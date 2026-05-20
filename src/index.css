@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-gray-200 antialiased selection:bg-primary/30 selection:text-white;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Cards & Containers */
+  .glass-panel {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.3)];
+  }
+  
+  /* Section Containers */
+  .section-container {
+    @apply w-full max-w-7xl mx-auto px-6 py-20 flex flex-col gap-8;
+  }
+
+  /* Reusable Glow Effects */
+  .glow-primary {
+    @apply relative before:absolute before:inset-0 before:-z-10 before:bg-primary/20 before:blur-xl before:rounded-2xl;
+  }
+  
+  .glow-secondary {
+    @apply relative before:absolute before:inset-0 before:-z-10 before:bg-secondary/20 before:blur-xl before:rounded-2xl;
+  }
+
+  /* Animated Gradients */
+  .bg-gradient-animated {
+    @apply bg-gradient-to-r from-primary via-secondary to-primary bg-[length:200%_auto] animate-[gradient_4s_linear_infinite];
+  }
+}
+
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}

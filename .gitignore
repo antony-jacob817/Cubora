@@ -1,0 +1,46 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Local environments
+.env
+.env.*
+*.env
+
+# OS generated files (Windows equivalent to .DS_Store)
+Thumbs.db
+
+# ESLint cache (prevents pushing linting cache files)
+.eslintcache
+
+# Vite/TypeScript build cache files
+*.tsbuildinfo
+
+# Testing/Coverage reports (if you add unit tests later)
+coverage/
+.nyc_output/
+
+# Common deployment folders (Vercel, Netlify, etc.)
+.vercel/
+.netlify/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
