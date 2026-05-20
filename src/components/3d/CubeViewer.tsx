@@ -1,13 +1,17 @@
 import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
-import { RubiksCube } from './RubiksCube';
+import { AnimatedCube } from './AnimatedCube';
 
+// 1. Add the missing types to your interface
 interface CubeViewerProps {
   className?: string;
+  currentMove: string | null;
+  speed: number;
 }
 
-export function CubeViewer({ className }: CubeViewerProps) {
+// 2. Extract currentMove and speed from the props
+export function CubeViewer({ className, currentMove, speed }: CubeViewerProps) {
   return (
     <div className={`w-full h-full relative cursor-grab active:cursor-grabbing ${className}`}>
       <Canvas 
@@ -19,9 +23,9 @@ export function CubeViewer({ className }: CubeViewerProps) {
         <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow />
         <spotLight position={[-10, -10, -5]} intensity={0.5} color="#4d8eff" />
 
-        {/* The Cube Model */}
+        {/* The Cube Model - Now it has the variables it needs! */}
         <Suspense fallback={null}>
-          <RubiksCube />
+          <AnimatedCube currentMove={currentMove} speed={speed} />
         </Suspense>
 
         {/* Environmental Reflections & Ground Shadow */}
