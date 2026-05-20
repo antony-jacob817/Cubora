@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useCamera } from '@/hooks/useCamera';
 import { PageTransition } from '@/components/animations/PageTransition';
 import { clsx } from 'clsx';
+import { ColorDetector, type GridSample } from '@/services/colorDetector';
 
 // --- SEQUENCE CONFIGURATION ---
 const SCAN_SEQUENCE = [
@@ -17,6 +18,12 @@ const SCAN_SEQUENCE = [
   { id: 'L', name: 'Left', icon: ArrowLeft, instruction: 'Rotate the cube LEFT once more to scan the Left face.' },
   { id: 'U', name: 'Top', icon: ArrowDown, instruction: 'Return to Front, then rotate the cube DOWN to scan the Top face.' },
   { id: 'D', name: 'Bottom', icon: ArrowUp, instruction: 'Rotate the cube UP twice to scan the Bottom face.' },
+];
+
+const SAMPLING_GRID_3X3: GridSample[] = [
+  { x: 0.25, y: 0.25 }, { x: 0.50, y: 0.25 }, { x: 0.75, y: 0.25 },
+  { x: 0.25, y: 0.50 }, { x: 0.50, y: 0.50 }, { x: 0.75, y: 0.50 },
+  { x: 0.25, y: 0.75 }, { x: 0.50, y: 0.75 }, { x: 0.75, y: 0.75 }
 ];
 
 export default function Scanner() {
@@ -37,20 +44,26 @@ export default function Scanner() {
   const isComplete = currentStep === SCAN_SEQUENCE.length;
 
   // --- ACTIONS ---
-  const handleCapture = () => {
-    if (scanState !== 'idle') return;
+  // --- ACTIONS ---
+  const handleCapture = async () => {
+    if (scanState !== 'idle' || !videoRef.current) return;
     
     setScanState('scanning');
     
-    // Simulate AI Processing Time
-    setTimeout(() => {
+    try {
+      // 1. Pass the real video element and the 3x3 tracking coordinate markers
+      const faceColors = await ColorDetector.processVideoFrame(videoRef.current, SAMPLING_GRID_3X3);
+      console.log(`Extracted Pattern for ${currentFace.id} face:`, faceColors);
+
+      // 2. Save the real matrix data mapping into your state object
       setScannedFaces(prev => ({
         ...prev,
-        [currentFace.id]: { captured: true, timestamp: Date.now() }
+        [currentFace.id]: faceColors // Storing the actual ['W', 'R', 'G', ...] array
       }));
+      
       setScanState('success');
       
-      // Auto-advance after brief success message
+      // Auto-advance after brief success message animation
       setTimeout(() => {
         if (currentStep < SCAN_SEQUENCE.length - 1) {
           setCurrentStep(prev => prev + 1);
@@ -60,7 +73,12 @@ export default function Scanner() {
           setScanState('complete');
         }
       }, 1500);
-    }, 800);
+      return faceColors;
+
+    } catch (err) {
+      console.error("OpenCV image parsing processing failure pipeline thread exception:", err);
+      return null;
+    }
   };
 
   const handleUndo = () => {
