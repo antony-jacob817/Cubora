@@ -2,6 +2,15 @@ import { OpenCVLoader } from './opencvLoader';
 
 export type CubeColor = 'W' | 'Y' | 'G' | 'B' | 'R' | 'O' | 'UNKNOWN';
 
+export interface CompleteCubeState {
+  F: CubeColor[];
+  R: CubeColor[];
+  B: CubeColor[];
+  L: CubeColor[];
+  U: CubeColor[];
+  D: CubeColor[];
+}
+
 export interface GridSample {
   x: number; // Percent coordinates relative to frame grid boundary [0, 1]
   y: number;
