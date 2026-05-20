@@ -198,7 +198,7 @@ export default function MultiplayerHub() {
                 <h2 className="font-display text-4xl font-bold text-white mb-2">Match Found!</h2>
                 <div className="flex items-center gap-8 mt-8">
                   <div className="text-center">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Cubora" alt="You" className="w-20 h-20 rounded-2xl bg-primary/20 border-2 border-primary mb-3" />
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Cubora" alt="You" loading="lazy" className="w-20 h-20 rounded-2xl bg-primary/20 border-2 border-primary mb-3" />
                     <span className="font-bold text-white block">You</span>
                     <span className="text-xs text-primary font-mono">{PLAYER_ELO} Elo</span>
                   </div>
@@ -206,7 +206,7 @@ export default function MultiplayerHub() {
                   <span className="font-display text-4xl font-bold text-gray-500 italic">VS</span>
                   
                   <div className="text-center">
-                    <img src={MOCK_OPPONENT.avatar} alt="Opponent" className="w-20 h-20 rounded-2xl bg-red-500/20 border-2 border-red-500 mb-3" />
+                    <img src={MOCK_OPPONENT.avatar} alt="Opponent" loading="lazy" className="w-20 h-20 rounded-2xl bg-red-500/20 border-2 border-red-500 mb-3" />
                     <span className="font-bold text-white block">{MOCK_OPPONENT.name}</span>
                     <span className="text-xs text-red-400 font-mono">{MOCK_OPPONENT.elo} Elo</span>
                   </div>
@@ -359,7 +359,7 @@ export default function MultiplayerHub() {
               )}>
                 <div className="flex items-center gap-4">
                   <span className="font-bold text-gray-500 font-mono w-4">2.</span>
-                  <img src={MOCK_OPPONENT.avatar} className="w-10 h-10 rounded bg-surface" />
+                  <img src={MOCK_OPPONENT.avatar} loading="lazy" className="w-10 h-10 rounded bg-surface" />
                   <span className="font-bold text-white text-lg">{MOCK_OPPONENT.name}</span>
                 </div>
                 <span className={clsx("font-display font-bold text-2xl", !playerWon ? "text-red-500" : "text-white")}>

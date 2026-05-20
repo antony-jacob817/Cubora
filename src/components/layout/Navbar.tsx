@@ -47,6 +47,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
         <button className="w-10 h-10 rounded-full bg-surface-bright border border-white/10 overflow-hidden hover:border-primary transition-colors flex-shrink-0">
           <img 
             src="https://api.dicebear.com/7.x/avataaars/svg?seed=Cubora" 
+            loading="lazy"
             alt="User profile" 
             className="w-full h-full object-cover"
           />

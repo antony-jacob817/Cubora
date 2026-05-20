@@ -139,7 +139,7 @@ export default function CommunityHub() {
                   <div key={post.id} className="glass-panel p-6 flex flex-col">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-3">
-                        <img src={post.author.avatar} alt={post.author.name} className="w-10 h-10 rounded-full border border-white/10 bg-surface-bright" />
+                        <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-10 h-10 rounded-full border border-white/10 bg-surface-bright" />
                         <div>
                           <h4 className="font-bold text-white text-sm">{post.author.name}</h4>
                           <span className="text-xs text-gray-500 font-mono">{post.author.handle} • {post.timeAgo}</span>
@@ -261,7 +261,7 @@ export default function CommunityHub() {
                 {/* Avatar & Edit */}
                 <div className="flex justify-between items-end -mt-12 mb-6">
                   <div className="w-24 h-24 rounded-2xl bg-surface border-4 border-background p-1 relative z-10 shadow-xl">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Cubora" alt="Profile" className="w-full h-full rounded-xl bg-white/5" />
+                    <img loading="lazy" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Cubora" alt="Profile" className="w-full h-full rounded-xl bg-white/5" />
                   </div>
                   <Button variant="secondary" size="sm">Edit Profile</Button>
                 </div>

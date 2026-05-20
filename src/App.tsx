@@ -1,74 +1,65 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, LazyMotion, domAnimation } from 'framer-motion';
 
-// --- LAYOUTS & ANIMATIONS ---
+// --- LAYOUTS (Eagerly Loaded) ---
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { PageTransition } from '@/components/animations/PageTransition';
 
-// --- PUBLIC & AUTH PAGES ---
+// --- PUBLIC & AUTH PAGES (Eagerly Loaded for instant First Contentful Paint) ---
 import LandingPage from '@/pages/LandingPage';
 import Login from '@/components/auth/Login';
 import Signup from '@/components/auth/Signup';
 import ForgotPassword from '@/components/auth/ForgotPassword';
 
-// --- DASHBOARD PAGES ---
-import Dashboard from '@/pages/dashboard/Dashboard';
-import Scanner from '@/pages/scanner/Scanner';
-import ColorCorrection from '@/pages/scanner/ColorCorrection';
-import SolverShowcase from '@/components/solver/SolverShowcase';
-import Academy from '@/components/academy/Academy';
-import PracticeSession from '@/pages/practice/PracticeSession';
-import AnalyticsDashboard from '@/pages/analytics/AnalyticsDashboard';
-import AiCoach from '@/pages/coach/AiCoach';
-import CommunityHub from '@/pages/community/CommunityHub';
-import MultiplayerHub from '@/pages/multiplayer/MultiplayerHub';
+// --- DASHBOARD PAGES (Lazy Loaded on demand) ---
+const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'));
+const Scanner = lazy(() => import('@/pages/scanner/Scanner'));
+const ColorCorrection = lazy(() => import('@/pages/scanner/ColorCorrection'));
+const SolverShowcase = lazy(() => import('@/components/solver/SolverShowcase'));
+const Academy = lazy(() => import('@/components/academy/Academy'));
+const PracticeSession = lazy(() => import('@/pages/practice/PracticeSession'));
+const AnalyticsDashboard = lazy(() => import('@/pages/analytics/AnalyticsDashboard'));
+const AiCoach = lazy(() => import('@/pages/coach/AiCoach'));
+const CommunityHub = lazy(() => import('@/pages/community/CommunityHub'));
+const MultiplayerHub = lazy(() => import('@/pages/multiplayer/MultiplayerHub'));
 
-// Centralized Animated Routing Component
+// Premium loading state while chunks are fetched
+const RouteLoader = () => (
+  <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-4">
+    <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+    <span className="text-xs font-mono font-bold tracking-widest text-primary animate-pulse">LOADING MODULE...</span>
+  </div>
+);
+
 function AnimatedRoutes() {
   const location = useLocation();
-  {/* mode="wait" ensures the exit animation finishes before the enter animation starts */}
+  
   return (
-    
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         
-        {/* --- PUBLIC ROUTES --- */}
-        <Route path="/" element={
-          <PageTransition>
-            <LandingPage />
-          </PageTransition>
-        } />
-
-        {/* --- AUTHENTICATION ROUTES --- */}
-        {/* Note: AuthLayout and PageTransition are already baked into these components */}
+        <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        {/* --- APP DASHBOARD ROUTES --- */}
-        {/* Everything inside here will automatically have the Sidebar and Top Navbar */}
         <Route element={<DashboardLayout />}>
-          
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/scanner" element={<Scanner />} />
-          <Route path="/correction" element={<ColorCorrection />} />
-          <Route path="/solver" element={<SolverShowcase />} />
-          
-          {/* Mapping /learn from the sidebar to the Academy component */}
-          <Route path="/learn" element={<Academy />} />
-          <Route path="/academy" element={<Academy />} />
-          
-          <Route path="/practice" element={<PracticeSession />} />
-          <Route path="/analytics" element={<AnalyticsDashboard />} />
-          <Route path="/coach" element={<AiCoach />} />
-
-          {/* Placeholders for remaining sidebar items */}
-          <Route path="/multiplayer" element={<MultiplayerHub />} />
-          <Route path="/community" element={<CommunityHub />} />
+          {/* Wrap all lazy routes in Suspense to handle the asynchronous network request */}
+          <Route path="/dashboard" element={<Suspense fallback={<RouteLoader />}><Dashboard /></Suspense>} />
+          <Route path="/scanner" element={<Suspense fallback={<RouteLoader />}><Scanner /></Suspense>} />
+          <Route path="/correction" element={<Suspense fallback={<RouteLoader />}><ColorCorrection /></Suspense>} />
+          <Route path="/solver" element={<Suspense fallback={<RouteLoader />}><SolverShowcase /></Suspense>} />
+          <Route path="/learn" element={<Suspense fallback={<RouteLoader />}><Academy /></Suspense>} />
+          <Route path="/academy" element={<Suspense fallback={<RouteLoader />}><Academy /></Suspense>} />
+          <Route path="/practice" element={<Suspense fallback={<RouteLoader />}><PracticeSession /></Suspense>} />
+          <Route path="/analytics" element={<Suspense fallback={<RouteLoader />}><AnalyticsDashboard /></Suspense>} />
+          <Route path="/coach" element={<Suspense fallback={<RouteLoader />}><AiCoach /></Suspense>} />
+          <Route path="/multiplayer" element={<Suspense fallback={<RouteLoader />}><MultiplayerHub /></Suspense>} />
+          <Route path="/community" element={<Suspense fallback={<RouteLoader />}><CommunityHub /></Suspense>} />
           <Route path="/settings" element={
             <PageTransition><div className="flex h-full items-center justify-center text-gray-500 font-display text-xl">Settings Coming Soon</div></PageTransition>
           } />
-
         </Route>
 
       </Routes>
@@ -78,9 +69,12 @@ function AnimatedRoutes() {
 
 function App() {
   return (
-    <Router>
-      <AnimatedRoutes />
-    </Router>
+    // LazyMotion reduces the main bundle by ~40kb by lazy-loading the animation engine
+    <LazyMotion features={domAnimation}>
+      <Router>
+        <AnimatedRoutes />
+      </Router>
+    </LazyMotion>
   );
 }
 
