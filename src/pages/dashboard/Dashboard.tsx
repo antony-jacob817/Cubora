@@ -43,6 +43,10 @@ const itemVariants: Variants = {
   }
 };
 
+const Skeleton = ({ className }: { className: string }) => (
+  <div className={`animate-pulse bg-white/5 rounded-2xl ${className}`} />
+);
+
 export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,9 +60,11 @@ export default function Dashboard() {
     return (
       <div className="w-full h-full flex flex-col gap-6 animate-pulse">
         <div className="h-10 w-48 bg-white/5 rounded-lg mb-4" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => <div key={i} className="h-32 glass-panel" />)}
+        {isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[1,2,3,4].map(i => <Skeleton key={i} className="h-32" />)}
         </div>
+        )}
         <div className="h-96 glass-panel w-full" />
       </div>
     );

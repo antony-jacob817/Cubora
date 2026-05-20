@@ -17,13 +17,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000, 
     rollupOptions: {
       output: {
-        // Manually separate heavy libraries so they load in parallel and cache independently
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
-          'vendor-motion': ['framer-motion'],
-          'vendor-charts': ['recharts'],
-          'vendor-ui': ['clsx', 'tailwind-merge', 'lucide-react']
+        // Converted to a function to satisfy TypeScript's ManualChunksFunction requirement
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react/') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
+            if (id.includes('three') || id.includes('@react-three')) return 'vendor-three';
+            if (id.includes('framer-motion')) return 'vendor-motion';
+            if (id.includes('recharts')) return 'vendor-charts';
+            if (id.includes('lucide-react') || id.includes('clsx') || id.includes('tailwind-merge')) return 'vendor-ui';
+          }
         }
       }
     }
