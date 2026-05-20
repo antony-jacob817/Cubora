@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   TrendingDown, Activity, Target, Brain, 
   AlertTriangle, Zap, BarChart3
@@ -43,8 +43,30 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const Skeleton = ({ className }: { className: string }) => (
+  <div className={`animate-pulse bg-white/5 rounded-2xl ${className}`} />
+);
+
 export default function AnalyticsDashboard() {
+  const [isLoading, setIsLoading] = useState(true);
   const [timeframe, setTimeframe] = useState('30D');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="w-full flex flex-col gap-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
 
   return (
     <PageTransition className="w-full flex flex-col gap-6 pb-12 min-h-screen">
