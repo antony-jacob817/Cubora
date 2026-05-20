@@ -20,6 +20,7 @@ import Academy from '@/components/academy/Academy';
 import PracticeSession from '@/pages/practice/PracticeSession';
 import AnalyticsDashboard from '@/pages/analytics/AnalyticsDashboard';
 import AiCoach from '@/pages/coach/AiCoach';
+import CommunityHub from '@/pages/community/CommunityHub';
 
 // Centralized Animated Routing Component
 function AnimatedRoutes() {
@@ -64,9 +65,7 @@ function AnimatedRoutes() {
           <Route path="/multiplayer" element={
             <PageTransition><div className="flex h-full items-center justify-center text-gray-500 font-display text-xl">Multiplayer Coming Soon</div></PageTransition>
           } />
-          <Route path="/community" element={
-            <PageTransition><div className="flex h-full items-center justify-center text-gray-500 font-display text-xl">Community Coming Soon</div></PageTransition>
-          } />
+          <Route path="/community" element={<CommunityHub />} />
           <Route path="/settings" element={
             <PageTransition><div className="flex h-full items-center justify-center text-gray-500 font-display text-xl">Settings Coming Soon</div></PageTransition>
           } />
