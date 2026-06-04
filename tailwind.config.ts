@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,11 +8,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0B0F19',
-        primary: '#3B82F6', // Electric Blue
-        secondary: '#8B5CF6', // Neon Violet
-        tertiary: '#06B6D4', // Cyan Glow
-        surface: 'rgba(255, 255, 255, 0.04)',
+        background: 'var(--background)',
+        primary: 'var(--primary)',
+        secondary: 'var(--secondary)',
+        tertiary: 'var(--tertiary)',
+        surface: 'var(--surface)',
+      },
+      backgroundImage: {
+        'ai-glow': 'var(--bg-ai-glow)',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

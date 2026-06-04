@@ -21,16 +21,29 @@ const userSchema = new mongoose.Schema({
     minlength: 6,
     select: false // Do not return password by default in queries
   },
-  createdAt: {
+  role: {
+    type: String,
+    enum: ['user', 'pro', 'admin'],
+    default: 'user'
+  },
+  avatar: {
+    type: String,
+    default: ''
+  },
+  name_updated_at: {
+    type: Date,
+    default: null
+  },
+  created_at: {
     type: Date,
     default: Date.now
   }
 });
 
 // Encrypt password using bcrypt before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function() {
   if (!this.isModified('password')) {
-    next();
+    return;
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);

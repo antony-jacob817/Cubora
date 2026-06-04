@@ -5,15 +5,239 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --background: #DCDFE2; /* Premium Cool Light Grey */
+    --surface: rgba(240, 244, 248, 0.35);
+    --border: rgba(255, 255, 255, 0.45);
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --bg-ai-glow: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.35) 0%, rgba(220, 223, 226, 0.25) 60%, transparent 100%);
+    
+    /* Default Graphite variables in light mode */
+    --primary: #4b5563;
+    --secondary: #374151;
+    --tertiary: #6b7280;
+    --accent-glow: rgba(75, 85, 99, 0.08);
+    --accent-glow-intense: rgba(75, 85, 99, 0.18);
+    --accent-gradient: linear-gradient(135deg, #6b7280, #374151);
+    --cube-reflection: #6b7280;
+    --btn-glow-shadow: rgba(31, 41, 55, 0.55); /* Elegant charcoal glow shadow */
+    --accent-mist: rgba(75, 85, 99, 0.28); /* Graphite mist in light mode */
+  }
+
+  .dark {
+    --background: #111315;
+    --surface: #181A1D;
+    --border: rgba(255, 255, 255, 0.06);
+    --text-primary: #F5F7FA;
+    --text-secondary: #9CA3AF;
+    --bg-ai-glow: radial-gradient(circle at 50% 50%, rgba(30, 32, 35, 0.5) 0%, rgba(17, 19, 21, 0.1) 70%, transparent 100%);
+    
+    /* Default Graphite variables in dark mode */
+    --primary: #71717a;
+    --secondary: #3f3f46;
+    --tertiary: #a1a1aa;
+    --accent-glow: rgba(113, 113, 122, 0.08);
+    --accent-glow-intense: rgba(113, 113, 122, 0.2);
+    --accent-gradient: linear-gradient(135deg, #a1a1aa, #3f3f46);
+    --cube-reflection: #d4d4d8;
+    --btn-glow-shadow: rgba(161, 161, 170, 0.45); /* Radiant, visible grey-zinc in dark mode */
+    --accent-mist: rgba(113, 113, 122, 0.15); /* Graphite mist in dark mode */
+  }
+
+  /* --- RUNTIME ACCENTS (Dynamic CSS Variable Overrides) --- */
+  
+  /* Graphite Accent */
+  .accent-graphite {
+    /* Mapped to Graphite defaults automatically based on dark/light */
+    --btn-glow-shadow: rgba(24, 24, 27, 0.6) !important;
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.3) 0%, rgba(113, 113, 122, 0.08) 50%, transparent 100%) !important;
+    --accent-mist: rgba(75, 85, 99, 0.32) !important;
+  }
+  .dark.accent-graphite, .dark .accent-graphite {
+    --btn-glow-shadow: rgba(161, 161, 170, 0.45) !important;
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(113, 113, 122, 0.08) 0%, rgba(24, 24, 27, 0.02) 60%, transparent 100%) !important;
+    --accent-mist: rgba(113, 113, 122, 0.15) !important;
+  }
+
+  /* Electric Blue Accent */
+  .accent-blue {
+    --primary: #2563EB !important;
+    --secondary: #1D4ED8 !important;
+    --tertiary: #60A5FA !important;
+    --accent-glow: rgba(37, 99, 235, 0.12) !important;
+    --accent-glow-intense: rgba(37, 99, 235, 0.28) !important;
+    --accent-gradient: linear-gradient(135deg, #3B82F6, #1D4ED8) !important;
+    --cube-reflection: #5B7CFA !important;
+    --btn-glow-shadow: rgba(29, 78, 216, 0.6) !important; /* Deep cobalt/royal blue for light mode visibility */
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.4) 0%, rgba(37, 99, 235, 0.06) 45%, rgba(37, 99, 235, 0.02) 70%, transparent 100%) !important;
+    --accent-mist: rgba(37, 99, 235, 0.36) !important;
+  }
+  .dark.accent-blue, .dark .accent-blue {
+    --btn-glow-shadow: rgba(59, 130, 246, 0.5) !important; /* Radiant electric blue for dark mode */
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(37, 99, 235, 0.09) 0%, rgba(29, 78, 216, 0.02) 65%, transparent 100%) !important;
+    --accent-mist: rgba(37, 99, 235, 0.16) !important;
+  }
+
+  /* Deep Purple Accent */
+  .accent-purple {
+    --primary: #7C3AED !important;
+    --secondary: #6D28D9 !important;
+    --tertiary: #A78BFA !important;
+    --accent-glow: rgba(124, 58, 237, 0.12) !important;
+    --accent-glow-intense: rgba(124, 58, 237, 0.28) !important;
+    --accent-gradient: linear-gradient(135deg, #8B5CF6, #6D28D9) !important;
+    --cube-reflection: #A78BFA !important;
+    --btn-glow-shadow: rgba(109, 40, 217, 0.6) !important; /* Deep violet for light mode visibility */
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.4) 0%, rgba(124, 58, 237, 0.06) 45%, rgba(124, 58, 237, 0.02) 70%, transparent 100%) !important;
+    --accent-mist: rgba(124, 58, 237, 0.36) !important;
+  }
+  .dark.accent-purple, .dark .accent-purple {
+    --btn-glow-shadow: rgba(139, 92, 246, 0.5) !important; /* Radiant violet/purple for dark mode */
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(124, 58, 237, 0.09) 0%, rgba(109, 40, 217, 0.02) 65%, transparent 100%) !important;
+    --accent-mist: rgba(124, 58, 237, 0.16) !important;
+  }
+
+  /* Matte Black Accent */
+  .accent-matte-black {
+    --primary: #1F2937 !important;
+    --secondary: #111827 !important;
+    --tertiary: #4B5563 !important;
+    --accent-glow: rgba(31, 41, 55, 0.15) !important;
+    --accent-glow-intense: rgba(31, 41, 55, 0.3) !important;
+    --accent-gradient: linear-gradient(135deg, #4B5563, #111827) !important;
+    --cube-reflection: #9CA3AF !important;
+    --btn-glow-shadow: rgba(15, 23, 42, 0.65) !important; /* Deep onyx black/charcoal for light mode */
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.3) 0%, rgba(15, 23, 42, 0.05) 50%, transparent 100%) !important;
+    --accent-mist: rgba(15, 23, 42, 0.32) !important;
+  }
+  .dark.accent-matte-black, .dark .accent-matte-black {
+    --btn-glow-shadow: rgba(75, 85, 99, 0.5) !important; /* Slate/charcoal for dark mode */
+    --bg-ai-glow: radial-gradient(circle at 50% 25%, rgba(75, 85, 99, 0.05) 0%, rgba(17, 19, 21, 0.01) 60%, transparent 100%) !important;
+    --accent-mist: rgba(75, 85, 99, 0.12) !important;
+  }
+
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   body {
-    @apply bg-background text-gray-200 antialiased selection:bg-primary/30 selection:text-white;
+    @apply bg-background text-slate-800 dark:text-gray-200 antialiased transition-colors duration-300;
+    background-image: var(--bg-ai-glow);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  body::selection {
+    background-color: var(--accent-glow-intense);
+    color: var(--text-primary);
   }
 }
 
 @layer components {
-  /* Glassmorphism Cards & Containers */
+  /* High-Fidelity Smoked Glassmorphism Cards & Containers */
   .glass-panel {
-    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.3)];
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.045),
+      rgba(255, 255, 255, 0.015)
+    );
+    
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    
+    box-shadow: 
+      0 24px 80px rgba(0, 0, 0, 0.35), 
+      inset 0 1px 1px rgba(255, 255, 255, 0.08);
+      
+    border-radius: 1rem;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Light Mode Smoked Glass adjustment */
+  :root:not(.dark) .glass-panel {
+    background: linear-gradient(
+      135deg,
+      rgba(220, 223, 226, 0.35),
+      rgba(220, 223, 226, 0.15)
+    );
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 
+      0 20px 50px rgba(15, 23, 42, 0.08), 
+      inset 0 1px 1px rgba(255, 255, 255, 0.55);
+  }
+
+  /* Dark Mode Smoked Glass adjustment */
+  .dark .glass-panel {
+    background: linear-gradient(
+      135deg,
+      rgba(24, 26, 29, 0.45),
+      rgba(24, 26, 29, 0.15)
+    ) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    backdrop-filter: blur(28px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+    box-shadow: 
+      0 24px 80px rgba(0, 0, 0, 0.45), 
+      inset 0 1px 1px rgba(255, 255, 255, 0.07) !important;
+  }
+
+  /* Shadow-free variant for tightly packed card strips (e.g. mobile stats) */
+  .glass-panel.glass-flat,
+  .dark .glass-panel.glass-flat,
+  :root:not(.dark) .glass-panel.glass-flat {
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.07) !important;
+  }
+
+  /* Global light-mode overrides to morph opaque containers into translucent grey-glass */
+  :root:not(.dark) .bg-white {
+    background-color: rgba(220, 223, 226, 0.35) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  :root:not(.dark) .bg-slate-50 {
+    background-color: rgba(220, 223, 226, 0.2) !important;
+  }
+  :root:not(.dark) .bg-slate-100 {
+    background-color: rgba(220, 223, 226, 0.25) !important;
+  }
+  :root:not(.dark) .bg-slate-200 {
+    background-color: rgba(220, 223, 226, 0.4) !important;
+  }
+  
+  :root:not(.dark) .hover\:bg-slate-200\/50:hover {
+    background-color: rgba(220, 223, 226, 0.45) !important;
+  }
+  :root:not(.dark) .hover\:bg-slate-100:hover {
+    background-color: rgba(220, 223, 226, 0.35) !important;
+  }
+  :root:not(.dark) .border-slate-200 {
+    border-color: rgba(255, 255, 255, 0.4) !important;
+  }
+
+  /* Interactive hovering elevation for premium cards */
+  .glass-panel-interactive {
+    @apply glass-panel cursor-pointer;
+  }
+  
+  .glass-panel-interactive:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 
+      0 30px 100px rgba(0, 0, 0, 0.45), 
+      0 0 35px var(--accent-glow-intense),
+      inset 0 1px 1px rgba(255, 255, 255, 0.12);
+  }
+
+  :root:not(.dark) .glass-panel-interactive:hover {
+    border-color: rgba(255, 255, 255, 0.65);
+    box-shadow: 
+      0 24px 60px rgba(15, 23, 42, 0.14), 
+      0 0 30px var(--accent-glow-intense),
+      inset 0 1px 1px rgba(255, 255, 255, 0.85);
   }
   
   /* Section Containers */
@@ -23,16 +247,27 @@
 
   /* Reusable Glow Effects */
   .glow-primary {
-    @apply relative before:absolute before:inset-0 before:-z-10 before:bg-primary/20 before:blur-xl before:rounded-2xl;
+    @apply relative before:absolute before:inset-0 before:-z-10 before:bg-primary/10 before:blur-xl before:rounded-2xl;
   }
   
   .glow-secondary {
-    @apply relative before:absolute before:inset-0 before:-z-10 before:bg-secondary/20 before:blur-xl before:rounded-2xl;
+    @apply relative before:absolute before:inset-0 before:-z-10 before:bg-secondary/10 before:blur-xl before:rounded-2xl;
   }
 
   /* Animated Gradients */
   .bg-gradient-animated {
-    @apply bg-gradient-to-r from-primary via-secondary to-primary bg-[length:200%_auto] animate-[gradient_4s_linear_infinite];
+    @apply bg-gradient-to-r from-primary via-tertiary to-primary bg-[length:200%_auto] animate-[gradient_4s_linear_infinite];
+  }
+
+  /* Reusable button glow variant */
+  .btn-glow {
+    transition: box-shadow 0.3s ease-in-out, transform 0.2s ease-in-out, border-color 0.3s ease-in-out;
+  }
+  .btn-glow:hover {
+    box-shadow: 0 0 20px var(--btn-glow-shadow) !important;
+  }
+  .dark .btn-glow:hover {
+    box-shadow: 0 0 30px var(--btn-glow-shadow) !important;
   }
 }
 
@@ -40,4 +275,164 @@
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+/* Film grain overlay using a luxury micro-SVG smoked noise texture */
+.film-grain-noise {
+  position: relative;
+}
+.film-grain-noise::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.022;
+  pointer-events: none;
+  z-index: 1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Accent Mist Glow - A small, premium, and very blurred backdrop mist that drifts slowly and adapts to the chosen accent color */
+.accent-mist-glow {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: var(--accent-mist);
+  filter: blur(140px);
+  pointer-events: none;
+  z-index: -5; /* Set behind application containers, but in front of canvas/body background */
+  opacity: 0.75;
+  mix-blend-mode: screen;
+  animation: slow-drift 24s ease-in-out infinite;
+  transition: background-color 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s, opacity 0.8s;
+  will-change: background-color, transform;
+}
+
+:root:not(.dark) .accent-mist-glow {
+  mix-blend-mode: multiply; /* Blends beautifully with titanium grey, creating a rich colored mist shadow */
+  opacity: 0.7;
+  filter: blur(120px);
+}
+
+@keyframes slow-drift {
+  0% {
+    transform: translate(-50%, -50%) translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(-50%, -50%) translate(35px, -45px) scale(1.06);
+  }
+  66% {
+    transform: translate(-50%, -50%) translate(-30px, 25px) scale(0.94);
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(0px, 0px) scale(1);
+  }
+}
+
+/* Premium Custom Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.15);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.35) !important;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Firefox scrollbar config */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.15) transparent;
+}
+
+.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+/* Scrollbar hiding utilities */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media (max-width: 768px) {
+  .glass-scroll-safe {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0), inset 0 1px 1px rgba(255, 255, 255, 0.07) !important;
+  }
+  :root:not(.dark) .glass-scroll-safe {
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.55) !important;
+  }
+  
+  .glass-scroll-safe:hover {
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
+  }
+  :root:not(.dark) .glass-scroll-safe:hover {
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.85) !important;
+  }
+}@media (min-width: 1024px) {
+  main:has(.practice-session-root),
+  main:has(.multiplayer-hub-root) {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    height: 100vh !important; /* Locks exactly to screen height */
+  }
+
+  main:has(.practice-session-root) > div:has(> .practice-session-root),
+  main:has(.multiplayer-hub-root) > div:has(> .multiplayer-hub-root) {
+    flex: 1 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding-top: 1.25rem !important;
+    padding-bottom: 0 !important;
+  }
+}
+
+/* MOBILE & TABLET (under 1024px): Allow natural scrolling */
+@media (max-width: 1023px) {
+  /* Dynamic spacing adjustments on mobile to maximize touch canvas sizes */
+  main:has(.practice-session-root) > div:has(> .practice-session-root),
+  main:has(.multiplayer-hub-root) > div:has(> .multiplayer-hub-root) {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    /* Explicitly ensuring mobile is NOT locked */
+    overflow: visible !important; 
+    height: auto !important;
+  }
 }

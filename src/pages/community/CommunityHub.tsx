@@ -1,331 +1,554 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  MessageSquare, Heart, Share2, Trophy, 
-  Medal, Users, TrendingUp, Flame, Star, 
-  Clock, Award, } from 'lucide-react';
+import {
+    MessageSquare, Heart, Share2, Trophy, Edit2,
+    Medal, TrendingUp, Flame, Star,
+    Clock, Award, Loader2
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageTransition } from '@/components/animations/PageTransition';
+import { useAuth } from '@/context/AuthContext';
 import { clsx } from 'clsx';
 
-// --- MOCK SOCIAL DATA ---
-const MOCK_POSTS = [
-  {
-    id: '1',
-    type: 'solve',
-    author: { name: 'Elena Rostova', handle: '@speedy_elena', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Elena' },
-    timeAgo: '2 hours ago',
-    content: 'Finally broke the sub-10 barrier! The AI Coach drill on F2L lookahead completely changed my transition speed.',
-    solveData: { time: '9.84s', method: 'CFOP', scramble: "R U2 R' U' R U2 L' U R' U' L" },
-    likes: 234,
-    comments: 45
-  },
-  {
-    id: '2',
-    type: 'algorithm',
-    author: { name: 'Marcus Chen', handle: '@marcus_cubes', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus' },
-    timeAgo: '5 hours ago',
-    content: 'Found a much smoother fingertrick for the V-Perm. Try executing the starting R\' U R\' with a pinch grip.',
-    solveData: { alg: "R' U R' d' R' F' R2 U' R' U R' F R F", type: 'PLL' },
-    likes: 892,
-    comments: 112
-  },
-  {
-    id: '3',
-    type: 'discussion',
-    author: { name: 'Sarah Jenkins', handle: '@s_jenks', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah' },
-    timeAgo: '12 hours ago',
-    content: 'Is anyone else transitioning from CFOP to Roux? Im struggling with the M-slice speed on the Last 6 Edges. Any tips?',
-    likes: 56,
-    comments: 89
-  }
-];
-
-const MOCK_ACHIEVEMENTS = [
-  { id: 'a1', title: 'Sub-15 Club', desc: 'Achieve a verified Ao5 under 15 seconds.', rarity: 'epic', icon: Timer, date: 'Mar 12, 2024' },
-  { id: 'a2', title: 'Flawless Week', desc: 'Maintain a 7-day practice streak.', rarity: 'rare', icon: Flame, date: 'Apr 02, 2024' },
-  { id: 'a3', title: 'OLL Master', desc: 'Learn all 57 OLL algorithms.', rarity: 'legendary', icon: Brain, date: 'May 14, 2024' },
-  { id: 'a4', title: 'First Scan', desc: 'Successfully digitize a physical cube.', rarity: 'common', icon: Scan, date: 'Jan 05, 2024' },
-];
-
-// --- HELPER COMPONENTS ---
-function Timer(props: any) { return <Clock {...props} />; }
-function Brain(props: any) { return <Star {...props} />; }
-function Scan(props: any) { return <Trophy {...props} />; }
-
-const RarityColors = {
-  common: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
-  rare: 'text-primary bg-primary/10 border-primary/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]',
-  epic: 'text-secondary bg-secondary/10 border-secondary/20 shadow-[0_0_15px_rgba(139,92,246,0.15)]',
-  legendary: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20 shadow-[0_0_20px_rgba(234,179,8,0.2)]'
+const RarityColors: Record<string, string> = {
+    common: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
+    rare: 'text-primary bg-primary/10 border-primary/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]',
+    epic: 'text-secondary bg-secondary/10 border-secondary/20 shadow-[0_0_15px_rgba(139,92,246,0.15)]',
+    legendary: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20 shadow-[0_0_20px_rgba(234,179,8,0.2)]'
 };
 
+const RARITY_MAP: Record<string, string> = {
+    'First Contact': 'common',
+    'Sub-30 Pioneer': 'rare',
+    'Sub-20 Expert': 'epic',
+    'Elite Speedcuber': 'legendary',
+    'Century Halfway': 'rare',
+    'Centurion Solver': 'epic',
+};
+
+const ICON_MAP: Record<string, any> = {
+    'Sparkles': Star,
+    'Zap': Flame,
+    'Flame': Flame,
+    'Trophy': Trophy,
+    'Target': Clock,
+    'Crown': Award,
+};
+
+interface CommunityPost {
+    _id: string;
+    content: string;
+    type: 'solve' | 'algorithm' | 'discussion';
+    author: { _id: string; name: string; handle: string; avatar: string };
+    solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string };
+    likes: number;
+    isLikedByMe: boolean;
+    timeAgo: string;
+}
+
+interface AchievementData {
+    id: string;
+    title: string;
+    description: string;
+    icon: string;
+    category: string;
+    isUnlocked: boolean;
+    unlockedAt: string | null;
+    progress: number;
+    progressTarget: number;
+}
+
 export default function CommunityHub() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
+    const { user, getAuthHeaders } = useAuth();
+    const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
 
-  return (
-    <PageTransition className="w-full flex flex-col gap-6 pb-12 min-h-screen">
-      
-      {/* Header Context */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-            <Users className="w-8 h-8 text-primary" /> Cubora Network
-          </h1>
-          <p className="text-gray-400 text-sm mt-2">
-            Connect with speedcubers, share verified times, and discover new algorithms.
-          </p>
-        </div>
-        
-        {/* Navigation Tabs */}
-        <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
-          <button
-            onClick={() => setActiveTab('feed')}
-            className={clsx(
-              "px-6 py-2 rounded-lg text-sm font-bold transition-all",
-              activeTab === 'feed' ? "bg-primary/20 text-primary" : "text-gray-500 hover:text-white"
-            )}
-          >
-            Global Feed
-          </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={clsx(
-              "px-6 py-2 rounded-lg text-sm font-bold transition-all",
-              activeTab === 'profile' ? "bg-primary/20 text-primary" : "text-gray-500 hover:text-white"
-            )}
-          >
-            My Profile
-          </button>
-        </div>
-      </div>
+    // Feed state
+    const [posts, setPosts] = useState<CommunityPost[]>([]);
+    const [isLoadingFeed, setIsLoadingFeed] = useState(true);
+    const [newPostContent, setNewPostContent] = useState('');
+    const [isPosting, setIsPosting] = useState(false);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-      <AnimatePresence mode="wait">
-        {activeTab === 'feed' ? (
-          /* ================= GLOBAL FEED TAB ================= */
-          <motion.div 
-            key="feed"
-            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-8"
-          >
-            {/* Left Column: Post Feed */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              
-              {/* Create Post Input */}
-              <div className="glass-panel p-4 flex gap-4 items-start">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Cubora" alt="Me" className="w-10 h-10 rounded-full border border-white/10 bg-surface" />
-                <div className="flex-1">
-                  <textarea 
-                    placeholder="Share a solve, algorithm, or thought..."
-                    className="w-full bg-transparent text-white placeholder:text-gray-500 outline-none resize-none min-h-[60px] text-sm"
-                  />
-                  <div className="flex justify-between items-center border-t border-white/5 pt-3 mt-2">
-                    <div className="flex gap-2">
-                      <button className="text-xs font-bold text-gray-400 hover:text-primary transition-colors flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-lg">
-                        <Clock className="w-3 h-3" /> Attach Solve
-                      </button>
-                      <button className="text-xs font-bold text-gray-400 hover:text-secondary transition-colors flex items-center gap-1 bg-white/5 px-3 py-1.5 rounded-lg">
-                        <Share2 className="w-3 h-3" /> Share Alg
-                      </button>
-                    </div>
-                    <Button variant="glow" size="sm">Post</Button>
-                  </div>
+    // Profile state
+    const [profileStats, setProfileStats] = useState<{
+        pb: number | null;
+        ao5: number | null;
+        totalSolves: number;
+        streak: number;
+    } | null>(null);
+    const [achievements, setAchievements] = useState<AchievementData[]>([]);
+    const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+    // --- FETCH COMMUNITY FEED ---
+    useEffect(() => {
+        const fetchPosts = async () => {
+            try {
+                const res = await fetch('http://localhost:5000/api/community', { headers: getAuthHeaders() });
+                const data = await res.json();
+                if (data.success) setPosts(data.data);
+            } catch (err) {
+                console.error('Failed to load community feed:', err);
+            } finally {
+                setIsLoadingFeed(false);
+            }
+        };
+        fetchPosts();
+    }, []);
+
+    // --- FETCH PROFILE DATA ---
+    useEffect(() => {
+        if (activeTab !== 'profile' || profileStats) return;
+        setIsLoadingProfile(true);
+
+        const fetchProfile = async () => {
+            try {
+                const headers = getAuthHeaders();
+                const [statsRes, achievRes, solvesRes] = await Promise.all([
+                    fetch('http://localhost:5000/api/solves/stats', { headers }),
+                    fetch('http://localhost:5000/api/achievements', { headers }),
+                    fetch('http://localhost:5000/api/solves', { headers }),
+                ]);
+
+                const statsData = await statsRes.json();
+                const achievData = await achievRes.json();
+                const solvesData = await solvesRes.json();
+
+                if (statsData.success) {
+                    setProfileStats({
+                        pb: statsData.stats.pb,
+                        ao5: statsData.stats.ao5,
+                        totalSolves: solvesData.success ? solvesData.count : 0,
+                        streak: statsData.stats.streak,
+                    });
+                }
+                if (achievData.success) {
+                    setAchievements(achievData.data);
+                }
+            } catch (err) {
+                console.error('Failed to load profile data:', err);
+            } finally {
+                setIsLoadingProfile(false);
+            }
+        };
+        fetchProfile();
+    }, [activeTab]);
+
+    // --- CREATE POST ---
+    const handleCreatePost = async () => {
+        if (!newPostContent.trim() || isPosting) return;
+        setIsPosting(true);
+        try {
+            const res = await fetch('http://localhost:5000/api/community', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ content: newPostContent.trim(), type: 'discussion' }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPosts(prev => [data.data, ...prev]);
+                setNewPostContent('');
+                if (textareaRef.current) textareaRef.current.style.height = 'auto';
+            }
+        } catch (err) {
+            console.error('Failed to create post:', err);
+        } finally {
+            setIsPosting(false);
+        }
+    };
+
+    // --- TOGGLE LIKE ---
+    const handleToggleLike = async (postId: string) => {
+        setPosts(prev => prev.map(p => {
+            if (p._id === postId) {
+                return {
+                    ...p,
+                    isLikedByMe: !p.isLikedByMe,
+                    likes: p.isLikedByMe ? p.likes - 1 : p.likes + 1,
+                };
+            }
+            return p;
+        }));
+
+        try {
+            await fetch(`http://localhost:5000/api/community/${postId}/like`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+            });
+        } catch (err) {
+            setPosts(prev => prev.map(p => {
+                if (p._id === postId) {
+                    return {
+                        ...p,
+                        isLikedByMe: !p.isLikedByMe,
+                        likes: p.isLikedByMe ? p.likes - 1 : p.likes + 1,
+                    };
+                }
+                return p;
+            }));
+        }
+    };
+
+    const unlockedAchievements = achievements.filter(a => a.isUnlocked);
+
+    return (
+        <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0 text-left">
+
+            {/* Header Context Controls */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-1">
+                <div>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
+                        <MessageSquare className="w-7 h-7 sm:w-8 sm:h-8 text-primary shrink-0" /> Cubora Network
+                    </h1>
+                    <p className="text-slate-500 dark:text-gray-400 text-xs sm:text-sm mt-1 leading-relaxed">
+                        Connect with speedcubers, share verified times, and discover new algorithms.
+                    </p>
                 </div>
-              </div>
 
-              {/* Feed Stream */}
-              <div className="flex flex-col gap-4">
-                {MOCK_POSTS.map((post) => (
-                  <div key={post.id} className="glass-panel p-6 flex flex-col">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-3">
-                        <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-10 h-10 rounded-full border border-white/10 bg-surface-bright" />
-                        <div>
-                          <h4 className="font-bold text-white text-sm">{post.author.name}</h4>
-                          <span className="text-xs text-gray-500 font-mono">{post.author.handle} • {post.timeAgo}</span>
+                {/* Navigation Control Tabs */}
+                {/* Navigation Control Tabs */}
+                <div className="flex w-full md:w-auto bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-1 rounded-xl shrink-0 max-w-full">
+                    {(['feed', 'profile'] as const).map((tab) => {
+                        const isActive = activeTab === tab;
+                        return (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={clsx(
+                                    "relative flex-1 md:flex-none px-4 sm:px-6 py-2 rounded-lg text-xs font-bold transition-colors text-center min-h-[36px] z-10",
+                                    isActive ? "text-primary" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                                )}
+                            >
+                                {/* Sliding Framer Motion Border */}
+                                {isActive && (
+                                    <motion.div
+                                        layoutId="activeCommunityTab"
+                                        className="absolute inset-0 bg-primary/10 border border-primary/30 shadow-sm rounded-lg z-[-1]"
+                                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                    />
+                                )}
+                                <span className="relative z-10">
+                                    {tab === 'feed' ? 'Global Feed' : 'My Profile'}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <AnimatePresence mode="wait">
+                {activeTab === 'feed' ? (
+                    /* ================= GLOBAL FEED STREAM TAB ================= */
+                    <motion.div
+                        key="feed"
+                        initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }}
+                        className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6 w-full"
+                    >
+                        {/* Left Column Feed Node Feed Panel */}
+                        <div className="lg:col-span-2 flex flex-col gap-5 sm:gap-6 w-full">
+
+                            {/* Post Creation Area Dashboard */}
+                            <div className="glass-panel p-4 flex gap-3.5 items-start w-full">
+                                <img
+                                    src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || 'Cubora')}`}
+                                    alt="Me"
+                                    className="w-9 h-9 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 object-cover shrink-0 mt-0.5"
+                                />
+                                <div className="flex-1 min-w-0 w-full">
+                                    <textarea
+                                        ref={textareaRef}
+                                        value={newPostContent}
+                                        onChange={(e) => setNewPostContent(e.target.value)}
+                                        placeholder="Share a solve, algorithm, or thought..."
+                                        className="w-full bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 outline-none resize-none min-h-[64px] text-sm leading-relaxed"
+                                        onInput={(e) => {
+                                            const target = e.target as HTMLTextAreaElement;
+                                            target.style.height = 'auto';
+                                            target.style.height = target.scrollHeight + 'px';
+                                        }}
+                                    />
+                                    <div className="flex flex-col sm:flex-row gap-3.5 sm:items-center sm:justify-between border-t border-slate-200 dark:border-white/5 pt-3.5 mt-2 w-full">
+                                        <div className="flex gap-2 w-full sm:w-auto">
+                                            <button className="flex-1 sm:flex-none text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:text-primary transition-colors flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-2 rounded-lg min-h-[38px] sm:min-h-0 uppercase tracking-wider">
+                                                <Clock className="w-3.5 h-3.5" /> Attach Solve
+                                            </button>
+                                            <button className="flex-1 sm:flex-none text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:text-secondary transition-colors flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-2 rounded-lg min-h-[38px] sm:min-h-0 uppercase tracking-wider">
+                                                <Share2 className="w-3.5 h-3.5" /> Share Alg
+                                            </button>
+                                        </div>
+                                        <Button
+                                            variant="glow"
+                                            size="sm"
+                                            onClick={handleCreatePost}
+                                            disabled={!newPostContent.trim() || isPosting}
+                                            className="w-full sm:w-auto h-9 min-h-[36px] text-xs font-bold uppercase tracking-wider justify-center"
+                                        >
+                                            {isPosting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Post'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Feed Content Stream */}
+                            <div className="flex flex-col gap-4 w-full">
+                                {isLoadingFeed ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-slate-500 w-full text-center">
+                                        <Loader2 className="w-7 h-7 animate-spin text-primary mb-3" />
+                                        <span className="text-xs font-medium">Loading feed...</span>
+                                    </div>
+                                ) : posts.length === 0 ? (
+                                    <div className="glass-panel p-8 sm:p-12 text-center w-full">
+                                        <MessageSquare className="w-10 h-10 text-slate-400 dark:text-gray-600 mx-auto mb-4" />
+                                        <h3 className="text-slate-900 dark:text-white font-bold text-base sm:text-lg mb-1.5">No posts yet</h3>
+                                        <p className="text-slate-500 dark:text-gray-400 text-xs sm:text-sm leading-relaxed">Be the first to share something with the Cubora community!</p>
+                                    </div>
+                                ) : (
+                                    posts.map((post) => (
+                                        <div key={post._id} className="glass-panel p-4 sm:p-6 flex flex-col bg-white/40 dark:bg-white/[0.01] w-full">
+                                            <div className="flex justify-between items-start gap-4 mb-3.5 w-full">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover" />
+                                                    <div className="min-w-0">
+                                                        <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-snug">{post.author.name}</h4>
+                                                        <span className="text-[11px] text-slate-400 dark:text-gray-500 font-mono block truncate mt-0.5">{post.author.handle} • {post.timeAgo}</span>
+                                                    </div>
+                                                </div>
+                                                {post.type === 'solve' && <span className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/5 dark:bg-primary/10 border border-primary/20 px-2 py-0.5 rounded shrink-0">Verified</span>}
+                                                {post.type === 'algorithm' && <span className="text-[9px] font-bold uppercase tracking-widest text-secondary bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 px-2 py-0.5 rounded shrink-0">Alg</span>}
+                                            </div>
+
+                                            <p className="text-slate-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed mb-4 whitespace-pre-wrap break-words w-full">{post.content}</p>
+
+                                            {/* Rich Data Feed Attachments Layout Row */}
+                                            {post.type === 'solve' && post.solveData?.time && (
+                                                <div className="bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 mb-4 w-full overflow-hidden">
+                                                    <div className="flex items-center gap-3.5 min-w-0 w-full">
+                                                        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30 shadow-[0_0_15px_rgba(59,130,246,0.15)] shrink-0">
+                                                            <span className="font-display font-bold text-base sm:text-lg text-primary">{post.solveData.time}</span>
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <span className="text-[11px] font-bold text-slate-500 dark:text-gray-400 block leading-none mb-1.5">{post.solveData.method || 'CFOP'} Method</span>
+                                                            <span className="text-xs font-mono text-slate-400 dark:text-gray-500 block truncate max-w-full select-all" title={post.solveData.scramble}>{post.solveData.scramble}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {post.type === 'algorithm' && post.solveData?.alg && (
+                                                <div className="bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 mb-4 w-full overflow-hidden">
+                                                    <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 block leading-none mb-2 uppercase tracking-wide">{post.solveData.algType || 'Algorithm'}</span>
+                                                    <code className="text-slate-900 dark:text-white font-mono font-bold tracking-wider text-xs sm:text-sm block break-all select-all">{post.solveData.alg}</code>
+                                                </div>
+                                            )}
+
+                                            {/* Social Action Engagement Bar */}
+                                            <div className="flex items-center gap-5 sm:gap-6 mt-1 pt-3.5 border-t border-slate-200 dark:border-white/5 w-full">
+                                                <button
+                                                    onClick={() => handleToggleLike(post._id)}
+                                                    className={clsx(
+                                                        "flex items-center gap-1.5 transition-colors group min-h-[32px] px-1",
+                                                        post.isLikedByMe ? "text-red-400" : "text-slate-500 dark:text-gray-400 sm:hover:text-red-400"
+                                                    )}
+                                                >
+                                                    <Heart className={clsx("w-4 h-4 shrink-0", post.isLikedByMe && "fill-current")} />
+                                                    <span className="text-xs font-bold font-mono">{post.likes}</span>
+                                                </button>
+                                                <button className="flex items-center gap-1.5 text-slate-500 dark:text-gray-400 sm:hover:text-primary transition-colors min-h-[32px] px-1">
+                                                    <MessageSquare className="w-4 h-4 shrink-0" /> <span className="text-xs font-bold font-mono">0</span>
+                                                </button>
+                                                <button className="flex items-center gap-1.5 text-slate-500 dark:text-gray-400 sm:hover:text-slate-900 dark:sm:hover:text-white ml-auto min-h-[32px] px-1" aria-label="Share post link">
+                                                    <Share2 className="w-4 h-4 shrink-0" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
-                      </div>
-                      {post.type === 'solve' && <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded">Verified Solve</span>}
-                      {post.type === 'algorithm' && <span className="text-[10px] font-bold uppercase tracking-widest text-secondary bg-secondary/10 border border-secondary/20 px-2 py-1 rounded">Algorithm</span>}
-                    </div>
 
-                    <p className="text-gray-300 text-sm leading-relaxed mb-4">{post.content}</p>
+                        {/* Right Column Grid Panel: Leaderboard & Tracking Widget */}
+                        <div className="flex flex-col gap-5 sm:gap-6 w-full">
 
-                    {/* Rich Data Attachments */}
-                    {post.type === 'solve' && post.solveData && (
-                      <div className="bg-background/50 border border-white/10 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-                            <span className="font-display font-bold text-lg text-primary">{post.solveData.time}</span>
-                          </div>
-                          <div>
-                            <span className="text-xs font-bold text-gray-400 block mb-1">{post.solveData.method} Method</span>
-                            <span className="text-xs font-mono text-gray-500 block truncate max-w-[200px]">{post.solveData.scramble}</span>
-                          </div>
+                            {/* Top Solvers Lead Rank Widget Card */}
+                            <div className="glass-panel p-5 sm:p-6 w-full text-left">
+                                <div className="flex items-center gap-2 mb-5 w-full">
+                                    <TrendingUp className="w-4 h-4 sm:w-5 h-5 text-tertiary shrink-0" />
+                                    <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg">Top Solvers (Ao100)</h3>
+                                </div>
+
+                                <div className="space-y-3.5 w-full">
+                                    {[
+                                        { rank: 1, name: 'Max Park', time: '5.21s' },
+                                        { rank: 2, name: 'Tymon Kolasiński', time: '5.43s' },
+                                        { rank: 3, name: 'Ruihang Xu', time: '5.62s' }
+                                    ].map(lbUser => (
+                                        <div key={lbUser.rank} className="flex items-center justify-between group cursor-pointer w-full">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <span className={clsx(
+                                                    "w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0",
+                                                    lbUser.rank === 1 ? "bg-yellow-500/20 text-yellow-500" :
+                                                        lbUser.rank === 2 ? "bg-gray-300/20 text-gray-400" :
+                                                            lbUser.rank === 3 ? "bg-orange-600/20 text-orange-500" : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-500"
+                                                )}>{lbUser.rank}</span>
+                                                <span className="text-xs sm:text-sm font-medium text-slate-650 sm:group-hover:text-slate-900 dark:text-gray-300 sm:dark:group-hover:text-white transition-colors truncate">{lbUser.name}</span>
+                                            </div>
+                                            <span className="font-mono font-bold text-primary text-xs sm:text-sm shrink-0 pl-2">{lbUser.time}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button className="w-full mt-5 py-2.5 text-xs font-bold text-slate-500 sm:hover:text-slate-900 dark:text-gray-400 sm:dark:hover:text-white bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-transparent rounded-lg transition-colors min-h-[38px] uppercase tracking-wider">
+                                    Global Leaderboard
+                                </button>
+                            </div>
+
+                            {/* Active Sub-Challenges Framework */}
+                            <div className="glass-panel p-5 sm:p-6 border-secondary/20 w-full text-left">
+                                <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg mb-4">Community Challenge</h3>
+                                <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full">
+                                    <h4 className="font-bold text-secondary text-xs sm:text-sm mb-0.5 uppercase tracking-wide">Roux Transition Week</h4>
+                                    <p className="text-xs text-slate-500 dark:text-gray-400 mb-4 leading-normal">Complete 50 verified solves using the Roux method.</p>
+                                    <div className="w-full h-1.5 bg-slate-200/40 dark:bg-background rounded-full overflow-hidden mb-2">
+                                        <div className="h-full bg-secondary w-[40%] transition-all" />
+                                    </div>
+                                    <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-gray-400">20 / 50 Solves</span>
+                                </div>
+                            </div>
                         </div>
-                        <Button variant="secondary" size="sm" className="w-full sm:w-auto">Play 3D Replay</Button>
-                      </div>
-                    )}
+                    </motion.div>
 
-                    {post.type === 'algorithm' && post.solveData && (
-                      <div className="bg-background/50 border border-white/10 rounded-xl p-4 mb-4">
-                        <span className="text-xs font-bold text-gray-400 block mb-2">{post.solveData.type} Case</span>
-                        <div className="flex justify-between items-center">
-                          <code className="text-white font-mono font-bold tracking-wider">{post.solveData.alg}</code>
-                          <button className="text-xs text-secondary hover:text-white transition-colors font-bold">Copy</button>
-                        </div>
-                      </div>
-                    )}
+                ) : (
+                    /* ================= PUBLIC PERSONAL PROFILE TAB ================= */
+                    <motion.div
+                        key="profile"
+                        initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -15 }}
+                        className="flex flex-col gap-5 sm:gap-6 w-full"
+                    >
+                        {isLoadingProfile ? (
+                            <div className="flex flex-col items-center justify-center py-24 text-slate-500 w-full text-center">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
+                                <span className="text-xs font-medium">Loading profile...</span>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Profile Banner & Info Header Card Layout */}
+                                <div className="glass-panel p-0 relative overflow-hidden bg-white/30 dark:bg-white/[0.01] w-full text-left">
+                                    {/* Backdrop Header Canvas Decor */}
+                                    <div className="h-24 sm:h-32 w-full bg-gradient-to-r from-primary/15 via-secondary/15 to-tertiary/15" />
 
-                    {/* Engagement Bar */}
-                    <div className="flex items-center gap-6 mt-2 pt-4 border-t border-white/5">
-                      <button className="flex items-center gap-2 text-gray-400 hover:text-red-400 transition-colors group">
-                        <Heart className="w-4 h-4 group-hover:fill-current" /> <span className="text-xs font-bold">{post.likes}</span>
-                      </button>
-                      <button className="flex items-center gap-2 text-gray-400 hover:text-primary transition-colors">
-                        <MessageSquare className="w-4 h-4" /> <span className="text-xs font-bold">{post.comments}</span>
-                      </button>
-                      <button className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors ml-auto">
-                        <Share2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                                    <div className="px-4 sm:px-8 pb-5 sm:pb-8 w-full">
+                                        {/* Floating Avatar & Settings Link */}
+                                        <div className="flex justify-between items-end -mt-8 sm:-mt-12 mb-5 sm:mb-6 w-full">
+                                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 dark:bg-[#111315] border-4 border-slate-100 dark:border-[#111315] p-0.5 relative z-10 shadow-xl overflow-hidden shrink-0">
+                                                <img
+                                                    loading="lazy"
+                                                    src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || 'Cubora')}`}
+                                                    alt="Profile"
+                                                    className="w-full h-full rounded-xl bg-slate-50 dark:bg-white/5 object-cover"
+                                                />
+                                            </div>
+                                            <Button variant="secondary" size="sm" className="gap-1.5 min-h-[44px] sm:min-h-[32px] px-4 sm:px-3 ml-8" onClick={() => navigate('/settings')}>
+                                                <Edit2 className="w-3.5 h-3.5" /> Edit Profile
+                                            </Button>
+                                        </div>
 
-            {/* Right Column: Trending & Leaderboards */}
-            <div className="flex flex-col gap-6">
-              
-              {/* Leaderboard Snippet */}
-              <div className="glass-panel p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <TrendingUp className="w-5 h-5 text-tertiary" />
-                  <h3 className="font-display font-bold text-white text-lg">Top Solvers (Ao100)</h3>
-                </div>
-                
-                <div className="space-y-4">
-                  {[
-                    { rank: 1, name: 'Max Park', time: '5.21s' },
-                    { rank: 2, name: 'Tymon Kolasiński', time: '5.43s' },
-                    { rank: 3, name: 'Ruihang Xu', time: '5.62s' }
-                  ].map(user => (
-                    <div key={user.rank} className="flex items-center justify-between group cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <span className={clsx(
-                          "w-6 h-6 rounded flex items-center justify-center text-xs font-bold font-mono",
-                          user.rank === 1 ? "bg-yellow-500/20 text-yellow-500" :
-                          user.rank === 2 ? "bg-gray-300/20 text-gray-300" :
-                          user.rank === 3 ? "bg-orange-600/20 text-orange-500" : "bg-white/5 text-gray-500"
-                        )}>{user.rank}</span>
-                        <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{user.name}</span>
-                      </div>
-                      <span className="font-mono font-bold text-primary">{user.time}</span>
-                    </div>
-                  ))}
-                </div>
-                <button className="w-full mt-6 py-2 text-xs font-bold text-gray-400 hover:text-white bg-white/5 rounded-lg transition-colors">
-                  View Global Leaderboard
-                </button>
-              </div>
+                                        {/* Bio Identity Summary */}
+                                        <div className="mb-6 sm:mb-8 w-full">
+                                            <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+                                                {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
+                                            </h2>
+                                            <p className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm mt-1">
+                                                @{(user?.name || 'cubora').toLowerCase().replace(/\s+/g, '_')} • Speedcuber • Joined {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Recently'}
+                                            </p>
+                                        </div>
 
-              {/* Active Challenges */}
-              <div className="glass-panel p-6 border-secondary/20">
-                <h3 className="font-display font-bold text-white text-lg mb-4">Community Challenge</h3>
-                <div className="bg-secondary/10 border border-secondary/20 rounded-xl p-4">
-                  <h4 className="font-bold text-secondary text-sm mb-1">Roux Transition Week</h4>
-                  <p className="text-xs text-gray-400 mb-4">Complete 50 verified solves using the Roux method.</p>
-                  <div className="w-full h-1.5 bg-background rounded-full overflow-hidden mb-2">
-                    <div className="h-full bg-secondary w-[40%]" />
-                  </div>
-                  <span className="text-xs font-mono text-gray-400">20 / 50 Solves</span>
-                </div>
-              </div>
+                                        {/* Performance Metrics Tracker Rows Grid (2 cols mobile -> 4 cols desktop) */}
+                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full">
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">PB Single</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-primary leading-none block">{profileStats?.pb ? `${profileStats.pb}s` : '--'}</span>
+                                            </div>
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Current Ao5</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.ao5 ? `${profileStats.ao5}s` : '--'}</span>
+                                            </div>
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Total Solves</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.totalSolves ?? 0}</span>
+                                            </div>
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Solve Streak</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.streak ?? 0} Days</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
-            </div>
-          </motion.div>
+                                {/* Achievements Showcase Trophy Case */}
+                                <div className="w-full text-left">
+                                    <div className="flex items-center justify-between gap-4 mb-4 w-full">
+                                        <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+                                            <Award className="w-4 h-4 sm:w-5 sm:h-5 text-tertiary shrink-0" /> Trophy Case
+                                        </h3>
+                                        <span className="text-xs font-mono font-bold text-slate-500 dark:text-gray-500">{unlockedAchievements.length} Unlocked</span>
+                                    </div>
 
-        ) : (
-          /* ================= PUBLIC PROFILE TAB ================= */
-          <motion.div 
-            key="profile"
-            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-            className="flex flex-col gap-8"
-          >
-            {/* Profile Header Card */}
-            <div className="glass-panel p-0 relative overflow-hidden">
-              {/* Banner */}
-              <div className="h-32 w-full bg-gradient-to-r from-primary/20 via-secondary/20 to-tertiary/20" />
-              
-              <div className="px-8 pb-8">
-                {/* Avatar & Edit */}
-                <div className="flex justify-between items-end -mt-12 mb-6">
-                  <div className="w-24 h-24 rounded-2xl bg-surface border-4 border-background p-1 relative z-10 shadow-xl">
-                    <img loading="lazy" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Cubora" alt="Profile" className="w-full h-full rounded-xl bg-white/5" />
-                  </div>
-                  <Button variant="secondary" size="sm">Edit Profile</Button>
-                </div>
+                                    {achievements.length === 0 ? (
+                                        <div className="glass-panel p-8 text-center text-slate-500 w-full">
+                                            <Trophy className="w-7 h-7 mx-auto mb-2 opacity-50" />
+                                            <p className="text-xs">Start solving to unlock achievements!</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-3 gap-4 w-full pb-2 snap-x hide-scrollbar">
+                                            {/* CHANGED: Mobile horizontal flex container that snaps back to a grid on desktop (lg:) */}
+                                            {achievements.map((achievement) => {
+                                                const rarity = RARITY_MAP[achievement.title] || 'common';
+                                                const IconComponent = ICON_MAP[achievement.icon] || Trophy;
+                                                return (
+                                                    <div
+                                                        key={achievement.id}
+                                                        className={clsx(
+                                                            "p-4 sm:p-5 rounded-2xl border flex flex-col items-center text-center relative overflow-hidden group transition-all cursor-pointer min-h-[150px]",
+                                                            // CHANGED: Force fixed widths for the mobile scroll, then allow w-full inside the desktop grid
+                                                            "flex-shrink-0 w-[240px] sm:w-[280px] lg:w-full snap-center",
+                                                            achievement.isUnlocked ? RarityColors[rarity] : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01] opacity-40 grayscale",
+                                                            achievement.isUnlocked && "sm:hover:scale-[1.02] sm:hover:shadow-md"
+                                                        )}
+                                                    >
+                                                        <IconComponent className="w-8 h-8 sm:w-9 sm:h-9 mb-2.5 opacity-90 sm:group-hover:scale-105 transition-transform shrink-0" />
+                                                        <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm mb-0.5 relative z-10 truncate max-w-full">{achievement.title}</h4>
+                                                        <p className="text-[11px] opacity-70 mb-4 relative z-10 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed px-1">{achievement.description}</p>
 
-                {/* Info */}
-                <div className="mb-8">
-                  <h2 className="font-display text-3xl font-bold text-white flex items-center gap-2">
-                    Antony Jacob <Medal className="w-5 h-5 text-yellow-500" />
-                  </h2>
-                  <p className="text-gray-400 font-mono text-sm">@antony_j • Speedcuber • Joined Jan 2024</p>
-                </div>
-
-                {/* Profile Stats Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Global Rank</span>
-                    <span className="font-display font-bold text-2xl text-white">#4,201</span>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Official PB</span>
-                    <span className="font-display font-bold text-2xl text-primary">11.42s</span>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Total Solves</span>
-                    <span className="font-display font-bold text-2xl text-white">8,492</span>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Followers</span>
-                    <span className="font-display font-bold text-2xl text-white">124</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Achievements Section */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-display font-bold text-xl text-white flex items-center gap-2">
-                  <Award className="w-5 h-5 text-tertiary" /> Trophy Case
-                </h3>
-                <span className="text-sm font-mono text-gray-500">14 Unlocked</span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {MOCK_ACHIEVEMENTS.map((achievement) => (
-                  <div 
-                    key={achievement.id} 
-                    className={clsx(
-                      "p-5 rounded-2xl border flex flex-col items-center text-center relative overflow-hidden group hover:scale-105 transition-transform cursor-pointer",
-                      RarityColors[achievement.rarity as keyof typeof RarityColors]
-                    )}
-                  >
-                    <achievement.icon className="w-10 h-10 mb-3 opacity-90 group-hover:scale-110 transition-transform" />
-                    <h4 className="font-bold text-white text-sm mb-1 relative z-10">{achievement.title}</h4>
-                    <p className="text-xs opacity-70 mb-4 relative z-10">{achievement.desc}</p>
-                    <span className="text-[10px] font-mono font-bold opacity-50 mt-auto">{achievement.date}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </PageTransition>
-  );
+                                                        {achievement.isUnlocked && achievement.unlockedAt ? (
+                                                            <span className="text-[10px] font-mono font-bold opacity-40 mt-auto leading-none">
+                                                                {new Date(achievement.unlockedAt).toLocaleDateString()}
+                                                            </span>
+                                                        ) : achievement.progressTarget > 0 ? (
+                                                            <div className="w-full mt-auto pt-1">
+                                                                <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className="h-full bg-primary transition-all"
+                                                                        style={{ width: `${Math.min(100, (achievement.progress / achievement.progressTarget) * 100)}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-[9px] font-mono font-bold opacity-40 mt-1 block leading-none">
+                                                                    {achievement.progress} / {achievement.progressTarget}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-[9px] font-mono font-bold opacity-40 mt-auto leading-none">Locked</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </PageTransition>
+    );
 }

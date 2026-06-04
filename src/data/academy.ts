@@ -42,6 +42,33 @@ export const ACADEMY_COURSES: Course[] = [
     ]
   },
   {
+    id: 'simplified-cfop',
+    title: 'Simplified CFOP',
+    badge: 'Intermediate',
+    description: 'An easier version of CFOP using 4-Look Last Layer (4LLL) to transition smoothly from beginner.',
+    progress: 15,
+    modules: [
+      {
+        id: 'two-look-oll',
+        title: '2-Look OLL',
+        description: 'Orient the last layer in two simple steps.',
+        lessons: [
+          { id: 'sc1', title: 'Edge Orientation', explanation: 'Orient all top edges to form a yellow cross.', algorithm: "F R U R' U' F'" },
+          { id: 'sc2', title: 'Sune Corner Orientation', explanation: 'Orient corners when one corner is already oriented.', algorithm: "R U R' U R U2 R'" }
+        ]
+      },
+      {
+        id: 'two-look-pll',
+        title: '2-Look PLL',
+        description: 'Permute corners then permute edges.',
+        lessons: [
+          { id: 'sc3', title: 'T-Perm Corner Swap', explanation: 'Swap two adjacent corners on the top layer.', algorithm: "R U R' U' R' F R2 U' R' U' R U R' F'" },
+          { id: 'sc4', title: 'Ub-Perm Edge Cycle', explanation: 'Cycle three top layer edges clockwise.', algorithm: "R2 U R U R' U' R' U' R' U R'" }
+        ]
+      }
+    ]
+  },
+  {
     id: 'cfop',
     title: 'CFOP Mastery',
     badge: 'Advanced',
@@ -76,11 +103,48 @@ export const ACADEMY_COURSES: Course[] = [
     progress: 0,
     modules: [
       {
-        id: 'blocks',
+        id: 'roux-blocks',
         title: 'First Two Blocks',
-        description: 'Build 1x2x3 blocks on the left and right.',
+        description: 'Build 1x2x3 blocks on the left and right sides without affecting other edges.',
         lessons: [
-          { id: 'r1', title: 'Left Block Setup', explanation: 'Align the D-L edge and build around it.', algorithm: "L U L' U L U2 L'" }
+          { id: 'r1', title: 'Left Block Setup', explanation: 'Align the D-L edge and build around it.', algorithm: "L U L' U L U2 L'" },
+          { id: 'r2', title: 'Right Block Setup', explanation: 'Build the symmetrical 1x2x3 block on the right side.', algorithm: "R U' R' U' R U2 R'" }
+        ]
+      },
+      {
+        id: 'roux-cmll',
+        title: 'CMLL & M-Slice (LSE)',
+        description: 'Solve top corners and permute the last six edges (LSE) using M-slice moves.',
+        lessons: [
+          { id: 'r3', title: 'Corner Orientation', explanation: 'Orient last layer corners without disturbing the side blocks.', algorithm: "R U R' U' R' F R F'" },
+          { id: 'r4', title: 'M-Slice Edge Cycle', explanation: 'Cycle edges using the central M-slice axis.', algorithm: "M2 U M' U2 M U M2" }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'zz',
+    title: 'ZZ Method',
+    badge: 'Expert',
+    description: 'Rotationless solving via Edge Orientation Line (EOLine) followed by F2L blockbuilding.',
+    progress: 0,
+    modules: [
+      {
+        id: 'zz-eoline',
+        title: 'EOLine Setup',
+        description: 'Orient all edges (EO) and place the DF and DB line edges (Line).',
+        lessons: [
+          { id: 'z1', title: 'Edge Orientation (EO)', explanation: 'Orient bad edges to make the rest of the solve completely rotationless.', algorithm: "F R U R' U' F'" },
+          { id: 'z2', title: 'Line Placement', explanation: 'Align the front-bottom and back-bottom line edges.', algorithm: "D R2 L2 D'" }
+        ]
+      },
+      {
+        id: 'zz-f2l',
+        title: 'Rotationless F2L & LL',
+        description: 'Complete the first two layers using only U, R, L moves, then finish the last layer.',
+        lessons: [
+          { id: 'z3', title: 'Right Block Slotting', explanation: 'Solve right side slots rotation-free using U/R moves.', algorithm: "R U R' U' R U R'" },
+          { id: 'z4', title: 'Left Block Slotting', explanation: 'Solve left side slots rotation-free using U/L moves.', algorithm: "L U' L' U L U' L'" }
         ]
       }
     ]

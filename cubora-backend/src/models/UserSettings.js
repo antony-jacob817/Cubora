@@ -6,6 +6,7 @@ const userSettingsSchema = new mongoose.Schema({
   theme: { type: String, enum: ['dark', 'light', 'system'], default: 'dark' },
   timerInspection: { type: Boolean, default: true }, // 15-second WCA inspection
   smartCubeConnected: { type: Boolean, default: false },
+  accent: { type: String, enum: ['graphite', 'blue', 'purple', 'matte-black'], default: 'graphite' },
   updatedAt: { type: Date, default: Date.now }
 });
 

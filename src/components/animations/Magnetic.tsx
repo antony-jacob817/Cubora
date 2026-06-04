@@ -37,7 +37,7 @@ export function Magnetic({ children, pullFactor = 0.15 }: MagneticProps) {
       onMouseLeave={reset}
       animate={{ x, y }}
       transition={{ type: "spring", stiffness: 150, damping: 15, mass: 0.1 }}
-      className="inline-block relative z-10"
+      className="inline-block w-full sm:w-auto relative z-10"
     >
       {children}
     </motion.div>

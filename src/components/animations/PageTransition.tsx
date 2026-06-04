@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { pageVariants } from '@/animations/variants';
+import { getPageVariants } from '@/animations/variants';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -8,16 +9,18 @@ interface PageTransitionProps {
 }
 
 export function PageTransition({ children, className }: PageTransitionProps) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const variants = getPageVariants(prefersReducedMotion);
+
   return (
     <motion.div
       initial="initial"
       animate="enter"
       exit="exit"
-      variants={pageVariants}
+      variants={variants}
       className={className}
     >
       {children}
-      {/*<Your3DCubeComponent />*/}
     </motion.div>
   );
 }

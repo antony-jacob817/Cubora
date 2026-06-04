@@ -1,6 +1,7 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { revealVariants } from '@/animations/variants';
+import { motion, type Variants } from 'framer-motion';
+import { getRevealVariants } from '@/animations/variants';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 interface ScrollRevealProps {
   children: React.ReactNode;
@@ -17,6 +18,32 @@ export function ScrollReveal({
   width = '100%',
   className 
 }: ScrollRevealProps) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const revealVariants = getRevealVariants(prefersReducedMotion);
+
+  // Construct dynamic variants cleanly and type-safely
+  const dynamicVariants: Variants = {
+    hidden: revealVariants.hidden,
+    visible: typeof revealVariants.visible === 'function'
+      ? (customDir: any) => {
+          const base = (revealVariants.visible as any)(customDir);
+          return {
+            ...base,
+            transition: {
+              ...base?.transition,
+              delay
+            }
+          };
+        }
+      : {
+          ...revealVariants.visible,
+          transition: {
+            ...(revealVariants.visible as any)?.transition,
+            delay
+          }
+        }
+  };
+
   return (
     <motion.div
       style={{ width }}
@@ -25,16 +52,7 @@ export function ScrollReveal({
       initial="hidden"
       whileInView="visible"
       viewport={{ once: true, margin: "-50px" }}
-      variants={{
-        ...revealVariants,
-        visible: {
-          ...revealVariants.visible,
-          transition: {
-            ...(revealVariants.visible as any).transition,
-            delay,
-          }
-        }
-      }}
+      variants={dynamicVariants}
     >
       {children}
     </motion.div>

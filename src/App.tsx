@@ -1,10 +1,15 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence, LazyMotion, domAnimation } from 'framer-motion';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ThemeProvider } from '@/context/ThemeContext';
+import { SolverProvider } from '@/context/SolverContext';
 
 // --- LAYOUTS (Eagerly Loaded) ---
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { PageTransition } from '@/components/animations/PageTransition';
+import { DepthParticlesBackground } from '@/components/layout/DepthParticlesBackground';
+import { LandingNavbar } from '@/components/layout/LandingNavbar';
 
 // --- PUBLIC & AUTH PAGES (Eagerly Loaded for instant First Contentful Paint) ---
 import LandingPage from '@/pages/LandingPage';
@@ -23,6 +28,7 @@ const AnalyticsDashboard = lazy(() => import('@/pages/analytics/AnalyticsDashboa
 const AiCoach = lazy(() => import('@/pages/coach/AiCoach'));
 const CommunityHub = lazy(() => import('@/pages/community/CommunityHub'));
 const MultiplayerHub = lazy(() => import('@/pages/multiplayer/MultiplayerHub'));
+const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
 
 // Premium loading state while chunks are fetched
 const RouteLoader = () => (
@@ -32,6 +38,35 @@ const RouteLoader = () => (
   </div>
 );
 
+// Route Guard for authenticated dashboard pages
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="w-full h-screen flex flex-col items-center justify-center gap-4 bg-[#0B0F19]">
+        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+        <span className="text-xs font-mono font-bold tracking-widest text-primary animate-pulse">AUTHORIZING SESSION...</span>
+      </div>
+    );
+  }
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
+// Route Guard for public auth pages (redirects if already logged in)
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) return null;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
 function AnimatedRoutes() {
   const location = useLocation();
   
@@ -40,11 +75,12 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         
         <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        <Route element={<DashboardLayout />}>
+        <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           {/* Wrap all lazy routes in Suspense to handle the asynchronous network request */}
           <Route path="/dashboard" element={<Suspense fallback={<RouteLoader />}><Dashboard /></Suspense>} />
           <Route path="/scanner" element={<Suspense fallback={<RouteLoader />}><Scanner /></Suspense>} />
@@ -57,9 +93,7 @@ function AnimatedRoutes() {
           <Route path="/coach" element={<Suspense fallback={<RouteLoader />}><AiCoach /></Suspense>} />
           <Route path="/multiplayer" element={<Suspense fallback={<RouteLoader />}><MultiplayerHub /></Suspense>} />
           <Route path="/community" element={<Suspense fallback={<RouteLoader />}><CommunityHub /></Suspense>} />
-          <Route path="/settings" element={
-            <PageTransition><div className="flex h-full items-center justify-center text-gray-500 font-display text-xl">Settings Coming Soon</div></PageTransition>
-          } />
+          <Route path="/settings" element={<Suspense fallback={<RouteLoader />}><SettingsPage /></Suspense>} />
         </Route>
 
       </Routes>
@@ -67,13 +101,30 @@ function AnimatedRoutes() {
   );
 }
 
+function LandingNavbarConditional() {
+  const location = useLocation();
+  if (location.pathname === '/') {
+    return <LandingNavbar />;
+  }
+  return null;
+}
+
 function App() {
   return (
     // LazyMotion reduces the main bundle by ~40kb by lazy-loading the animation engine
     <LazyMotion features={domAnimation}>
-      <Router>
-        <AnimatedRoutes />
-      </Router>
+      <AuthProvider>
+        <ThemeProvider>
+          <SolverProvider>
+            <Router>
+              <DepthParticlesBackground />
+              <div className="accent-mist-glow" />
+              <LandingNavbarConditional />
+              <AnimatedRoutes />
+            </Router>
+          </SolverProvider>
+        </ThemeProvider>
+      </AuthProvider>
     </LazyMotion>
   );
 }

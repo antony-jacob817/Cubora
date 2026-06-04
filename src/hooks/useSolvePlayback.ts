@@ -1,73 +1,80 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
 export interface SolveStep {
   phase: string;
   explanation: string;
-  moves: string; // e.g., "R U R' U'"
+  moves: string;
 }
 
+const invertMove = (move: string): string => {
+  if (move.includes("'")) return move.replace("'", "");
+  if (move.includes("2")) return move;
+  return move + "'";
+};
+
+export type PlaybackAction = { index: number; move: string };
+
 export function useSolvePlayback(steps: SolveStep[]) {
-  // Flatten moves into a single timeline array
-  const moveTimeline = useRef<{ move: string; stepIndex: number; moveIndex: number }[]>([]);
+  // FIX: useMemo calculates the timeline synchronously before the first render!
+  // This stops the UI from falsely assuming totalMoves is 0 on load.
+  const moveTimeline = useMemo(() => {
+    const timeline: { move: string; stepIndex: number; moveIndex: number }[] = [];
+    steps.forEach((step, sIdx) => {
+      const moves = step.moves.split(' ').filter(Boolean);
+      moves.forEach((move, mIdx) => {
+        timeline.push({ move, stepIndex: sIdx, moveIndex: mIdx });
+      });
+    });
+    return timeline;
+  }, [steps]);
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTimelineIndex, setCurrentTimelineIndex] = useState(-1);
-  const [speed, setSpeed] = useState(1); // 0.5x to 2.0x
+  const [speed, setSpeed] = useState(1); 
+  const [action, setAction] = useState<PlaybackAction | null>(null);
   
-  // Track active step for the UI Sidebar
   const activeStepIndex = currentTimelineIndex >= 0 
-    ? moveTimeline.current[currentTimelineIndex]?.stepIndex 
+    ? moveTimeline[currentTimelineIndex]?.stepIndex 
     : 0;
-
-  useEffect(() => {
-    // Parse the backend steps into a linear timeline
-    const timeline = [];
-    steps.forEach((step, sIdx) => {
-      const moves = step.moves.split(' ');
-      moves.forEach((move, mIdx) => {
-        if (move) timeline.push({ move, stepIndex: sIdx, moveIndex: mIdx });
-      });
-    });
-    moveTimeline.current = timeline;
-  }, [steps]);
 
   const nextMove = useCallback(() => {
     setCurrentTimelineIndex(prev => {
-      const next = prev + 1;
-      return next < moveTimeline.current.length ? next : prev;
+      if (prev < moveTimeline.length - 1) {
+        const nextIdx = prev + 1;
+        setAction({ index: nextIdx, move: moveTimeline[nextIdx].move });
+        return nextIdx;
+      }
+      return prev;
     });
-  }, []);
+  }, [moveTimeline]);
 
   const prevMove = useCallback(() => {
-    setCurrentTimelineIndex(prev => (prev > -1 ? prev - 1 : prev));
-  }, []);
+    setCurrentTimelineIndex(prev => {
+      if (prev > -1) {
+        const inverted = invertMove(moveTimeline[prev].move);
+        setAction({ index: prev - 1, move: inverted });
+        return prev - 1;
+      }
+      return prev;
+    });
+  }, [moveTimeline]);
 
-  // Playback Loop
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    if (isPlaying && currentTimelineIndex < moveTimeline.current.length - 1) {
-      interval = setInterval(() => {
-        nextMove();
-      }, 1000 / speed); // Base speed: 1 move per second
-    } else if (currentTimelineIndex >= moveTimeline.current.length - 1) {
-      setIsPlaying(false); // Stop at end
+    if (isPlaying && currentTimelineIndex < moveTimeline.length - 1) {
+      interval = setInterval(() => nextMove(), 1000 / speed);
+    } else if (currentTimelineIndex >= moveTimeline.length - 1) {
+      setIsPlaying(false);
     }
-    
     return () => clearInterval(interval);
-  }, [isPlaying, currentTimelineIndex, speed, nextMove]);
+  }, [isPlaying, currentTimelineIndex, speed, nextMove, moveTimeline.length]);
 
   const togglePlay = () => setIsPlaying(!isPlaying);
 
   return {
-    isPlaying,
-    togglePlay,
-    speed,
-    setSpeed,
-    nextMove,
-    prevMove,
-    currentTimelineIndex,
-    activeStepIndex,
-    totalMoves: moveTimeline.current.length,
-    currentMove: currentTimelineIndex >= 0 ? moveTimeline.current[currentTimelineIndex].move : null
+    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove,
+    currentTimelineIndex, activeStepIndex, action,
+    totalMoves: moveTimeline.length,
+    currentMove: action ? action.move : null
   };
 }

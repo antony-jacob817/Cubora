@@ -35,7 +35,7 @@ export function generateScramble(length = 21): string {
 }
 
 // --- STATS CALCULATOR ---
-export function calculateAverage(times: number[], count: 5 | 12): number | null {
+export function calculateAverage(times: number[], count: number): number | null {
   if (times.length < count) return null;
   
   // Get the most recent 'count' times
