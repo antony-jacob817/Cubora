@@ -27,9 +27,9 @@ export default function DashboardLayout() {
 
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* CHANGED: Added pb-safe to ensure the footer doesn't hit the iOS home indicator */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth pt-4 pb-safe sm:pb-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth pt-4 pb-safe sm:pb-0 flex flex-col">
           <Navbar onMenuToggle={() => setIsMobileMenuOpen(true)} />
-          <div className="p-4 sm:p-6 lg:p-10 w-full max-w-[1600px] mx-auto min-h-full">
+          <div className="p-4 sm:p-6 lg:p-10 w-full max-w-[1600px] mx-auto flex-1">
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>

@@ -52,14 +52,20 @@ export function calculateAverage(times: number[], count: number): number | null 
   return sum / trimmed.length;
 }
 
-export function formatTime(ms: number): string {
-  if (!ms) return '0.00';
-  const totalSeconds = ms / 1000;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = (totalSeconds % 60).toFixed(2);
-  
-  if (minutes > 0) {
-    return `${minutes}:${seconds.padStart(5, '0')}`;
-  }
-  return seconds;
+export function formatTime(timeMs: number): string {
+    if (!timeMs || timeMs === 0) return "0.000";
+    
+    const totalSeconds = timeMs / 1000;
+    
+    // If under a minute, just show the seconds with 3 decimals (e.g. "0.770")
+    if (totalSeconds < 60) {
+        return totalSeconds.toFixed(3);
+    }
+    
+    // If over a minute, format as M:SS.MMM
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = (totalSeconds % 60).toFixed(3);
+    
+    // padStart(6, '0') ensures single-digit seconds get a leading zero (e.g. 1:05.123)
+    return `${minutes}:${seconds.padStart(6, '0')}`;
 }

@@ -38,7 +38,7 @@ exports.saveSolve = async (req, res) => {
 // @access  Private
 exports.updateSolve = async (req, res) => {
   try {
-    const { penalty, comments } = req.body;
+    const { penalty, comments, sessionId } = req.body;
     let solve = await SolveHistory.findOne({ _id: req.params.id, user: req.user.id });
 
     if (!solve) {
@@ -47,6 +47,7 @@ exports.updateSolve = async (req, res) => {
 
     if (penalty !== undefined) solve.penalty = penalty;
     if (comments !== undefined) solve.comments = comments;
+    if (sessionId !== undefined) solve.sessionId = sessionId;
 
     await solve.save();
     res.status(200).json({ success: true, data: solve });
@@ -65,6 +66,10 @@ exports.getSolves = async (req, res) => {
     if (sessionId !== 'all') {
       query.sessionId = sessionId;
     }
+    
+    // We send ALL solves (even soft-deleted ones) to the frontend.
+    // The frontend React code will filter out `isDeleted` for charts/tables,
+    // but keep them for building the Annual Activity Heatmap.
     const solves = await SolveHistory.find(query).sort({ date: -1 });
     res.status(200).json({ success: true, count: solves.length, data: solves });
   } catch (error) {
@@ -72,7 +77,7 @@ exports.getSolves = async (req, res) => {
   }
 };
 
-// @desc    Delete a solve record (discard solve)
+// @desc    Delete a solve record (Soft delete to preserve streaks)
 // @route   DELETE /api/solves/:id
 // @access  Private
 exports.deleteSolve = async (req, res) => {
@@ -83,7 +88,10 @@ exports.deleteSolve = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Solve record not found' });
     }
 
-    await solve.deleteOne();
+    // Soft delete: Hides it from stats but keeps the footprint for streaks
+    solve.isDeleted = true;
+    await solve.save();
+    
     res.status(200).json({ success: true, data: {} });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -96,16 +104,17 @@ exports.deleteSolve = async (req, res) => {
 exports.getSolveStats = async (req, res) => {
   try {
     const sessionId = req.query.sessionId || 'all';
-    const timeframe = req.query.timeframe || '30D'; // Added to track timeframe options
+    const timeframe = req.query.timeframe || '30D';
     
     const query = { user: req.user.id };
     if (sessionId !== 'all') {
       query.sessionId = sessionId;
     }
     
-    const solves = await SolveHistory.find(query).sort({ date: 1 });
+    // Fetch ALL solves (including soft-deleted ones) for streak calculation
+    const allHistoricalSolves = await SolveHistory.find(query).sort({ date: 1 });
 
-    if (solves.length === 0) {
+    if (allHistoricalSolves.length === 0) {
       return res.status(200).json({
         success: true,
         stats: {
@@ -120,7 +129,10 @@ exports.getSolveStats = async (req, res) => {
       });
     }
 
-    const validSolves = solves.filter(s => s.penalty !== 'DNF');
+    // Filter out deleted solves specifically for performance math
+    const activeSolves = allHistoricalSolves.filter(s => !s.isDeleted);
+    const validSolves = activeSolves.filter(s => s.penalty !== 'DNF');
+    
     const times = validSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
     
     const pb = times.length > 0 ? Math.min(...times) : null;
@@ -140,7 +152,7 @@ exports.getSolveStats = async (req, res) => {
     const ao12 = calculateAoN(times, 12);
     const ao100 = calculateAoN(times, 100);
 
-    // --- FIX APPLIED: TIME-SCALE ADAPTIVE TREND GENERATOR ---
+    // TIME-SCALE ADAPTIVE TREND GENERATOR
     // Configures chart points safely based on the timeframe request parameters
     let lookbackDays = 7;
     if (timeframe === '30D') lookbackDays = 30;
@@ -154,7 +166,6 @@ exports.getSolveStats = async (req, res) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
       
-      // Use concise formatting labels depending on total lookback density
       const label = lookbackDays <= 7 
         ? dayNames[d.getDay()] 
         : `${d.getMonth() + 1}/${d.getDate()}`;
@@ -162,6 +173,7 @@ exports.getSolveStats = async (req, res) => {
       trendMap[label] = [];
     }
 
+    // Only populate trends with valid, active solves
     validSolves.forEach(solve => {
       const solveDate = new Date(solve.date);
       const label = lookbackDays <= 7 
@@ -182,8 +194,10 @@ exports.getSolveStats = async (req, res) => {
       };
     });
 
+    // STREAK CALCULATION
+    // Uses allHistoricalSolves so soft-deleted sessions don't break the streak
     let streak = 0;
-    const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
+    const uniqueDays = new Set(allHistoricalSolves.map(s => new Date(s.date).toDateString()));
     const today = new Date();
     
     for (let i = 0; i < 365; i++) {
@@ -199,11 +213,11 @@ exports.getSolveStats = async (req, res) => {
     res.status(200).json({
       success: true,
       stats: {
-        pb: pb ? parseFloat((pb / 1000).toFixed(2)) : null,
-        ao5: ao5 ? parseFloat((ao5 / 1000).toFixed(2)) : null,
-        ao12: ao12 ? parseFloat((ao12 / 1000).toFixed(2)) : null,
-        ao100: ao100 ? parseFloat((ao100 / 1000).toFixed(2)) : null,
-        globalAverage: globalAverage ? parseFloat((globalAverage / 1000).toFixed(2)) : null,
+        pb: pb ? parseFloat((pb / 1000).toFixed(3)) : null,
+        ao5: ao5 ? parseFloat((ao5 / 1000).toFixed(3)) : null,
+        ao12: ao12 ? parseFloat((ao12 / 1000).toFixed(3)) : null,
+        ao100: ao100 ? parseFloat((ao100 / 1000).toFixed(3)) : null,
+        globalAverage: globalAverage ? parseFloat((globalAverage / 1000).toFixed(3)) : null,
         streak,
         trends
       }

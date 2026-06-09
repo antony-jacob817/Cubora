@@ -9,11 +9,10 @@ const solveHistorySchema = new mongoose.Schema({
   penalty: { type: String, enum: ['None', '+2', 'DNF'], default: 'None' },
   comments: { type: String, default: '' }, // NEW: Solve notes/comments
   isManual: { type: Boolean, default: false }, // NEW: Tracks if time was typed manually
-  phaseSplits: { // For advanced analytics (Cross, F2L, OLL, PLL)
-    cross: Number,
-    f2l: Number,
-    oll: Number,
-    pll: Number
+  phaseSplits: { type: Object, default: {} },
+  isDeleted: {
+    type: Boolean,
+    default: false
   },
   date: { type: Date, default: Date.now }
 });

@@ -5,7 +5,7 @@ import {
     ChevronRight, Activity, ScanLine, History, CheckCircle2, CalendarDays
 } from 'lucide-react';
 import {
-    AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+    AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceDot
 } from 'recharts';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
@@ -26,7 +26,6 @@ const MINI_COLOR_MAP: Record<string, string> = {
     'B': 'bg-blue-500', 'R': 'bg-red-500', 'O': 'bg-orange-500', 'UNKNOWN': 'bg-transparent'
 };
 
-// --- PROCEDURAL 365-DAY CHALLENGE MATRIX ---
 const getDailyChallenge = (date: Date) => {
     const start = new Date(date.getFullYear(), 0, 0);
     const diff = date.getTime() - start.getTime();
@@ -104,23 +103,47 @@ export default function Dashboard() {
     const { getAuthHeaders } = useAuth();
     const { isDarkMode } = useTheme();
     const navigate = useNavigate();
-    const chartWrapperRef = useRef<HTMLDivElement>(null);
     const mapScrollRef = useRef<HTMLDivElement>(null);
-    const [isChartSafe, setIsChartSafe] = useState(false);
+    const chartScrollRef = useRef<HTMLDivElement>(null);
 
     const [timeRange, setTimeRange] = useState('Last 7 Days');
     const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
     const timeDropdownRef = useRef<HTMLDivElement>(null);
 
-    // Desktop Drag-to-Scroll State
+    const [chartSession, setChartSession] = useState('All Sessions');
+    const [isChartSessionDropdownOpen, setIsChartSessionDropdownOpen] = useState(false);
+    const chartSessionDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Map dragging state
     const [isDraggingMap, setIsDraggingMap] = useState(false);
-    const [startX, setStartX] = useState(0);
-    const [scrollLeft, setScrollLeft] = useState(0);
+    const [mapStartX, setMapStartX] = useState(0);
+    const [mapScrollLeft, setMapScrollLeft] = useState(0);
+
+    // Chart dragging & scrolling state (to fix tooltip on mobile)
+    const [isDraggingChart, setIsDraggingChart] = useState(false);
+    const [chartStartX, setChartStartX] = useState(0);
+    const [chartScrollLeftValue, setChartScrollLeftValue] = useState(0);
+    const [isChartScrolling, setIsChartScrolling] = useState(false);
+    const chartScrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 640);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent | TouchEvent) => {
             if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
                 setIsTimeDropdownOpen(false);
+            }
+            if (chartSessionDropdownRef.current && !chartSessionDropdownRef.current.contains(event.target as Node)) {
+                setIsChartSessionDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -145,25 +168,11 @@ export default function Dashboard() {
     const [expandedScanId, setExpandedScanId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!chartWrapperRef.current) return;
-        
-        const observer = new ResizeObserver(([entry]) => {
-            if (entry.contentRect.width > 0) {
-                setIsChartSafe(true);
-                observer.disconnect(); 
-            }
-        });
-        
-        observer.observe(chartWrapperRef.current);
-        return () => observer.disconnect();
-    }, []);
-
-    useEffect(() => {
         const fetchData = async () => {
             try {
                 const headers = getAuthHeaders();
                 const [statsRes, solvesRes, scansRes] = await Promise.all([
-                    fetch('http://localhost:5000/api/solves/stats', { headers }),
+                    fetch('http://localhost:5000/api/solves/stats?sessionId=all', { headers }),
                     fetch('http://localhost:5000/api/solves?sessionId=all', { headers }),
                     fetch('http://localhost:5000/api/solver/history', { headers })
                 ]);
@@ -184,13 +193,166 @@ export default function Dashboard() {
         fetchData();
     }, []);
 
-    // --- LIVE SEEDED DAILY CHALLENGE CALCULATOR ---
+    const uniqueSessions = useMemo(() => {
+        const savedSessionsStr = localStorage.getItem('cubora_practice_sessions');
+        const savedSessions: string[] = savedSessionsStr ? JSON.parse(savedSessionsStr) : [];
+        
+        const activeSolves = solves.filter(s => !s.isDeleted);
+        const solvesSessions = Array.from(new Set(activeSolves.map(s => s.sessionId || 'Session 1')));
+        
+        const sessionEarliestDates: Record<string, number> = {};
+        solves.forEach(s => {
+            const sess = s.sessionId || 'Session 1';
+            const time = s.date ? new Date(s.date).getTime() : 0;
+            if (time > 0) {
+                if (!sessionEarliestDates[sess] || time < sessionEarliestDates[sess]) {
+                    sessionEarliestDates[sess] = time;
+                }
+            }
+        });
+        
+        const sorted = [...solvesSessions].sort((a, b) => {
+            const idxA = savedSessions.indexOf(a);
+            const idxB = savedSessions.indexOf(b);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            
+            const dateA = sessionEarliestDates[a] || 0;
+            const dateB = sessionEarliestDates[b] || 0;
+            return dateA - dateB;
+        });
+        
+        return ['All Sessions', ...sorted];
+    }, [solves]);
+
+    const sessionColors = useMemo(() => {
+        const savedColorsStr = localStorage.getItem('cubora_practice_session_colors');
+        const savedColors = savedColorsStr ? JSON.parse(savedColorsStr) : {};
+        
+        const map: Record<string, string> = {};
+        uniqueSessions.forEach(s => {
+            const saved = savedColors[s];
+            // Resolve 'theme' (or undefined) strictly to the dynamic CSS variable
+            map[s] = (saved === 'theme' || !saved) ? 'var(--primary)' : saved;
+        });
+        return map;
+    }, [uniqueSessions]);
+
+
+    // Wrap validSolves and chartSolves in useMemo to prevent re-renders on scroll
+    const validSolves = useMemo(() => solves.filter(s => s.penalty !== 'DNF' && !s.isDeleted), [solves]);
+    
+    // Filter chart data explicitly by Session
+    const chartSolves = useMemo(() => validSolves.filter(s => (s.sessionId || 'Session 1') === chartSession), [validSolves, chartSession]);
+    
+    const performanceData = useMemo(() => {
+        if (chartSession !== 'All Sessions') {
+            const limit = timeRange === 'Last 7 Days' ? 20 : timeRange === 'Last 30 Days' ? 50 : chartSolves.length;
+            const data = [...chartSolves]
+                .slice(0, limit)
+                .reverse()
+                .map((solve, idx) => ({
+                    date: `#${idx + 1}`,
+                    time: parseFloat(((solve.timeMs + (solve.penalty === '+2' ? 2000 : 0)) / 1000).toFixed(3)),
+                    method: solve.method || 'CFOP'
+                }));
+            if (data.length === 1) {
+                data.unshift({ date: 'Start', time: data[0].time, method: data[0].method });
+            }
+            return data;
+        } else {
+            const sessionsList = uniqueSessions.filter(s => s !== 'All Sessions');
+            const chronologicalSolves = [...validSolves].reverse();
+            
+            // 1. UPDATE THIS MAP TO STORE AN OBJECT INSTEAD OF JUST A NUMBER
+            const sessionSolvesMap: Record<string, {time: number, method: string}[]> = {};
+            sessionsList.forEach(s => {
+                sessionSolvesMap[s] = [];
+            });
+            
+            chronologicalSolves.forEach(solve => {
+                const sId = solve.sessionId || 'Session 1';
+                if (sessionSolvesMap[sId]) {
+                    sessionSolvesMap[sId].push({
+                        time: parseFloat(((solve.timeMs + (solve.penalty === '+2' ? 2000 : 0)) / 1000).toFixed(3)),
+                        method: solve.method || 'CFOP'
+                    });
+                }
+            });
+            
+            const limit = timeRange === 'Last 7 Days' ? 20 : timeRange === 'Last 30 Days' ? 50 : Infinity;
+            
+            // 2. UPDATE THE LIMITED MAP TYPE
+            const sessionSolvesLimited: Record<string, {time: number, method: string}[]> = {};
+            sessionsList.forEach(s => {
+                sessionSolvesLimited[s] = sessionSolvesMap[s].slice(-limit);
+            });
+            
+            const maxSolves = Math.max(...sessionsList.map(s => sessionSolvesLimited[s].length), 0);
+            
+            const data = Array.from({ length: maxSolves }).map((_, idx) => {
+                const point: any = {
+                    date: `#${idx + 1}`
+                };
+                sessionsList.forEach(s => {
+                    if (idx < sessionSolvesLimited[s].length) {
+                        // 3. ASSIGN BOTH TIME AND METHOD TO THE POINT
+                        point[s] = sessionSolvesLimited[s][idx].time;
+                        point[`${s}_method`] = sessionSolvesLimited[s][idx].method; 
+                    }
+                });
+                return point;
+            });
+            
+            if (data.length === 1) {
+                const startPoint = { ...data[0], date: 'Start' };
+                data.unshift(startPoint);
+            }
+            return data;
+        }
+    }, [chartSession, chartSolves, validSolves, timeRange, uniqueSessions]);
+
+    // Auto-scroll the chart to the end when data changes
+    useEffect(() => {
+        if (!isLoading && performanceData.length > 0 && chartScrollRef.current) {
+            const timerId = setTimeout(() => {
+                if (chartScrollRef.current) {
+                    chartScrollRef.current.scrollLeft = chartScrollRef.current.scrollWidth;
+                }
+            }, 100);
+            return () => clearTimeout(timerId);
+        }
+    }, [performanceData, isLoading]);
+
+    // Isolate Personal Best Point
+    const pbSec = stats?.pb ? parseFloat(stats.pb.toFixed(3)) : null;
+    let pbPoint: any = null;
+    let pbSessionKey: string | null = null;
+    if (pbSec) {
+        if (chartSession !== 'All Sessions') {
+            pbPoint = performanceData.find((d: any) => d.time && Math.abs(d.time - pbSec) < 0.001);
+        } else {
+            const sessionsList = uniqueSessions.filter(s => s !== 'All Sessions');
+            for (const d of performanceData) {
+                for (const s of sessionsList) {
+                    if (d[s] && Math.abs(d[s] - pbSec) < 0.001) {
+                        pbPoint = d;
+                        pbSessionKey = s;
+                        break;
+                    }
+                }
+                if (pbPoint) break;
+            }
+        }
+    }
+    const hasEnoughChartData = chartSession !== 'All Sessions' ? chartSolves.length >= 2 : validSolves.length >= 2
+
     const currentChallenge = getDailyChallenge(new Date());
     const solvesToday = solves.filter(s => s.date && new Date(s.date).toDateString() === new Date().toDateString());
     const { progress: challengeProgress, target: challengeTarget } = currentChallenge.evaluate(solvesToday);
     const challengeComplete = challengeProgress >= challengeTarget;
 
-    // --- 365-DAY YEARLY HISTORY DATA MAPPING ---
     const yearHistory = useMemo(() => {
         const history = [];
         const today = new Date();
@@ -203,31 +365,27 @@ export default function Dashboard() {
             return acc;
         }, {});
 
-        // Determine the day of the week exactly 364 days ago
         const oldestDate = new Date(today);
         oldestDate.setDate(today.getDate() - 364);
         const startDayOfWeek = oldestDate.getDay();
 
-        // Pad the start to align columns properly (Row 0 = Sunday)
         for (let i = 0; i < startDayOfWeek; i++) {
             history.push({ empty: true });
         }
 
-        // Evaluate all 365 days using the deterministic subchallenge
         for (let i = 364; i >= 0; i--) {
             const d = new Date(today);
             d.setDate(d.getDate() - i);
             const dStr = d.toDateString();
             const daySolves = solvesByDate[dStr] || [];
 
-            let level = 0; // Stage 1: Full Dim
-            
+            let level = 0; 
             if (daySolves.length > 0) {
-                level = 1; // Stage 2: Half Bright (streak maintained)
+                level = 1; 
                 const challenge = getDailyChallenge(d);
                 const { progress, target } = challenge.evaluate(daySolves);
                 if (progress >= target) {
-                    level = 2; // Stage 3: Full Bright (streak & sub challenge finished)
+                    level = 2; 
                 }
             }
             history.push({ date: d, level, empty: false });
@@ -235,7 +393,6 @@ export default function Dashboard() {
         return history;
     }, [solves]);
 
-    // Ensure the Annual Map defaults to showing the most recent days (scroll right)
     useEffect(() => {
         if (!isLoading && yearHistory.length > 0 && mapScrollRef.current) {
             const timerId = setTimeout(() => {
@@ -247,28 +404,94 @@ export default function Dashboard() {
         }
     }, [yearHistory, isLoading]);
 
-    // Desktop Drag-to-Scroll Handlers
+    // Map Handlers
     const handleMapMouseDown = (e: any) => {
         if (!mapScrollRef.current) return;
         setIsDraggingMap(true);
-        setStartX(e.pageX - mapScrollRef.current.offsetLeft);
-        setScrollLeft(mapScrollRef.current.scrollLeft);
+        setMapStartX(e.pageX - mapScrollRef.current.offsetLeft);
+        setMapScrollLeft(mapScrollRef.current.scrollLeft);
     };
-
-    const handleMapMouseLeave = () => {
-        setIsDraggingMap(false);
-    };
-
-    const handleMapMouseUp = () => {
-        setIsDraggingMap(false);
-    };
-
+    const handleMapMouseLeave = () => setIsDraggingMap(false);
+    const handleMapMouseUp = () => setIsDraggingMap(false);
     const handleMapMouseMove = (e: any) => {
         if (!isDraggingMap || !mapScrollRef.current) return;
-        e.preventDefault(); // Prevent text/box selection while dragging
+        e.preventDefault(); 
         const x = e.pageX - mapScrollRef.current.offsetLeft;
-        const walk = (x - startX) * 1.5; // Drag speed multiplier
-        mapScrollRef.current.scrollLeft = scrollLeft - walk;
+        const walk = (x - mapStartX) * 1.5; 
+        mapScrollRef.current.scrollLeft = mapScrollLeft - walk;
+    };
+
+    // Chart Handlers (Scroll & Drag)
+    const handleChartScroll = () => {
+        setIsChartScrolling(true);
+        if (chartScrollTimeout.current) clearTimeout(chartScrollTimeout.current);
+        chartScrollTimeout.current = setTimeout(() => {
+            setIsChartScrolling(false);
+        }, 150);
+    };
+    const handleChartMouseDown = (e: any) => {
+        if (!chartScrollRef.current) return;
+        setIsDraggingChart(true);
+        setChartStartX(e.pageX - chartScrollRef.current.offsetLeft);
+        setChartScrollLeftValue(chartScrollRef.current.scrollLeft);
+    };
+    const handleChartMouseLeave = () => setIsDraggingChart(false);
+    const handleChartMouseUp = () => setIsDraggingChart(false);
+    const handleChartMouseMove = (e: any) => {
+        if (!isDraggingChart || !chartScrollRef.current) return;
+        e.preventDefault(); 
+        const x = e.pageX - chartScrollRef.current.offsetLeft;
+        const walk = (x - chartStartX) * 1.5; 
+        chartScrollRef.current.scrollLeft = chartScrollLeftValue - walk;
+    };
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="px-3 py-2.5 rounded-xl backdrop-blur-xl bg-white/80 dark:bg-[#141519]/80 border border-primary/30 shadow-[0_8px_20px_rgba(0,0,0,0.15)] relative overflow-hidden flex flex-col outline-none z-50 pointer-events-none">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary shadow-[0_0_10px_currentColor]" />
+                        
+                        {/* 1. RESTORED SIMPLE HEADER */}
+                        <div className="flex justify-between items-center mb-1.5 border-b border-slate-200/50 dark:border-white/5 pb-1 gap-4">
+                            <span className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest pl-1.5">
+                                Solve {label}
+                            </span>
+                        </div>
+                    
+                    <div className="flex flex-col gap-1.5 pl-1.5 mt-1">
+                        {payload.map((entry: any, index: number) => {
+                            const displayName = entry.name === 'time' ? (chartSession === 'All Sessions' ? 'Solve Time' : chartSession) : entry.name;
+                            
+                            // 2. GRAB METHOD DYNAMICALLY FOR EITHER SINGLE OR ALL SESSIONS
+                            const method = entry.payload[`${entry.name}_method`] || entry.payload.method;
+
+                            let color = entry.color;
+                            if (color === 'currentColor') {
+                                color = chartSession !== 'All Sessions' ? sessionColors[chartSession] : 'var(--primary)';
+                            }
+
+                            return (
+                                <div key={index} className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                                    
+                                    {/* 3. INLINE FLEX ROW FOR NAME, TIME, AND BADGE */}
+                                    <span className="text-xs font-semibold text-slate-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <span>{displayName}: <span className="font-display font-bold text-slate-900 dark:text-white">{entry.value}s</span></span>
+                                        
+                                        {method && (
+                                            <span className="text-[8px] font-mono font-bold text-slate-400 dark:text-gray-500 bg-slate-100 dark:bg-white/[0.05] px-1.5 py-0.5 rounded uppercase leading-none mt-px">
+                                                {method}
+                                            </span>
+                                        )}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        }
+        return null;
     };
 
     if (isLoading) {
@@ -309,7 +532,7 @@ export default function Dashboard() {
                                 <Flame className="w-3.5 h-3.5 sm:w-5 h-5 animate-pulse" />
                             </div>
                             <span className="text-[11px] font-mono font-bold text-orange-500 dark:text-orange-400 bg-orange-500/10 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-orange-500/15">
-                                PB: {stats?.pb ? `${stats.pb}s` : '--'}
+                                PB: {stats?.pb ? `${Number(stats.pb).toFixed(3)}s` : '--'}
                             </span>
                         </div>
                         <div className="mt-2 sm:mt-3 text-left">
@@ -324,13 +547,13 @@ export default function Dashboard() {
                                 <Timer className="w-3.5 h-3.5 sm:w-5 h-5" />
                             </div>
                             <span className="flex items-center text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full border border-emerald-500/15">
-                                Solves: {solves.length}
+                                Total Solves: {solves.filter(s => !s.isDeleted).length}
                             </span>
                         </div>
                         <div className="mt-2 sm:mt-3 text-left">
                             <h3 className="text-slate-500 dark:text-gray-400 text-[11px] font-bold uppercase tracking-wider">Global Average</h3>
                             <div className="text-xl font-display font-bold text-slate-900 dark:text-white mt-0.5 sm:mt-1 leading-none">
-                                {stats?.globalAverage ? `${stats.globalAverage}` : '--'}
+                                {stats?.globalAverage ? Number(stats.globalAverage).toFixed(3) : '--'}
                                 {stats?.globalAverage && <span className="text-xs sm:text-base text-gray-500 dark:text-gray-400 ml-1 font-sans">s</span>}
                             </div>
                         </div>
@@ -369,67 +592,204 @@ export default function Dashboard() {
                     
                     {/* LEFT COLUMN: Performance Trend */}
                     <motion.div variants={itemVariants} className="glass-panel p-4 sm:p-6 lg:col-span-2 min-h-[360px] sm:min-h-[400px] flex flex-col w-full overflow-hidden">
-                        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-3 mb-5 w-full">
+                        <div className="flex flex-col gap-3 mb-5 w-full">
+                            
                             <div className="flex items-center gap-2 text-left">
                                 <Activity className="w-4 h-4 sm:w-5 h-5 text-primary" />
                                 <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white">Performance Trend</h3>
                             </div>
-                            <div className="relative self-start xs:self-auto" ref={timeDropdownRef}>
-                                <button 
-                                    onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                                    className={`glass-panel flex items-center justify-between gap-3 bg-slate-50 dark:bg-[#1C1E22] border rounded-2xl text-[16px] sm:text-sm font-semibold text-slate-700 dark:text-gray-300 pl-4 pr-3 py-2.5 outline-none transition-all min-h-[44px] min-w-[150px] shadow-sm ${
-                                        isTimeDropdownOpen ? "border-primary ring-1 ring-primary" : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
-                                    }`}
-                                >
-                                    {timeRange}
-                                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isTimeDropdownOpen ? "rotate-180" : ""}`} />
-                                </button>
-                                <div className={`glass-panel absolute top-full mt-2 right-0 sm:left-0 w-full min-w-[150px] bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden z-50 transition-all duration-200 origin-top ${
-                                    isTimeDropdownOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
-                                }`}>
-                                    {['Last 7 Days', 'Last 30 Days', 'All Time'].map((option) => (
-                                        <button
-                                            key={option}
-                                            onClick={() => { setTimeRange(option); setIsTimeDropdownOpen(false); }}
-                                            className={`w-full text-left px-4 py-3 sm:py-2.5 text-[16px] sm:text-sm font-medium transition-colors ${
-                                                timeRange === option ? "bg-primary/10 text-primary dark:text-blue-400" : "text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5"
-                                            }`}
-                                        >
-                                            {option}
-                                        </button>
-                                    ))}
+                            
+                            <div className="flex items-center justify-between w-full">
+                                <div className="relative" ref={timeDropdownRef}>
+                                    <button 
+                                        onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                                        className={`glass-panel flex items-center justify-between gap-3 bg-slate-50 dark:bg-[#1C1E22] border rounded-2xl text-[16px] sm:text-sm font-semibold text-slate-700 dark:text-gray-300 pl-4 pr-3 py-2.5 outline-none transition-all min-h-[44px] min-w-[150px] shadow-sm ${
+                                            isTimeDropdownOpen ? "border-primary ring-1 ring-primary" : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
+                                        }`}
+                                    >
+                                        {timeRange}
+                                        <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isTimeDropdownOpen ? "rotate-180" : ""}`} />
+                                    </button>
+                                    
+                                    <div className={`glass-panel absolute top-full mt-2 left-0 w-full min-w-[150px] bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden z-50 transition-all duration-200 origin-top-left ${
+                                        isTimeDropdownOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
+                                    }`}>
+                                        {['Last 7 Days', 'Last 30 Days', 'All Time'].map((option) => (
+                                            <button
+                                                key={option}
+                                                onClick={() => { setTimeRange(option); setIsTimeDropdownOpen(false); }}
+                                                className={`w-full text-left px-4 py-3 sm:py-2.5 text-[16px] sm:text-sm font-medium transition-colors ${
+                                                    timeRange === option ? "bg-primary/10 text-primary dark:text-blue-400" : "text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                                                }`}
+                                            >
+                                                {option}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
+
+                                <div className="relative shrink-0" ref={chartSessionDropdownRef}>
+                                    <button 
+                                        onClick={() => setIsChartSessionDropdownOpen(!isChartSessionDropdownOpen)}
+                                        className={`glass-panel flex items-center justify-between gap-1.5 sm:gap-3 bg-slate-50 dark:bg-[#1C1E22] border rounded-xl sm:rounded-2xl text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-gray-300 pl-3 pr-2 sm:pl-4 sm:pr-3 py-2 sm:py-2.5 outline-none transition-all shadow-sm ${
+                                            isChartSessionDropdownOpen ? "border-primary ring-1 ring-primary" : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-1.5 truncate max-w-[80px] sm:max-w-[120px]">
+                                            {chartSession !== 'All Sessions' && (
+                                                <span 
+                                                    className="w-2.5 h-2.5 rounded-[5px] border border-black/10 dark:border-white/10 shrink-0" 
+                                                    style={{ backgroundColor: sessionColors[chartSession] }} 
+                                                />
+                                            )}
+                                            <span className="truncate">{chartSession}</span>
+                                        </div>
+                                        <ChevronDown className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform duration-200 ${isChartSessionDropdownOpen ? "rotate-180" : ""}`} />
+                                    </button>
+                                    <div className={`glass-panel absolute top-full mt-2 right-0 w-[140px] sm:w-[180px] bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-xl sm:rounded-2xl shadow-xl overflow-hidden z-50 transition-all duration-200 origin-top-right ${
+                                        isChartSessionDropdownOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
+                                    }`}>
+                                        <div className="max-h-[200px] overflow-y-auto hide-scrollbar">
+                                            {uniqueSessions.map((option) => (
+                                                <button
+                                                    key={option}
+                                                    onClick={() => { setChartSession(option); setIsChartSessionDropdownOpen(false); }}
+                                                    className={`w-full text-left px-3 sm:px-4 py-2 sm:py-2.5 text-[12px] sm:text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                                                        chartSession === option ? "bg-primary/10 text-primary dark:text-blue-400" : "text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                                                    }`}
+                                                >
+                                                    {option !== 'All Sessions' && (
+                                                        <span 
+                                                            className="w-2.5 h-2.5 rounded-[5px] border border-black/10 dark:border-white/10 shrink-0" 
+                                                            style={{ backgroundColor: sessionColors[option] }} 
+                                                        />
+                                                    )}
+                                                    <span className="truncate">{option}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>                                
                             </div>
                         </div>
                         
-                        <div ref={chartWrapperRef} className="flex-1 w-full h-[240px] sm:h-[280px] relative mt-1">
-                            {isChartSafe && (
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <AreaChart data={stats?.trends || []} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorTime" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.4} />
-                                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="4 4" stroke={isDarkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)'} vertical={false} />
-                                    <XAxis dataKey="date" stroke={isDarkMode ? '#4B5563' : '#94A3B8'} tick={{ fill: isDarkMode ? '#9CA3AF' : '#64748B', fontSize: 10, fontFamily: 'monospace' }} axisLine={false} tickLine={false} />
-                                    <YAxis stroke={isDarkMode ? '#4B5563' : '#94A3B8'} tick={{ fill: isDarkMode ? '#9CA3AF' : '#64748B', fontSize: 10, fontFamily: 'monospace' }} axisLine={false} tickLine={false} domain={['dataMin - 1', 'dataMax + 1']} />
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                                            backdropFilter: 'blur(20px)',
-                                            border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
-                                            borderRadius: '14px',
-                                            boxShadow: '0 15px 30px rgba(0,0,0,0.15)',
-                                            fontSize: '11px'
-                                        }}
-                                        itemStyle={{ color: isDarkMode ? '#3B82F6' : '#2563EB', fontWeight: 'bold' }}
-                                        labelStyle={{ color: isDarkMode ? '#9CA3AF' : '#64748B', fontWeight: 'medium' }}
-                                    />
-                                    <Area type="monotone" dataKey="time" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorTime)" animationDuration={1200} />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                        <div className="relative flex-1 w-full flex flex-col overflow-hidden">
+                            {!hasEnoughChartData ? (
+                                <div className="flex flex-col items-center justify-center flex-1 w-full h-full text-slate-500 dark:text-gray-500 gap-3 min-h-[240px]">
+                                    <Activity className="w-8 h-8 sm:w-10 sm:h-10 opacity-20 dark:opacity-40" />
+                                    <p className="text-xs sm:text-sm font-medium">Minimum 2 solves required to show trend.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* FIXED Y-AXIS OVERLAY */}
+                                    <div 
+                                        className="absolute left-0 top-0 bottom-0 w-[40px] z-10 pointer-events-none bg-slate-50/30 dark:bg-[#181A1D]/30 backdrop-blur-sm border-r border-slate-200/10 dark:border-white/5 pr-1 pb-2 flex flex-col justify-between"
+                                        style={{ color: chartSession !== 'All Sessions' ? sessionColors[chartSession] : 'var(--primary)' }}
+                                    >
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={performanceData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                                                {/* ... (Keep your existing AreaChart code here) ... */}
+                                                <XAxis dataKey="date" hide />
+                                                <YAxis 
+                                                    stroke={isDarkMode ? '#4B5563' : '#94A3B8'} 
+                                                    tick={{ fill: isDarkMode ? '#9CA3AF' : '#64748B', fontSize: 10, fontFamily: 'monospace' }} 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    domain={[0, 'auto']} 
+                                                />
+                                                {chartSession !== 'All Sessions' ? (
+                                                    <Area type="monotone" dataKey="time" stroke="transparent" fill="transparent" strokeWidth={0} fillOpacity={0} activeDot={false} dot={false} />
+                                                ) : (
+                                                    uniqueSessions.filter(s => s !== 'All Sessions').map((sessionName) => (
+                                                        <Area key={sessionName} type="monotone" dataKey={sessionName} stroke="transparent" fill="transparent" strokeWidth={0} fillOpacity={0} activeDot={false} dot={false} />
+                                                    ))
+                                                )}
+                                                {pbPoint && (
+                                                    <ReferenceDot x={pbPoint.date} y={chartSession === 'All Sessions' && pbSessionKey ? pbPoint[pbSessionKey] : pbPoint.time} r={0} fill="transparent" stroke="transparent" />
+                                                )}
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
+
+                                    {/* SCROLLABLE CHART CONTAINER */}
+                                    <div 
+                                        ref={chartScrollRef}
+                                        onScroll={handleChartScroll}
+                                        onMouseDown={handleChartMouseDown}
+                                        onMouseLeave={handleChartMouseLeave}
+                                        onMouseUp={handleChartMouseUp}
+                                        onMouseMove={handleChartMouseMove}
+                                        className={clsx(
+                                            "flex-1 min-w-0 w-full h-[240px] sm:h-[280px] mt-1 outline-none overflow-x-auto overflow-y-hidden pb-2 select-none",
+                                            "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+                                            isDraggingChart ? "cursor-grabbing" : "cursor-grab"
+                                        )}
+                                        style={{ color: chartSession !== 'All Sessions' ? sessionColors[chartSession] : 'var(--primary)' }}
+                                    >
+                                        <style>{`
+                                            .recharts-wrapper:focus, 
+                                            .recharts-surface:focus, 
+                                            .recharts-responsive-container:focus,
+                                            .recharts-wrapper *:focus {
+                                                outline: none !important;
+                                            }
+                                        `}</style>
+                                        <div 
+                                            style={{ width: `${Math.max(100, (performanceData.length / (isMobile ? 5 : 10)) * 100)}%`, height: '100%', minWidth: '100%' }}
+                                            className={clsx(
+                                                "transition-opacity",
+                                                (isChartScrolling || isDraggingChart) && "pointer-events-none opacity-90"
+                                            )}
+                                        >
+                                            <ResponsiveContainer width="100%" height="100%" minWidth={0} style={{ outline: 'none' }}>
+                                                <AreaChart style={{ outline: 'none' }} data={performanceData} margin={{ top: 10, right: 15, left: 40, bottom: 0 }}>
+                                                    {/* ... (Keep your existing AreaChart code here) ... */}
+                                                    <defs>
+                                                        {chartSession !== 'All Sessions' ? (
+                                                            <linearGradient id="dynamicColorTime" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="5%" stopColor="currentColor" stopOpacity={0.4} />
+                                                                <stop offset="95%" stopColor="currentColor" stopOpacity={0} />
+                                                            </linearGradient>
+                                                        ) : (
+                                                            uniqueSessions.filter(s => s !== 'All Sessions').map((sessionName) => {
+                                                                const sColor = sessionColors[sessionName] || 'var(--primary)';
+                                                                const gradId = `gradient-${sessionName.replace(/\s+/g, '-')}`;
+                                                                return (
+                                                                    <linearGradient key={gradId} id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                                                        <stop offset="5%" stopColor={sColor} stopOpacity={0.15} />
+                                                                        <stop offset="95%" stopColor={sColor} stopOpacity={0} />
+                                                                    </linearGradient>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="4 4" stroke={isDarkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)'} vertical={false} />
+                                                    <XAxis 
+                                                        dataKey="date" 
+                                                        stroke={isDarkMode ? '#4B5563' : '#94A3B8'} 
+                                                        tick={{ fill: isDarkMode ? '#9CA3AF' : '#64748B', fontSize: 10, fontFamily: 'monospace' }} 
+                                                        axisLine={false} 
+                                                        tickLine={false}
+                                                        interval="preserveStartEnd"
+                                                        minTickGap={20}
+                                                    />
+                                                    <YAxis stroke="transparent" tick={false} axisLine={false} tickLine={false} width={0} domain={[0, 'auto']} />
+                                                    <Tooltip cursor={false} content={<CustomTooltip />} />
+                                                    {chartSession !== 'All Sessions' ? (
+                                                        <Area type="monotone" dataKey="time" name={chartSession} stroke="currentColor" strokeWidth={2.5} fillOpacity={1} fill="url(#dynamicColorTime)" animationDuration={1200} dot={{ r: 4, fill: 'currentColor', strokeWidth: 0 }} activeDot={{ r: 6, fill: 'currentColor', stroke: '#fff', strokeWidth: 2 }} />
+                                                    ) : (
+                                                        uniqueSessions.filter(s => s !== 'All Sessions').map((sessionName) => (
+                                                            <Area key={sessionName} type="monotone" dataKey={sessionName} name={sessionName} stroke={sessionColors[sessionName] || 'var(--primary)'} strokeWidth={2.5} fillOpacity={1} fill={`url(#gradient-${sessionName.replace(/\s+/g, '-')})`} animationDuration={1200} dot={{ r: 4, fill: sessionColors[sessionName] || 'var(--primary)', strokeWidth: 0 }} activeDot={{ r: 6, fill: sessionColors[sessionName] || 'var(--primary)', stroke: '#fff', strokeWidth: 2 }} />
+                                                        ))
+                                                    )}
+                                                    {pbPoint && (
+                                                        <ReferenceDot x={pbPoint.date} y={chartSession === 'All Sessions' && pbSessionKey ? pbPoint[pbSessionKey] : pbPoint.time} r={6} fill="#F97316" stroke="#fff" strokeWidth={2} style={{ filter: 'drop-shadow(0px 0px 6px #F97316)', outline: 'none' }} />
+                                                    )}
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </motion.div>
@@ -437,14 +797,12 @@ export default function Dashboard() {
                     {/* RIGHT COLUMN: Activity Map & AI Coach Wrapper */}
                     <div className="flex flex-col gap-5 sm:gap-6 lg:col-span-1 w-full">
                         
-                        {/* 1. Annual Activity Map (Top) */}
                         <motion.div variants={itemVariants} className="glass-panel p-4 sm:p-5 w-full flex flex-col relative">
                             <div className="flex items-center gap-2 mb-4">
                                 <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                                 <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white">Annual Activity Map</h3>
                             </div>
                             
-                            {/* Scrollable Drag-to-Scroll Container */}
                             <div 
                                 ref={mapScrollRef} 
                                 onMouseDown={handleMapMouseDown}
@@ -468,7 +826,7 @@ export default function Dashboard() {
                                                 title={`${day.date.toDateString()}: ${day.level === 0 ? 'No activity' : day.level === 1 ? 'Streak maintained' : 'Challenge finished'}`}
                                                 className={clsx(
                                                     "w-[10px] h-[10px] sm:w-[13px] sm:h-[13px] rounded-[2px] sm:rounded-[3px] transition-colors duration-300 pointer-events-none",
-                                                    day.level === 0 && "bg-slate-200 dark:bg-white/5",
+                                                    day.level === 0 && "bg-primary opacity-10 dark:opacity-100 dark:bg-white/5",
                                                     day.level === 1 && "bg-primary opacity-40",
                                                     day.level === 2 && "bg-primary shadow-sm"
                                                 )}
@@ -481,7 +839,7 @@ export default function Dashboard() {
                             <div className="flex items-center justify-end gap-2 mt-3 text-[10px] sm:text-xs text-slate-500 dark:text-gray-400 font-medium">
                                 <span>Lazy</span>
                                 <div className="flex gap-1">
-                                    <div className="w-3 h-3 rounded-[3px] bg-slate-200 dark:bg-white/5" />
+                                    <div className="w-3 h-3 rounded-[3px] bg-primary opacity-10 dark:opacity-100 dark:bg-white/5" />
                                     <div className="w-3 h-3 rounded-[3px] bg-primary opacity-40" />
                                     <div className="w-3 h-3 rounded-[3px] bg-primary" />
                                 </div>
@@ -489,7 +847,6 @@ export default function Dashboard() {
                             </div>
                         </motion.div>
 
-                        {/* 2. AI Coach (Bottom) */}
                         <motion.div variants={itemVariants} className="glass-panel p-5 sm:p-6 flex flex-col border-primary/20 bg-gradient-to-b from-primary/[0.02] to-transparent w-full text-left h-full">
                             <div className="flex items-center gap-2.5 mb-5">
                                 <div className="w-8 h-8 rounded-lg bg-gradient-animated flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.3)] flex-shrink-0">
@@ -550,14 +907,20 @@ export default function Dashboard() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        solves.slice(0, 4).map((solve) => (
+                                        solves.filter(s => !s.isDeleted).slice(0, 4).map((solve) => (
                                             <tr key={solve._id || solve.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors group">
                                                 <td className="py-3.5 pl-2 sm:pl-4 font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg transition-colors group-hover:text-primary">
                                                     {solve.penalty === '+2' ? formatTime(solve.timeMs + 2000) + '+' : formatTime(solve.timeMs)}
                                                 </td>
                                                 <td className="py-3.5 text-xs sm:text-sm text-slate-500 dark:text-gray-400 font-semibold">
-                                                    <span className="bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5">
-                                                        {solve.sessionId || 'Session 1'}
+                                                    <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 w-max">
+                                                        <span 
+                                                            className="w-2 h-2 rounded-full shrink-0" 
+                                                            style={{ backgroundColor: sessionColors[solve.sessionId || 'Session 1'] }} 
+                                                        />
+                                                        <span className="truncate max-w-[80px] sm:max-w-[120px]">
+                                                            {solve.sessionId || 'Session 1'}
+                                                        </span>
                                                     </span>
                                                 </td>
                                                 <td className="py-3.5 text-xs sm:text-sm text-slate-700 dark:text-gray-300 font-medium">{solve.method || 'CFOP'}</td>
