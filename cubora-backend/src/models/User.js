@@ -37,7 +37,15 @@ const userSchema = new mongoose.Schema({
   created_at: {
     type: Date,
     default: Date.now
-  }
+  },
+  elo: {
+    type: Number,
+    default: 1200
+  },
+  friends: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User' 
+  }]
 });
 
 // Encrypt password using bcrypt before saving

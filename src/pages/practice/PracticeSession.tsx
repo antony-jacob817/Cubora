@@ -993,40 +993,40 @@ export default function PracticeSession() {
     const renderStats = (containerClass: string, cardClass: string = "p-3") => (
         <div className={clsx("w-full", containerClass)}>
             <div className={clsx("glass-panel flex flex-col justify-center text-center lg:text-left transition-all duration-300", cardClass)}>
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-1 lg:gap-1.5 mb-1 truncate">
-                    <Trophy className="w-3.5 h-3.5 text-[#FFC107] shrink-0" /> <span>Best Single</span>
+                <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-0.5 sm:gap-1.5 mb-1 truncate w-full">
+                    <Trophy className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-[#FFC107] shrink-0" /> <span className="truncate"><span className="hidden sm:inline">Best </span>Single</span>
                 </span>
-                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight mt-1">{renderStatValue(globalPb)}</span>
+                <span className="font-display font-bold text-[10px] xs:text-xs sm:text-xl lg:text-2xl text-slate-900 dark:text-white leading-tight mt-0.5 sm:mt-1 truncate w-full text-center lg:text-left">{renderStatValue(globalPb)}</span>
             </div>
             <div className={clsx("glass-panel flex flex-col justify-center text-center lg:text-left transition-all duration-300", cardClass)}>
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-1 lg:gap-1.5 mb-1 truncate">
-                    <Activity className="w-3.5 h-3.5 text-[#00E5FF] shrink-0" /> <span>Best mo3</span>
+                <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-0.5 sm:gap-1.5 mb-1 truncate w-full">
+                    <Activity className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-[#00E5FF] shrink-0" /> <span className="truncate"><span className="hidden sm:inline">Best </span>mo3</span>
                 </span>
-                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight mt-1">{renderStatValue(bestMo3)}</span>
+                <span className="font-display font-bold text-[10px] xs:text-xs sm:text-xl lg:text-2xl text-slate-900 dark:text-white leading-tight mt-0.5 sm:mt-1 truncate w-full text-center lg:text-left">{renderStatValue(bestMo3)}</span>
             </div>
             <div className={clsx("glass-panel flex flex-col justify-center text-center lg:text-left transition-all duration-300", cardClass)}>
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-1 lg:gap-1.5 mb-1 truncate">
-                    <Zap className="w-3.5 h-3.5 text-[#FF6B6B] shrink-0" /> <span>Best ao5</span>
+                <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-0.5 sm:gap-1.5 mb-1 truncate w-full">
+                    <Zap className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-[#FF6B6B] shrink-0" /> <span className="truncate"><span className="hidden sm:inline">Best </span>ao5</span>
                 </span>
-                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight mt-1">{renderStatValue(bestAo5)}</span>
+                <span className="font-display font-bold text-[10px] xs:text-xs sm:text-xl lg:text-2xl text-slate-900 dark:text-white leading-tight mt-0.5 sm:mt-1 truncate w-full text-center lg:text-left">{renderStatValue(bestAo5)}</span>
             </div>
             <div className={clsx("glass-panel flex flex-col justify-center text-center lg:text-left transition-all duration-300", cardClass)}>
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-1 lg:gap-1.5 mb-1 truncate">
-                    <Target className="w-3.5 h-3.5 text-[#DA70D6] shrink-0" /> <span>Best ao12</span>
+                <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-0.5 sm:gap-1.5 mb-1 truncate w-full">
+                    <Target className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-[#DA70D6] shrink-0" /> <span className="truncate"><span className="hidden sm:inline">Best </span>ao12</span>
                 </span>
-                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight mt-1">{renderStatValue(bestAo12)}</span>
+                <span className="font-display font-bold text-[10px] xs:text-xs sm:text-xl lg:text-2xl text-slate-900 dark:text-white leading-tight mt-0.5 sm:mt-1 truncate w-full text-center lg:text-left">{renderStatValue(bestAo12)}</span>
             </div>
             <div className={clsx("glass-panel flex flex-col justify-center text-center lg:text-left transition-all duration-300", cardClass)}>
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-1 lg:gap-1.5 mb-1 truncate">
-                    <Award className="w-3.5 h-3.5 text-[#10B981] shrink-0" /> <span>Best ao50</span>
+                <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-0.5 sm:gap-1.5 mb-1 truncate w-full">
+                    <Award className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-[#10B981] shrink-0" /> <span className="truncate"><span className="hidden sm:inline">Best </span>ao50</span>
                 </span>
-                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight mt-1">{renderStatValue(bestAo50)}</span>
+                <span className="font-display font-bold text-[10px] xs:text-xs sm:text-xl lg:text-2xl text-slate-900 dark:text-white leading-tight mt-0.5 sm:mt-1 truncate w-full text-center lg:text-left">{renderStatValue(bestAo50)}</span>
             </div>
             <div className={clsx("glass-panel flex flex-col justify-center text-center lg:text-left transition-all duration-300", cardClass)}>
-                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-1 lg:gap-1.5 mb-1 truncate">
-                    <Crown className="w-3.5 h-3.5 text-[#E2E8F0] shrink-0" /> <span>Best ao100</span>
+                <span className="text-[8px] xs:text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase flex items-center justify-center lg:justify-start gap-0.5 sm:gap-1.5 mb-1 truncate w-full">
+                    <Crown className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-[#E2E8F0] shrink-0" /> <span className="truncate"><span className="hidden sm:inline">Best </span>ao100</span>
                 </span>
-                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight mt-1">{renderStatValue(bestAo100)}</span>
+                <span className="font-display font-bold text-[10px] xs:text-xs sm:text-xl lg:text-2xl text-slate-900 dark:text-white leading-tight mt-0.5 sm:mt-1 truncate w-full text-center lg:text-left">{renderStatValue(bestAo100)}</span>
             </div>
         </div>
     );
@@ -1099,8 +1099,6 @@ export default function PracticeSession() {
                         </div>
                     </div>
                 </div>
-
-                {renderStats("flex overflow-x-auto gap-2.5 mb-4 lg:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden w-full px-0.5 py-0.5 snap-x snap-mandatory", "p-2 sm:p-2.5 min-w-[110px] sm:min-w-[120px] flex-1 shrink-0 snap-center glass-flat")}
 
                 <div
                     ref={timerRef}
@@ -1329,6 +1327,8 @@ export default function PracticeSession() {
                     
                     <canvas ref={confettiCanvasRef} className="pointer-events-none absolute inset-0 w-full h-full z-[9999]" />
                 </div>
+
+                {renderStats("grid grid-cols-6 gap-1 sm:gap-2 mt-4 lg:hidden w-full px-0.5 py-0.5", "p-1 sm:p-2 min-w-0 w-full glass-flat")}
             </div>
 
             <div className="w-full lg:w-96 flex flex-col gap-5 sm:gap-6 shrink-0 lg:h-full">
@@ -1400,7 +1400,7 @@ export default function PracticeSession() {
                         <div className="col-span-2 text-center">ao12</div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1 hide-scrollbar w-full method-dropdown-container">
+                    <div className="flex-1 max-h-[210px] lg:max-h-none overflow-y-auto p-2 space-y-1 hide-scrollbar w-full method-dropdown-container">
                         {solves.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-500 dark:text-gray-500 text-xs sm:text-sm py-12 w-full text-center">
                                 <TimerIcon className="w-7 h-7 mb-2 opacity-50" />

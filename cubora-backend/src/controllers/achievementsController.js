@@ -41,3 +41,41 @@ exports.getAchievements = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+exports.evaluateAchievements = async (userId, latestSolveTimeMs, totalSolvesCount) => {
+  try {
+    // Get currently unlocked achievements to avoid duplicates
+    const unlocked = await Achievement.find({ user: userId });
+    const unlockedIds = new Set(unlocked.map(a => a.badgeId));
+    const newUnlocks = [];
+
+    const checkAndAward = async (badgeId) => {
+      if (!unlockedIds.has(badgeId)) {
+        const badgeDef = ALL_BADGES.find(b => b.id === badgeId);
+        if (badgeDef) {
+          await Achievement.create({
+            user: userId,
+            badgeId: badgeId,
+            title: badgeDef.title
+          });
+          newUnlocks.push(badgeDef);
+        }
+      }
+    };
+
+    // 1. Check Volume Milestones
+    if (totalSolvesCount >= 1) await checkAndAward('first-solve');
+    if (totalSolvesCount >= 50) await checkAndAward('50-solves-milestone');
+    if (totalSolvesCount >= 100) await checkAndAward('100-solves-milestone');
+
+    // 2. Check Speed Milestones (Convert ms to seconds)
+    const timeSec = latestSolveTimeMs / 1000;
+    if (timeSec < 30) await checkAndAward('sub-30-solve');
+    if (timeSec < 20) await checkAndAward('sub-20-solve');
+    if (timeSec < 10) await checkAndAward('sub-10-solve');
+
+    return newUnlocks; // Returns array of newly unlocked badges so the frontend can show a popup!
+  } catch (error) {
+    console.error('Achievement Evaluation Error:', error);
+    return [];
+  }
+};

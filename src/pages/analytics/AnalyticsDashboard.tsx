@@ -2,11 +2,11 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Activity, Target, Brain, ChevronDown,
   AlertTriangle, Zap, BarChart3, Trophy, Award, Crown,
-  Gauge, Timer, Crosshair, Layers, GitCompare
+  Gauge, Timer, Crosshair, Layers, GitCompare, Check
 } from 'lucide-react';
 import { 
   Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, CartesianGrid, Legend, ReferenceDot, ComposedChart, Line,
+  BarChart, Bar, Cell, CartesianGrid, ReferenceDot, ComposedChart, Line,
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 import { PageTransition } from '@/components/animations/PageTransition';
@@ -20,7 +20,7 @@ const CustomTooltip = ({ active, payload, label, activeColor }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="px-3 py-2.5 rounded-xl backdrop-blur-xl bg-white/80 dark:bg-[#141519]/80 border border-primary/30 shadow-[0_8px_20px_rgba(0,0,0,0.15)] relative overflow-hidden flex flex-col outline-none z-50">
-        <div className="absolute left-0 top-0 bottom-0 w-1 shadow-[0_0_10px_currentColor]" style={{ backgroundColor: activeColor || 'var(--color-primary)'}} />
+        <div className={`absolute left-0 top-0 bottom-0 w-1 shadow-[0_0_10px_currentColor] text-primary ${!activeColor || activeColor === 'var(--color-primary)' ? 'bg-primary' : ''}`} style={activeColor && activeColor !== 'var(--color-primary)' ? { backgroundColor: activeColor } : {}} />
           <div className="flex justify-between items-center mb-1.5 border-b border-slate-200/50 dark:border-white/5 pb-1 gap-4">
             <span className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest pl-1.5">
                 {label}
@@ -31,14 +31,22 @@ const CustomTooltip = ({ active, payload, label, activeColor }: any) => {
                 </span>
             )}
          </div>
-        {payload.map((entry: any, index: number) => {
-          const color = (entry.name === 'Solve Time' && activeColor) 
-            ? activeColor 
-            : (entry.color === 'currentColor' ? 'var(--color-primary)' : entry.color);
+        {[...payload].sort((a, b) => a.name === 'Target Time' ? -1 : b.name === 'Target Time' ? 1 : 0).map((entry: any, index: number) => {
+          let color = entry.color;
+          if (entry.name === 'Solve Time' && activeColor) {
+              color = activeColor;
+          } else if (entry.name === 'Your Avg Time') {
+              color = entry.payload.time > entry.payload.target ? '#EF4444' : '#10B981';
+          }
+          
+          const isAccent = entry.name === 'Target Time' || (entry.name === 'Solve Time' && (!activeColor || activeColor === 'var(--color-primary)'));
             
           return (
             <div key={index} className="flex items-center gap-2 mb-1.5 pl-1.5">
-                <div className="w-1.5 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }} />
+                <div 
+                    className={`w-1.5 h-1.5 rounded-full shadow-sm ${isAccent ? 'bg-primary text-primary' : ''}`} 
+                    style={isAccent ? { boxShadow: '0 0 6px currentColor' } : { backgroundColor: color, boxShadow: `0 0 6px ${color}` }} 
+                />
                 <span className="text-slate-900 dark:text-white font-mono font-bold text-xs sm:text-sm leading-none">
                     {typeof entry.value === 'number' ? entry.value : entry.value}
                     {entry.name.includes('Efficiency') ? '%' : 's'}
@@ -47,6 +55,55 @@ const CustomTooltip = ({ active, payload, label, activeColor }: any) => {
             </div>
           )
         })}
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomRadarTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="px-3 py-2.5 rounded-xl backdrop-blur-xl bg-white/80 dark:bg-[#141519]/80 border border-primary/30 shadow-[0_8px_20px_rgba(0,0,0,0.15)] relative overflow-hidden flex flex-col outline-none z-50">
+        <div className="absolute left-0 top-0 bottom-0 w-1 shadow-[0_0_10px_currentColor] text-primary bg-primary" />
+        <div className="flex justify-between items-center mb-1.5 border-b border-slate-200/50 dark:border-white/5 pb-1 gap-4">
+            <span className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest pl-1.5">
+                {label}
+            </span>
+        </div>
+        <div className="flex flex-col gap-2">
+            {payload.map((entry: any, index: number) => {
+              const mName = entry.dataKey;
+              if (mName === 'Target') {
+                return (
+                  <div key={index} className="flex items-center justify-between gap-6 mb-1 pl-1.5">
+                    <div className="flex items-center gap-2">
+                       <div className="w-1.5 h-1.5 rounded-full shadow-sm bg-primary text-primary" style={{ boxShadow: '0 0 6px currentColor' }} />
+                       <span className="text-[10px] font-bold text-slate-500 uppercase leading-none">Target Ideal</span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white leading-none">100%</span>
+                  </div>
+                );
+              }
+              const specificPhase = entry.payload[`${mName}Name`] || label;
+              const realTime = entry.payload[`${mName}Time`];
+              return (
+                <div key={index} className="flex items-center justify-between gap-6 pl-1.5">
+                    <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full shadow-sm shrink-0" style={{ backgroundColor: entry.color, boxShadow: `0 0 6px ${entry.color}` }} />
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-700 dark:text-gray-300 uppercase leading-none">{mName}</span>
+                            <span className="text-[9px] text-slate-400 dark:text-gray-500 font-medium leading-none mt-0.5">{specificPhase}</span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white leading-none">{entry.value}%</span>
+                        {realTime && <span className="text-[9px] text-slate-400 font-mono mt-0.5">{realTime}s</span>}
+                    </div>
+                </div>
+              )
+            })}
+        </div>
       </div>
     );
   }
@@ -95,6 +152,7 @@ export default function AnalyticsDashboard() {
   const chartScrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isMobile, setIsMobile] = useState(false);
+  const [hiddenMethods, setHiddenMethods] = useState<string[]>([]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 640);
@@ -216,6 +274,18 @@ export default function AnalyticsDashboard() {
       'Beginner': { 'First Layer': 0.30, 'Second Layer': 0.35, 'Third Layer': 0.35 }
   };
 
+  const METHOD_COLORS: Record<string, string> = {
+      'CFOP': 'var(--color-primary, #3B82F6)',
+      'Simplified CFOP': '#00E5FF',
+      'Roux': '#10B981',
+      'ZZ': '#F97316',
+      'Beginner': '#E11D48'
+  };
+
+  const toggleMethodInLegend = (m: string) => {
+      setHiddenMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
+  };
+
   // ==========================================
   // TAB 1: SESSION TRAJECTORY LOGIC
   // ==========================================
@@ -282,6 +352,29 @@ export default function AnalyticsDashboard() {
   const avgTimeSec = useMemo(() => timesChronological.length === 0 ? 0 : parseFloat((timesChronological.reduce((acc, t) => acc + t, 0) / timesChronological.length / 1000).toFixed(3)), [timesChronological]);
   const tps = useMemo(() => avgTimeSec > 0 ? parseFloat((50 / avgTimeSec).toFixed(1)) : 0, [avgTimeSec]);
 
+  const consistencyIndex = useMemo(() => {
+    if (timesChronological.length < 2) return null;
+    const mean = timesChronological.reduce((sum, t) => sum + t, 0) / timesChronological.length;
+    const variance = timesChronological.reduce((sum, t) => sum + Math.pow(t - mean, 2), 0) / timesChronological.length;
+    return parseFloat((Math.sqrt(variance) / 1000).toFixed(3));
+  }, [timesChronological]);
+
+  const consistencyPercent = useMemo(() => {
+    if (consistencyIndex === null || avgTimeSec <= 0) return null;
+    return (consistencyIndex / avgTimeSec) * 100;
+  }, [consistencyIndex, avgTimeSec]);
+
+  const consistencyGrade = useMemo(() => {
+    if (consistencyPercent === null) return { grade: '--', color: 'text-slate-400', message: 'Not enough data' };
+    if (consistencyPercent < 3) return { grade: 'S', color: 'text-yellow-400', message: 'Locked In' };
+    if (consistencyPercent < 5) return { grade: 'A', color: 'text-green-400', message: 'Elite' };
+    if (consistencyPercent < 8) return { grade: 'B', color: 'text-blue-400', message: 'Stable' };
+    if (consistencyPercent < 12) return { grade: 'C', color: 'text-orange-400', message: 'Average' };
+    if (consistencyPercent < 18) return { grade: 'D', color: 'text-red-400', message: 'Volatile' };
+    return { grade: 'F', color: 'text-red-600', message: 'Chaotic' };
+  }, [consistencyPercent]);
+
+
   // ==========================================
   // TAB 2: PHASE ANALYSIS LOGIC
   // ==========================================
@@ -333,11 +426,24 @@ export default function AnalyticsDashboard() {
   // ==========================================
   // TAB 3: SPIDER CHART METHOD COMPARISON LOGIC
   // ==========================================
-  const methodRadarData = useMemo(() => {
-      const methodsToCompare = ['CFOP', 'Simplified CFOP', 'Roux', 'ZZ', 'Beginner'];
-      const radarResults: any[] = [];
+  const availableMethods = useMemo(() => {
+      const allMethods = ['CFOP', 'Simplified CFOP', 'Roux', 'ZZ', 'Beginner'];
+      return allMethods.filter(m => validSessionSolves.some(s => (s.method || 'CFOP') === m && s.phaseSplits && Object.keys(s.phaseSplits).length > 0));
+  }, [validSessionSolves]);
 
-      methodsToCompare.forEach(m => {
+  const methodRadarData = useMemo(() => {
+      const genericPhases = ['Phase 1 (Setup)', 'Phase 2 (Transition)', 'Phase 3 (Orientation)', 'Phase 4 (Permutation)'];
+      const data: any[] = genericPhases.map(gp => ({ phase: gp, Target: 100 }));
+
+      const phaseMap: Record<string, string[]> = {
+          'CFOP': ['Cross', 'F2L', 'OLL', 'PLL'],
+          'Simplified CFOP': ['Cross', 'F2L', 'OLL', 'PLL'],
+          'Roux': ['First Block', 'Second Block', 'CMLL', 'LSE'],
+          'ZZ': ['EOLine', 'Z2L', 'LL', ''],
+          'Beginner': ['First Layer', 'Second Layer', 'Third Layer']
+      };
+
+      availableMethods.forEach(m => {
           const mSolves = validSessionSolves.filter(s => (s.method || 'CFOP') === m && s.phaseSplits && Object.keys(s.phaseSplits).length > 0);
           if (mSolves.length > 0) {
               const phaseTotals: Record<string, number> = {};
@@ -355,116 +461,29 @@ export default function AnalyticsDashboard() {
               const avgMethodSec = (totalMs / mSolves.length) / 1000;
               const targetIdeals = IDEALS[m] || IDEALS['CFOP'];
 
-              const chartData = Object.keys(phaseTotals).map(phase => {
-                  const trueAvgSec = (phaseTotals[phase] / phaseCounts[phase]) / 1000;
-                  const expectedRatio = targetIdeals[phase] || (1 / Object.keys(phaseTotals).length);
-                  const targetSec = avgMethodSec * expectedRatio;
-                  
-                  const efficiency = Math.round((targetSec / trueAvgSec) * 100);
-                  
-                  return {
-                      phase,
-                      Efficiency: efficiency > 150 ? 150 : efficiency, 
-                      Target: 100,
-                      ActualTime: parseFloat(trueAvgSec.toFixed(2))
-                  };
-              });
-
-              radarResults.push({ 
-                  method: m, 
-                  data: chartData, 
-                  avgSec: parseFloat(avgMethodSec.toFixed(3)), 
-                  solveCount: mSolves.length 
+              phaseMap[m].forEach((specificPhaseName, index) => {
+                  if (specificPhaseName && phaseTotals[specificPhaseName]) {
+                      const trueAvgSec = (phaseTotals[specificPhaseName] / phaseCounts[specificPhaseName]) / 1000;
+                      const expectedRatio = targetIdeals[specificPhaseName] || (1 / phaseMap[m].filter(Boolean).length);
+                      const targetSec = avgMethodSec * expectedRatio;
+                      const efficiency = Math.round((targetSec / trueAvgSec) * 100);
+                      
+                      data[index][m] = efficiency > 150 ? 150 : efficiency;
+                      data[index][`${m}Name`] = specificPhaseName;
+                      data[index][`${m}Time`] = parseFloat(trueAvgSec.toFixed(3));
+                  }
               });
           }
       });
-
-      return radarResults;
-  }, [validSessionSolves]);
-
-  const consistencyIndex = useMemo(() => {
-    if (timesChronological.length < 2) return null;
-
-    const mean =
-      timesChronological.reduce((sum, t) => sum + t, 0) /
-      timesChronological.length;
-
-    const variance =
-      timesChronological.reduce(
-        (sum, t) => sum + Math.pow(t - mean, 2),
-        0
-      ) / timesChronological.length;
-
-    return parseFloat((Math.sqrt(variance) / 1000).toFixed(3));
-  }, [timesChronological]);
-
-  const consistencyPercent = useMemo(() => {
-    if (consistencyIndex === null || avgTimeSec <= 0) return null;
-    return (consistencyIndex / avgTimeSec) * 100;
-  }, [consistencyIndex, avgTimeSec]);
-
-  const consistencyGrade = useMemo(() => {
-    if (consistencyPercent === null) {
-      return {
-        grade: '--',
-        color: 'text-slate-400',
-        message: 'Not enough data'
-      };
-    }
-
-    if (consistencyPercent < 3) {
-      return {
-        grade: 'S',
-        color: 'text-yellow-400',
-        message: 'Locked In'
-      };
-    }
-
-    if (consistencyPercent < 5) {
-      return {
-        grade: 'A',
-        color: 'text-green-400',
-        message: 'Elite'
-      };
-    }
-
-    if (consistencyPercent < 8) {
-      return {
-        grade: 'B',
-        color: 'text-blue-400',
-        message: 'Stable'
-      };
-    }
-
-    if (consistencyPercent < 12) {
-      return {
-        grade: 'C',
-        color: 'text-orange-400',
-        message: 'Average'
-      };
-    }
-
-    if (consistencyPercent < 18) {
-      return {
-        grade: 'D',
-        color: 'text-red-400',
-        message: 'Volatile'
-      };
-    }
-
-    return {
-      grade: 'F',
-      color: 'text-red-600',
-      message: 'Chaotic'
-    };
-  }, [consistencyPercent]);
+      return data;
+  }, [validSessionSolves, availableMethods]);
 
   if (isLoading) {
     return (
       <div className="w-full flex flex-col gap-5 sm:gap-6 px-1 sm:px-0">
         <Skeleton className="h-10 w-64 mb-2" />
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 sm:gap-6 w-full mb-6">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => <Skeleton key={i} className="h-28" />)}
+        <div className="grid grid-cols-5 gap-1.5 sm:gap-4 lg:gap-6 w-full mb-6">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => <Skeleton key={i} className="h-16 sm:h-28" />)}
         </div>
         <Skeleton className="h-[350px] sm:h-[400px] w-full" />
       </div>
@@ -474,8 +493,17 @@ export default function AnalyticsDashboard() {
   const hasEnoughData = solves.filter(s => s.penalty !== 'DNF').length >= 3;
 
   return (
-    <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-4 sm:pb-12 px-1 sm:px-0 text-left">
+     <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-4 sm:pb-12 px-1 sm:px-0 text-left">
       
+      <style>{`
+          .recharts-wrapper:focus, 
+          .recharts-surface:focus, 
+          .recharts-responsive-container:focus,
+          .recharts-wrapper *:focus {
+              outline: none !important;
+          }
+      `}</style>
+
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-1">
         <div className="min-w-0">
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
@@ -560,7 +588,6 @@ export default function AnalyticsDashboard() {
              ========================================= */}
           {activeTab === 'trajectory' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex flex-col gap-5 sm:gap-6 w-full">
-              {/* FULL 10-GRID DASHBOARD METRICS */}
               <div className="grid grid-cols-5 gap-1.5 sm:gap-4 lg:gap-6 w-full">
                 
                 {/* ROW 1: General Stats */}
@@ -596,7 +623,7 @@ export default function AnalyticsDashboard() {
 
                 <div className="glass-panel p-1.5 xs:p-2 sm:p-4 flex flex-col justify-center items-center sm:items-start relative overflow-hidden group border-t-2 border-t-orange-500">
                   <div className={clsx(
-                    "absolute top-1.5 right-1.5 sm:top-3 sm:right-3 text-[9px] sm:text-xs font-black",
+                    "absolute top-1.5 right-2 sm:top-3 sm:right-3 text-[7px] sm:text-xs font-black",
                     consistencyGrade.color
                   )}>
                     {consistencyGrade.grade}
@@ -685,9 +712,9 @@ export default function AnalyticsDashboard() {
 
               {/* MAIN GRAPH AREA */}
               <div className="glass-panel p-4 sm:p-6 w-full overflow-hidden flex flex-col">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 sm:mb-6 w-full shrink-0">
-                    <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white shrink-0">Session Timeline</h3>
-                    <div className="flex items-center gap-2 self-start sm:self-auto max-w-full">
+                <div className="flex flex-row items-center justify-between gap-2 mb-5 sm:mb-6 w-full shrink-0">
+                    <h3 className="font-display font-bold text-sm xs:text-base sm:text-xl text-slate-900 dark:text-white shrink-0">Session Timeline</h3>
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         {/* SESSION FILTER DROPDOWN */}
                         <div className="relative shrink-0" ref={chartSessionDropdownRef}>
                             <button 
@@ -749,7 +776,6 @@ export default function AnalyticsDashboard() {
                 </div>
 
                 <div className="relative w-full h-[260px] sm:h-[360px] md:h-[400px] flex flex-col overflow-hidden">
-                  {/* FIXED Y-AXIS OVERLAY */}
                   <div className="absolute left-0 top-0 bottom-0 w-[40px] z-10 pointer-events-none bg-slate-50/30 dark:bg-[#181A1D]/30 backdrop-blur-sm border-r border-slate-200/10 dark:border-white/5 pr-1 pb-2 flex flex-col justify-between">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={performanceData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -760,7 +786,6 @@ export default function AnalyticsDashboard() {
                     </ResponsiveContainer>
                   </div>
 
-                  {/* SCROLLABLE CHART CONTAINER */}
                   <div 
                     ref={chartScrollRef}
                     onScroll={handleChartScroll}
@@ -856,19 +881,19 @@ export default function AnalyticsDashboard() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 w-full">
                   {phaseSplitsData.length > 0 ? (
-                    <div className="glass-panel p-4 sm:p-6 flex flex-col w-full overflow-hidden">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5 sm:mb-6 w-full">
-                          <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white">Phase Analysis Engine</h3>
+                    <div className="glass-panel p-3 xs:p-4 sm:p-6 flex flex-col w-full overflow-hidden">
+                      <div className="flex flex-row justify-between items-center gap-2 mb-3 sm:mb-6 w-full">
+                          <h3 className="font-display font-bold text-base xs:text-lg sm:text-xl text-slate-900 dark:text-white truncate pr-2">Phase Analysis Engine</h3>
                           {/* METHOD DROPDOWN FILTER */}
                           <div className="relative shrink-0 z-20" ref={phaseMethodDropdownRef}>
                               <button 
                                   onClick={() => setIsPhaseMethodDropdownOpen(!isPhaseMethodDropdownOpen)}
-                                  className={`glass-panel flex items-center justify-between gap-1.5 sm:gap-3 bg-slate-50 dark:bg-[#1C1E22] border rounded-xl sm:rounded-2xl text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-gray-300 pl-3 pr-2 sm:pl-4 sm:pr-3 py-2 sm:py-2.5 outline-none transition-all shadow-sm ${
+                                  className={`glass-panel flex items-center justify-between gap-1 sm:gap-3 bg-slate-50 dark:bg-[#1C1E22] border rounded-lg sm:rounded-2xl text-[10px] xs:text-[11px] sm:text-sm font-semibold text-slate-700 dark:text-gray-300 pl-2 pr-1.5 sm:pl-4 sm:pr-3 py-1.5 sm:py-2.5 outline-none transition-all shadow-sm ${
                                       isPhaseMethodDropdownOpen ? "border-primary ring-1 ring-primary" : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
                                   }`}
                               >
-                                  <span className="truncate">{phaseMethod}</span>
-                                  <ChevronDown className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform duration-200 ${isPhaseMethodDropdownOpen ? "rotate-180" : ""}`} />
+                                  <span className="truncate max-w-[55px] xs:max-w-[80px] sm:max-w-none">{phaseMethod}</span>
+                                  <ChevronDown className={`w-3 h-3 sm:w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform duration-200 ${isPhaseMethodDropdownOpen ? "rotate-180" : ""}`} />
                               </button>
                               <div className={`glass-panel absolute top-full mt-2 right-0 w-[140px] sm:w-[180px] bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-xl sm:rounded-2xl shadow-xl overflow-hidden transition-all duration-200 origin-top-right ${
                                   isPhaseMethodDropdownOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
@@ -888,22 +913,70 @@ export default function AnalyticsDashboard() {
                           </div>
                       </div>
 
-                      <div className="flex-1 w-full h-[260px] sm:h-[300px] min-w-0 mt-1">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                          <BarChart data={phaseSplitsData} layout="vertical" margin={{ top: 0, right: 15, left: -15, bottom: 0 }}>
+                      <div className="w-full h-[320px] sm:h-[300px] mt-1 relative min-h-[320px] sm:min-h-[300px]">
+                        <ResponsiveContainer width="99%" height="100%">
+                          <BarChart data={phaseSplitsData} layout="vertical" margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#1f2937' : '#e2e8f0'} horizontal={false} />
                             <XAxis type="number" stroke={isDarkMode ? '#4B5563' : '#94A3B8'} tick={{ fill: isDarkMode ? '#9CA3AF' : '#64748B', fontSize: 11, fontFamily: 'monospace' }} axisLine={false} tickLine={false} />
-                            <YAxis dataKey="phase" type="category" stroke={isDarkMode ? '#4B5563' : '#94A3B8'} tick={{ fill: isDarkMode ? '#fff' : '#0f172a', fontWeight: 'bold', fontSize: 11 }} axisLine={false} tickLine={false} width={50} />
+                            <YAxis 
+                              dataKey="phase" 
+                              type="category" 
+                              stroke={isDarkMode ? '#4B5563' : '#94A3B8'} 
+                              axisLine={false} 
+                              tickLine={false} 
+                              width={(() => {
+                                const longestLabel = phaseSplitsData.reduce((max, d) => d.phase.length > max ? d.phase.length : max, 0);
+                                const hasMultiWord = phaseSplitsData.some(d => d.phase.includes(' '));
+                                if (isMobile && hasMultiWord) return Math.max(65, Math.min(longestLabel * 5.5, 85));
+                                return Math.max(50, Math.min(longestLabel * 7, 100));
+                              })()}
+                              tick={(props: any) => {
+                                const { x, y, payload } = props;
+                                const words = (payload.value as string).split(' ');
+                                const fontSize = isMobile ? 10 : 11;
+                                const fillColor = isDarkMode ? '#fff' : '#0f172a';
+                                if (isMobile && words.length > 1) {
+                                  return (
+                                    <g>
+                                      {words.map((word: string, i: number) => (
+                                        <text key={i} x={x} y={y + (i - (words.length - 1) / 2) * (fontSize - 2)} textAnchor="end" fill={fillColor} fontWeight="bold" fontSize={fontSize}>
+                                          {word}
+                                        </text>
+                                      ))}
+                                    </g>
+                                  );
+                                }
+                                return (
+                                  <text x={x} y={y} dy={4} textAnchor="end" fill={fillColor} fontWeight="bold" fontSize={fontSize}>
+                                    {payload.value}
+                                  </text>
+                                );
+                              }}
+                            />
                             <Tooltip content={<CustomTooltip />} />
-                            <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '15px' }} />
-                            <Bar dataKey="time" name="Your Avg Time" fill="currentColor" radius={[0, 4, 4, 0]} className="text-primary">
+                            
+                            <Bar dataKey="time" name="Your Avg Time" fill="currentColor" radius={[0, 4, 4, 0]} className="text-slate-400 dark:text-slate-500">
                               {phaseSplitsData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.time > entry.target ? '#EF4444' : 'currentColor'} />
+                                <Cell key={`cell-${index}`} fill={entry.time > entry.target ? '#FF6B6B' : '#00A896'} opacity={0.7} />
                               ))}
                             </Bar>
-                            <Bar dataKey="target" name="Target Time" fill="#8B5CF6" radius={[0, 4, 4, 0]} opacity={0.4} />
+                            <Bar dataKey="target" name="Target Time" fill="currentColor" radius={[0, 4, 4, 0]} opacity={0.7} className="text-primary" />
                           </BarChart>
                         </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-2 pt-1 select-none">
+                          <div className="flex items-center gap-1.5">
+                              <div className="w-3 h-3 rounded-full bg-primary opacity-50" />
+                              <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-gray-400">Target Time</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                              <div className="w-3 h-3 rounded-full bg-[#00A896]" />
+                              <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-gray-400">Your Avg (Optimal)</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                              <div className="w-3 h-3 rounded-full bg-[#FF6B6B]" />
+                              <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-gray-400">Your Avg (Slow)</span>
+                          </div>
                       </div>
                       {weakestPhase && weakestPhase.time > weakestPhase.target && (
                         <div className="mt-4 p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl flex gap-3 text-left">
@@ -915,19 +988,19 @@ export default function AnalyticsDashboard() {
                       )}
                     </div>
                   ) : (
-                    <div className="glass-panel p-4 sm:p-6 flex flex-col w-full overflow-hidden">
-                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5 sm:mb-6 w-full">
-                          <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white">Phase Analysis Engine</h3>
-                          <div className="relative shrink-0 z-20" ref={phaseMethodDropdownRef}>
-                              <button 
-                                  onClick={() => setIsPhaseMethodDropdownOpen(!isPhaseMethodDropdownOpen)}
-                                  className={`glass-panel flex items-center justify-between gap-1.5 sm:gap-3 bg-slate-50 dark:bg-[#1C1E22] border rounded-xl sm:rounded-2xl text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-gray-300 pl-3 pr-2 sm:pl-4 sm:pr-3 py-2 sm:py-2.5 outline-none transition-all shadow-sm ${
-                                      isPhaseMethodDropdownOpen ? "border-primary ring-1 ring-primary" : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
-                                  }`}
-                              >
-                                  <span className="truncate">{phaseMethod}</span>
-                                  <ChevronDown className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform duration-200 ${isPhaseMethodDropdownOpen ? "rotate-180" : ""}`} />
-                              </button>
+                      <div className="glass-panel p-3 xs:p-4 sm:p-6 flex flex-col w-full overflow-hidden">
+                        <div className="flex flex-row justify-between items-center gap-2 mb-3 sm:mb-6 w-full">
+                            <h3 className="font-display font-bold text-base xs:text-lg sm:text-xl text-slate-900 dark:text-white truncate pr-2">Phase Analysis Engine</h3>
+                            <div className="relative shrink-0 z-20" ref={phaseMethodDropdownRef}>
+                                <button 
+                                    onClick={() => setIsPhaseMethodDropdownOpen(!isPhaseMethodDropdownOpen)}
+                                    className={`glass-panel flex items-center justify-between gap-1 sm:gap-3 bg-slate-50 dark:bg-[#1C1E22] border rounded-lg sm:rounded-2xl text-[10px] xs:text-[11px] sm:text-sm font-semibold text-slate-700 dark:text-gray-300 pl-2 pr-1.5 sm:pl-4 sm:pr-3 py-1.5 sm:py-2.5 outline-none transition-all shadow-sm ${
+                                        isPhaseMethodDropdownOpen ? "border-primary ring-1 ring-primary" : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
+                                    }`}
+                                >
+                                    <span className="truncate max-w-[55px] xs:max-w-[80px] sm:max-w-none">{phaseMethod}</span>
+                                    <ChevronDown className={`w-3 h-3 sm:w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform duration-200 ${isPhaseMethodDropdownOpen ? "rotate-180" : ""}`} />
+                                </button>
                               <div className={`glass-panel absolute top-full mt-2 right-0 w-[140px] sm:w-[180px] bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-xl sm:rounded-2xl shadow-xl overflow-hidden transition-all duration-200 origin-top-right ${
                                   isPhaseMethodDropdownOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
                               }`}>
@@ -1019,49 +1092,219 @@ export default function AnalyticsDashboard() {
 
 
           {/* =========================================
-                 TAB 3: METHOD COMPARISON (SPIDER CHARTS)
+                 TAB 3: METHOD COMPARISON (UNIFIED SPIDER CHART)
              ========================================= */}
           {activeTab === 'comparison' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex flex-col gap-5 sm:gap-6 w-full">
-               <div className="glass-panel p-4 sm:p-6 w-full overflow-hidden">
-                 <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white mb-2">Method Phase Strengths</h3>
-                 <p className="text-xs text-slate-500 dark:text-gray-400 mb-6 max-w-2xl leading-relaxed">This chart maps your Phase Efficiency. A score of 100% hits the ideal target time. A larger, outward-pushing shape means you are exceptionally fast at that phase, revealing your true natural method.</p>
+               <div className="glass-panel p-4 sm:p-6 w-full overflow-hidden flex flex-col">
+                 <div className="flex flex-col xl:flex-row justify-between items-start gap-4 sm:gap-6 mb-6 w-full">
+                   <div className="max-w-2xl">
+                     <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white mb-2">Unified Method Comparison</h3>
+                     <p className="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+                       This unified chart maps your Phase Efficiency across all practiced methods, standardized into sequence steps (Phase 1-4). 
+                       Compare the geometric footprints to reveal your true natural method.
+                     </p>
+                   </div>
+                   
+                   {/* Information Box */}
+                   <div className="glass-panel bg-slate-50/50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 p-3 sm:p-4 rounded-xl flex flex-col gap-2 w-full xl:w-auto shrink-0 shadow-sm">
+                     <h4 className="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-gray-300 uppercase tracking-widest border-b border-slate-200 dark:border-white/5 pb-1.5 mb-1">
+                       How to read this chart
+                     </h4>
+                     <div className="flex items-start gap-3">
+                       <div className="flex flex-col gap-2 mt-0.5 shrink-0">
+                         <div className="flex items-center gap-2">
+                           <div className="w-4 border-t-2 border-dashed border-primary" />
+                           <span className="text-[10px] sm:text-xs font-bold text-slate-900 dark:text-white leading-none">100% Target</span>
+                         </div>
+                         <div className="flex items-center gap-2">
+                           <div className="w-4 h-2 bg-primary/40 border border-[#374151] rounded-[2px]" />
+                           <span className="text-[10px] sm:text-xs font-bold text-slate-900 dark:text-white leading-none">Efficiency</span>
+                         </div>
+                       </div>
+                       <div className="w-[1px] h-8 bg-slate-200 dark:bg-white/10 shrink-0 mx-1" />
+                       <p className="text-[9px] sm:text-[10px] text-slate-500 dark:text-gray-400 leading-snug max-w-[200px]">
+                         <strong>Outside (&gt;100%):</strong> You are faster than the ideal target.<br/>
+                         <strong>Inside (&lt;100%):</strong> You are losing time / bottleneck phase.
+                       </p>
+                     </div>
+                   </div>
+                 </div>
 
-                 {methodRadarData.length > 0 ? (
-                     <div className="flex flex-wrap justify-center gap-4 sm:gap-6 w-full">
-                         {methodRadarData.map((dataObj) => (
-                             <div key={dataObj.method} className="w-full md:w-[calc(50%-12px)] xl:w-[calc(33.333%-16px)] bg-slate-50/50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex flex-col items-center shadow-inner relative group">
-                                 <h4 className="font-display font-bold text-base text-slate-900 dark:text-white mb-1 uppercase tracking-widest">{dataObj.method}</h4>
-                                 <div className="flex gap-3 text-[10px] font-mono font-bold text-slate-500 dark:text-gray-400 mb-2">
-                                     <span className="bg-slate-200/50 dark:bg-white/5 px-2 py-0.5 rounded">Avg: {dataObj.avgSec}s</span>
-                                     <span className="bg-slate-200/50 dark:bg-white/5 px-2 py-0.5 rounded">{dataObj.solveCount} Solves</span>
-                                 </div>
-                                 <div className="w-full h-[220px] sm:h-[260px] relative">
-                                     <ResponsiveContainer width="100%" height="100%">
-                                         <RadarChart cx="50%" cy="50%" outerRadius="65%" data={dataObj.data}>
-                                             <PolarGrid stroke={isDarkMode ? '#374151' : '#e2e8f0'} />
-                                             <PolarAngleAxis dataKey="phase" tick={{ fill: isDarkMode ? '#9CA3AF' : '#64748B', fontSize: 10, fontWeight: 'bold' }} />
-                                             <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
-                                             <Tooltip 
-                                                contentStyle={{ backgroundColor: isDarkMode ? '#0f172a' : '#fff', border: 'none', borderRadius: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)' }} 
-                                                itemStyle={{ fontWeight: 'bold' }}
-                                                formatter={(value: number, name: string) => [`${value}${name === 'Target' ? '%' : (name.includes('Efficiency') ? '%' : 's')}`, name]}
+                 {(() => {
+                     const availableMethods = ['CFOP', 'Simplified CFOP', 'Roux', 'ZZ', 'Beginner'].filter(m => methodRadarData.some(d => d[m] !== undefined));
+                     
+                     const comparisonInsights = (() => {
+                          let bestMethod = '';
+                          let bestPhase = '';
+                          let highestScore = 0;
+                          let weakestPhase = '';
+                          let lowestScore = Infinity;
+
+                          const allMethodStats: { method: string, phases: { name: string, score: number }[] }[] = [];
+
+                          availableMethods.forEach(m => {
+                              const mSolves = validSessionSolves.filter(s => (s.method || 'CFOP') === m && s.phaseSplits && Object.keys(s.phaseSplits).length > 0);
+                              if (mSolves.length > 0) {
+                                  const phaseTotals: Record<string, number> = {};
+                                  const phaseCounts: Record<string, number> = {};
+                                  let totalMs = 0;
+
+                                  mSolves.forEach(solve => {
+                                      totalMs += (solve.timeMs + (solve.penalty === '+2' ? 2000 : 0));
+                                      Object.entries(solve.phaseSplits as Record<string, number>).forEach(([phase, timeMs]) => {
+                                          phaseTotals[phase] = (phaseTotals[phase] || 0) + timeMs;
+                                          phaseCounts[phase] = (phaseCounts[phase] || 0) + 1;
+                                      });
+                                  });
+
+                                  const avgMethodSec = (totalMs / mSolves.length) / 1000;
+                                  const targetIdeals = IDEALS[m] || IDEALS['CFOP'];
+                                  const idealKeys = Object.keys(targetIdeals);
+                                  const mPhases: { name: string, score: number }[] = [];
+
+                                  idealKeys.forEach((phaseName) => {
+                                      if (phaseTotals[phaseName]) {
+                                          const trueAvgSec = (phaseTotals[phaseName] / phaseCounts[phaseName]) / 1000;
+                                          const expectedRatio = targetIdeals[phaseName];
+                                          const targetSec = avgMethodSec * expectedRatio;
+                                          const efficiency = Math.round((targetSec / trueAvgSec) * 100);
+                                          
+                                          mPhases.push({ name: phaseName, score: efficiency });
+
+                                          if (efficiency > highestScore) {
+                                              highestScore = efficiency;
+                                              bestMethod = m;
+                                              bestPhase = phaseName;
+                                          }
+                                      }
+                                  });
+                                  allMethodStats.push({ method: m, phases: mPhases });
+                              }
+                          });
+
+                          allMethodStats.forEach(stat => {
+                              if (stat.method !== bestMethod) {
+                                  stat.phases.forEach(p => {
+                                      if (p.score < lowestScore) {
+                                          lowestScore = p.score;
+                                          weakestPhase = p.name;
+                                      }
+                                  });
+                              }
+                          });
+
+                          if (!bestMethod && allMethodStats.length > 0) {
+                              bestMethod = allMethodStats[0].method;
+                              bestPhase = allMethodStats[0].phases[0]?.name || 'Phase 1';
+                          }
+                          if (lowestScore === Infinity && allMethodStats.length > 0) {
+                              weakestPhase = allMethodStats[0].phases[0]?.name || 'Phase 1';
+                          }
+
+                          return { bestMethod, bestPhase, weakestPhase };
+                     })();
+
+                     return availableMethods.length > 0 ? (
+                         <div className="flex flex-col lg:flex-row gap-6 w-full items-center lg:items-stretch">
+                             
+                             {/* OVERLAPPING RADAR CHART */}
+                              <div className="w-full lg:flex-1 h-[350px] sm:h-[450px] min-h-[350px] relative glass-panel p-2 sm:p-4 flex flex-col justify-center items-center">
+                                  <ResponsiveContainer width="99%" height="100%">
+                                      <RadarChart cx="50%" cy="50%" outerRadius={isMobile ? "60%" : "70%"} data={methodRadarData}>
+                                         <defs>
+                                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                                <feGaussianBlur stdDeviation="3" result="blur" />
+                                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                            </filter>
+                                         </defs>
+                                         <PolarGrid stroke={isDarkMode ? '#374151' : '#e2e8f0'} />
+                                         <PolarAngleAxis dataKey="phase" tick={{ fill: isDarkMode ? '#9CA3AF' : '#64748B', fontSize: isMobile ? 9 : 12, fontWeight: 'bold' }} />
+                                         <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
+                                         <Tooltip content={<CustomRadarTooltip />} cursor={false} />
+                                         
+                                         <Radar 
+                                            name="Target (100%)" 
+                                            dataKey="Target" 
+                                            stroke="currentColor" 
+                                            className="text-primary"
+                                            strokeWidth={2} 
+                                            fill="transparent" 
+                                            strokeDasharray="4 4" 
+                                            activeDot={{ r: 4, fill: "currentColor", className: "text-primary", strokeWidth: 2, stroke: "#ffffffff" }} 
+                                        />                                         
+                                         {availableMethods.map(m => !hiddenMethods.includes(m) && (
+                                             <Radar 
+                                                key={m} 
+                                                name={m} 
+                                                dataKey={m} 
+                                                stroke={METHOD_COLORS[m]} 
+                                                strokeWidth={1.5} 
+                                                fill={METHOD_COLORS[m]} 
+                                                fillOpacity={0.2} 
+                                                style={{ filter: 'url(#glow)' }} 
                                              />
-                                             <Radar name="Target (100%)" dataKey="Target" stroke="#8B5CF6" strokeWidth={2} fill="transparent" strokeDasharray="3 3" />
-                                             <Radar name="Your Efficiency" dataKey="Efficiency" stroke="var(--color-primary)" strokeWidth={2.5} fill="var(--color-primary)" fillOpacity={0.4} />
-                                         </RadarChart>
-                                     </ResponsiveContainer>
-                                 </div>
+                                         ))}
+                                     </RadarChart>
+                                 </ResponsiveContainer>
                              </div>
-                         ))}
-                     </div>
-                 ) : (
-                     <div className="text-slate-500 dark:text-gray-500 text-center py-12 flex flex-col items-center">
-                         <Layers className="w-12 h-12 opacity-30 mb-3" />
-                         <p className="font-bold text-sm">No multi-tap phase data available to compare methods.</p>
-                         <p className="text-xs mt-1">Use the "Track Phases" tool in Practice mode across different methods.</p>
-                     </div>
-                 )}
+
+                             {/* LEGEND & INSIGHTS SIDEBAR */}
+                             <div className="w-full lg:w-[320px] flex flex-col gap-4 shrink-0">
+                                 <div className="glass-panel p-4 flex flex-col w-full shadow-inner bg-slate-50/50 dark:bg-white/[0.02]">
+                                     <h4 className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest mb-3 border-b border-slate-200/50 dark:border-white/5 pb-2">Legend Controls</h4>
+                                     <div className="flex flex-col gap-2">
+                                         {availableMethods.map(m => (
+                                             <button
+                                                 key={m}
+                                                 onClick={() => toggleMethodInLegend(m)}
+                                                 className={clsx(
+                                                     "flex items-center justify-between px-3 py-2 rounded-xl transition-all border",
+                                                     hiddenMethods.includes(m) ? "bg-slate-100 dark:bg-white/5 border-transparent opacity-50 grayscale" : "bg-white/60 dark:bg-[#1C1E22] border-slate-200 dark:border-white/10 shadow-sm"
+                                                 )}
+                                             >
+                                                 <div className="flex items-center gap-2">
+                                                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: METHOD_COLORS[m], boxShadow: !hiddenMethods.includes(m) ? `0 0 6px ${METHOD_COLORS[m]}` : 'none' }} />
+                                                     <span className="text-xs font-bold text-slate-900 dark:text-white">{m}</span>
+                                                 </div>
+                                                 <div className={clsx("w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors", !hiddenMethods.includes(m) ? "bg-primary border-primary" : "border-slate-300 dark:border-gray-600 bg-transparent")}>
+                                                     {!hiddenMethods.includes(m) && <Check className="w-2.5 h-2.5 text-white" />}
+                                                 </div>
+                                             </button>
+                                         ))}
+                                     </div>
+                                 </div>
+
+                                 {/* AI Insights Box */}
+                                 {comparisonInsights.bestMethod && (
+                                     <div className="glass-panel p-5 flex flex-col relative overflow-hidden group w-full text-left bg-gradient-to-br from-primary/[0.05] to-transparent border-primary/20">
+                                        <div className="flex flex-col gap-1.5 mb-3 w-full border-b border-slate-200/50 dark:border-white/10 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-lg bg-gradient-animated flex items-center justify-center shadow-[0_0_10px_rgba(59,130,246,0.3)] shrink-0">
+                                                    <Brain className="w-3.5 h-3.5 text-white" />
+                                                </div>
+                                                <h4 className="font-bold text-sm text-slate-900 dark:text-white leading-snug">
+                                                    AI Method Insights
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-600 dark:text-gray-400 leading-relaxed">
+                                            Your most natural method based on current phase efficiency is <strong className="text-slate-900 dark:text-white">{comparisonInsights.bestMethod}</strong>, 
+                                            driven by an exceptional score in <strong className="text-slate-900 dark:text-white">{comparisonInsights.bestPhase}</strong>. 
+                                            Consider drilling <strong className="text-slate-900 dark:text-white">{comparisonInsights.weakestPhase || 'your transitions'}</strong> on your secondary methods to close the performance gap.
+                                        </p>
+                                     </div>
+                                 )}
+                             </div>
+                         </div>
+                     ) : (
+                         <div className="text-slate-500 dark:text-gray-500 text-center py-12 flex flex-col items-center w-full">
+                             <Layers className="w-12 h-12 opacity-30 mb-3" />
+                             <p className="font-bold text-sm">No multi-tap phase data available to compare methods.</p>
+                             <p className="text-xs mt-1">Use the "Track Phases" tool in Practice mode across different methods.</p>
+                         </div>
+                     )
+                 })()}
                </div>
             </motion.div>
           )}

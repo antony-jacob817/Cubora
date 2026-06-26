@@ -100,7 +100,7 @@ export default function Dashboard() {
     const containerVariants = getStaggerContainer(prefersReducedMotion, 0.08);
     const itemVariants = getSlideUpVariants(prefersReducedMotion, 15);
 
-    const { getAuthHeaders } = useAuth();
+    const { getAuthHeaders, user } = useAuth();
     const { isDarkMode } = useTheme();
     const navigate = useNavigate();
     const mapScrollRef = useRef<HTMLDivElement>(null);
@@ -113,6 +113,10 @@ export default function Dashboard() {
     const [chartSession, setChartSession] = useState('All Sessions');
     const [isChartSessionDropdownOpen, setIsChartSessionDropdownOpen] = useState(false);
     const chartSessionDropdownRef = useRef<HTMLDivElement>(null);
+
+    const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+    const yearDropdownRef = useRef<HTMLDivElement>(null);
+    const [selectedActivityYear, setSelectedActivityYear] = useState<number>(new Date().getFullYear());
 
     // Map dragging state
     const [isDraggingMap, setIsDraggingMap] = useState(false);
@@ -144,6 +148,9 @@ export default function Dashboard() {
             }
             if (chartSessionDropdownRef.current && !chartSessionDropdownRef.current.contains(event.target as Node)) {
                 setIsChartSessionDropdownOpen(false);
+            }
+            if (yearDropdownRef.current && !yearDropdownRef.current.contains(event.target as Node)) {
+                setIsYearDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -353,9 +360,33 @@ export default function Dashboard() {
     const { progress: challengeProgress, target: challengeTarget } = currentChallenge.evaluate(solvesToday);
     const challengeComplete = challengeProgress >= challengeTarget;
 
+    const currentYear = new Date().getFullYear();
+    const startYear = useMemo(() => {
+        if (user?.createdAt) {
+            return new Date(user.createdAt).getFullYear();
+        }
+        if (solves.length > 0) {
+            const oldestSolveDate = solves.reduce((oldest, s) => {
+                if (!s.date) return oldest;
+                const d = new Date(s.date).getTime();
+                return d < oldest ? d : oldest;
+            }, new Date().getTime());
+            return new Date(oldestSolveDate).getFullYear();
+        }
+        return currentYear;
+    }, [user, solves, currentYear]);
+
+    const availableYears = useMemo(() => {
+        const years = [];
+        for (let y = currentYear; y >= startYear; y--) {
+            years.push(y);
+        }
+        return years;
+    }, [startYear, currentYear]);
+
     const yearHistory = useMemo(() => {
         const history = [];
-        const today = new Date();
+        const year = selectedActivityYear;
         
         const solvesByDate = solves.reduce((acc, solve) => {
             if (!solve.date) return acc;
@@ -365,22 +396,23 @@ export default function Dashboard() {
             return acc;
         }, {});
 
-        const oldestDate = new Date(today);
-        oldestDate.setDate(today.getDate() - 364);
-        const startDayOfWeek = oldestDate.getDay();
+        const startDate = new Date(year, 0, 1);
+        const today = new Date();
+        const endDate = year === currentYear ? today : new Date(year, 11, 31);
+        const startDayOfWeek = startDate.getDay();
 
         for (let i = 0; i < startDayOfWeek; i++) {
             history.push({ empty: true });
         }
 
-        for (let i = 364; i >= 0; i--) {
-            const d = new Date(today);
-            d.setDate(d.getDate() - i);
+        const tempDate = new Date(startDate);
+        while (tempDate <= endDate) {
+            const d = new Date(tempDate);
             const dStr = d.toDateString();
             const daySolves = solvesByDate[dStr] || [];
 
             let level = 0; 
-            if (daySolves.length > 0) {
+            if (d <= today && daySolves.length > 0) {
                 level = 1; 
                 const challenge = getDailyChallenge(d);
                 const { progress, target } = challenge.evaluate(daySolves);
@@ -389,9 +421,10 @@ export default function Dashboard() {
                 }
             }
             history.push({ date: d, level, empty: false });
+            tempDate.setDate(tempDate.getDate() + 1);
         }
         return history;
-    }, [solves]);
+    }, [solves, selectedActivityYear, currentYear]);
 
     useEffect(() => {
         if (!isLoading && yearHistory.length > 0 && mapScrollRef.current) {
@@ -798,9 +831,41 @@ export default function Dashboard() {
                     <div className="flex flex-col gap-5 sm:gap-6 lg:col-span-1 w-full">
                         
                         <motion.div variants={itemVariants} className="glass-panel p-4 sm:p-5 w-full flex flex-col relative">
-                            <div className="flex items-center gap-2 mb-4">
-                                <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                                <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white">Annual Activity Map</h3>
+                            <div className="flex items-center justify-between gap-4 mb-4">
+                                <div className="flex items-center gap-2">
+                                    <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                                    <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white">Annual Activity Map</h3>
+                                </div>
+
+                                {/* Year Selector Dropdown */}
+                                <div className="relative z-30" ref={yearDropdownRef}>
+                                    <button 
+                                        onClick={() => setIsYearDropdownOpen(!isYearDropdownOpen)}
+                                        className="glass-panel flex items-center justify-between gap-1.5 sm:gap-2 bg-slate-50 dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-lg text-xs font-semibold text-slate-700 dark:text-gray-300 px-2.5 py-1.5 outline-none hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-100 dark:hover:bg-white/5 transition-all shadow-sm cursor-pointer"
+                                    >
+                                        <span>{selectedActivityYear}</span>
+                                        <ChevronDown className={clsx("w-3.5 h-3.5 text-slate-500 transition-transform duration-200", isYearDropdownOpen && "rotate-180")} />
+                                    </button>
+                                    <div className={clsx(
+                                        "glass-panel absolute top-full mt-1.5 right-0 w-[100px] bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-lg shadow-xl overflow-hidden z-50 transition-all duration-200 origin-top-right",
+                                        isYearDropdownOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
+                                    )}>
+                                        <div className="max-h-[150px] overflow-y-auto py-1 hide-scrollbar">
+                                            {availableYears.map((y) => (
+                                                <button
+                                                    key={y}
+                                                    onClick={() => { setSelectedActivityYear(y); setIsYearDropdownOpen(false); }}
+                                                    className={clsx(
+                                                        "w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer",
+                                                        selectedActivityYear === y ? "bg-primary/10 text-primary dark:text-blue-400 font-bold" : "text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                                                    )}
+                                                >
+                                                    {y}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div 
