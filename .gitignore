@@ -44,3 +44,7 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
+
+# Cubing tutorial PDFs
+*.pdf
+
