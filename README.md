@@ -1,4 +1,4 @@
-# <img src="./public/favicon.png" width="32" height="36" align="center" /> Cubora | AI-Powered Speedcubing Ecosystem
+# <img src="./public/favicon.png" width="32" height="36" align="absmiddle" /> Cubora | AI-Powered Speedcubing Ecosystem
 
 ![Cubora Cover](./public/cover.png)
 
