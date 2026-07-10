@@ -302,7 +302,7 @@ export default function MultiplayerHub() {
                                 </div>
 
                                 <div className="flex-1 flex flex-col items-center justify-center p-6 relative w-full">
-                                    {(timerState === 'IDLE' || timerState === 'STOPPED') && (
+                                    {(timerState === 'PRE_INSPECTION' || timerState === 'STOPPED') && (
                                         <div className="absolute top-6 flex items-center gap-2 text-slate-500 dark:text-gray-400 text-xs font-semibold">
                                             <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/10 rounded font-mono text-slate-700 dark:text-white text-[10px] border border-slate-200 dark:border-white/5 uppercase tracking-wide">TOUCH CONTAINER</span>
                                             <span>Hold to start</span>
@@ -316,7 +316,7 @@ export default function MultiplayerHub() {
                                             timerState === 'READY' && "text-emerald-500",
                                             timerState === 'RUNNING' && "text-slate-900 dark:text-white",
                                             timerState === 'STOPPED' && "text-primary",
-                                            timerState === 'IDLE' && "text-slate-900 dark:text-white"
+                                            timerState === 'PRE_INSPECTION' && "text-slate-900 dark:text-white"
                                         )}
                                     >
                                         {formatTime(playerTime)}
