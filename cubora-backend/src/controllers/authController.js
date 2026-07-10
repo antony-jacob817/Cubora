@@ -199,18 +199,18 @@ exports.deleteAccount = async (req, res) => {
   }
 };
 
-// @desc    Update user password
-// @route   PUT /api/auth/password
+// @desc    Change user password
+// @route   PUT /api/auth/change-password
 // @access  Private (Protected Route)
-exports.updatePassword = async (req, res) => {
+exports.changePassword = async (req, res) => {
   try {
-    const { password } = req.body;
-    if (!password) {
-      return res.status(400).json({ success: false, error: 'Please provide a password value' });
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Please provide old and new passwords' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters long' });
     }
 
     const user = await User.findById(req.user.id).select('+password');
@@ -218,11 +218,17 @@ exports.updatePassword = async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    user.password = password;
+    const isMatch = await user.matchPassword(oldPassword);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, error: 'Incorrect old password' });
+    }
+
+    user.password = newPassword;
     await user.save();
 
     res.status(200).json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
-};
+};
+

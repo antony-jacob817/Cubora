@@ -4,7 +4,7 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   Bolt, User, Timer, Palette, Shield,
   Check, Loader2, LogOut, ChevronRight, ChevronDown,
-  Trash2, AlertTriangle, X
+  Trash2, AlertTriangle, X, Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -50,10 +50,6 @@ export default function SettingsPage() {
   const [selectedAvatar, setSelectedAvatar] = useState<string>(user?.avatar || '');
   const [displayName, setDisplayName] = useState(user?.name || '');
   const [nameError, setNameError] = useState<string | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -80,6 +76,15 @@ export default function SettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Change password states
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Fetch settings on mount
   useEffect(() => {
@@ -124,7 +129,6 @@ export default function SettingsPage() {
     setIsSaving(true);
     setSaveSuccess(false);
     setNameError(null);
-    setPasswordError(null);
 
     try {
       // 1. If name changed, update it first with strict 24h frequency check
@@ -139,37 +143,6 @@ export default function SettingsPage() {
           setNameError(nameData.error || 'Failed to update display name.');
           setIsSaving(false);
           return; // Stop the pipeline
-        }
-      }
-
-      // 1.5. If new password is provided, update it
-      if (newPassword) {
-        if (newPassword.length < 6) {
-          setPasswordError('Password must be at least 6 characters.');
-          setIsSaving(false);
-          return; // Stop the pipeline
-        }
-        if (newPassword !== confirmPassword) {
-          setPasswordError('Passwords do not match.');
-          setIsSaving(false);
-          return; // Stop the pipeline
-        }
-
-        const passwordRes = await fetch('http://localhost:5000/api/auth/password', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify({ password: newPassword }),
-        });
-        const passwordData = await passwordRes.json();
-        if (!passwordData.success) {
-          setPasswordError(passwordData.error || 'Failed to update password.');
-          setIsSaving(false);
-          return; // Stop the pipeline
-        } else {
-          setNewPassword('');
-          setConfirmPassword('');
-          setPasswordSuccess(true);
-          setTimeout(() => setPasswordSuccess(false), 3000);
         }
       }
 
@@ -249,6 +222,49 @@ export default function SettingsPage() {
     }
   };
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All password fields are required.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirm password do not match.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    try {
+      const res = await fetch('http://localhost:5000/api/auth/change-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPasswordSuccess('Password updated successfully!');
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => setIsPasswordModalOpen(false), 2000);
+      } else {
+        setPasswordError(data.error || 'Failed to update password.');
+      }
+    } catch (err) {
+      console.error('Failed to update password:', err);
+      setPasswordError('A network error occurred. Please try again.');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   const updateField = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
     setSettings(prev => prev ? { ...prev, [key]: value } : prev);
   };
@@ -316,59 +332,6 @@ export default function SettingsPage() {
                 <p className="text-[10px] text-slate-400 dark:text-gray-600 mt-1">Can be changed once every 24 hours.</p>
               )}
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-              <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">New Password</label>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    setPasswordError(null);
-                  }}
-                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
-                  placeholder="New Password"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Confirm New Password</label>
-                <Input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => {
-                    setConfirmPassword(e.target.value);
-                    setPasswordError(null);
-                  }}
-                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
-                  placeholder="Confirm Password"
-                />
-              </div>
-            </div>
-
-            <AnimatePresence>
-              {(passwordError || passwordSuccess) && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden w-full"
-                >
-                  {passwordError && (
-                    <p className="text-xs text-red-500 dark:text-red-400 mt-1 font-medium flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                      {passwordError}
-                    </p>
-                  )}
-                  {passwordSuccess && (
-                    <p className="text-xs text-emerald-500 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Password updated successfully.
-                    </p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             <div>
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Email Address</label>
@@ -979,6 +942,24 @@ export default function SettingsPage() {
 
           <div className="space-y-2 w-full">
             <button
+              onClick={() => {
+                setOldPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordError(null);
+                setPasswordSuccess(null);
+                setIsPasswordModalOpen(true);
+              }}
+              className="w-full flex items-center justify-between p-4 bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-slate-100 dark:border-white/5 sm:hover:bg-slate-100/50 sm:dark:hover:bg-white/5 transition-colors group min-h-[52px]"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Key className="w-5 h-5 text-primary shrink-0" />
+                <span className="text-slate-900 dark:text-white text-xs sm:text-sm font-bold truncate">Change Password</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 dark:text-gray-500 sm:group-hover:text-slate-900 sm:dark:group-hover:text-white transition-colors shrink-0" />
+            </button>
+
+            <button
               onClick={handleLogout}
               className="w-full flex items-center justify-between p-4 bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-slate-100 dark:border-white/5 sm:hover:bg-slate-100/50 sm:dark:hover:bg-white/5 transition-colors group min-h-[52px]"
             >
@@ -1077,6 +1058,106 @@ export default function SettingsPage() {
               )}
             </button>
           </div>
+        </Modal>,
+        document.body
+      )}
+
+      {/* Change Password Modal */}
+      {createPortal(
+        <Modal
+          isOpen={isPasswordModalOpen}
+          onClose={() => setIsPasswordModalOpen(false)}
+          className="max-w-md p-5 xs:p-6 sm:p-8 flex flex-col gap-5 sm:gap-6"
+        >
+          <button
+            onClick={() => setIsPasswordModalOpen(false)}
+            className="absolute top-4 right-3 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-white transition-colors z-10"
+            aria-label="Close modal content"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/15 shrink-0">
+              <Key className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-tight">Change Password</h3>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-mono tracking-wide">SECURE YOUR ACCOUNT</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdatePassword} className="space-y-4 text-left">
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Old Password</label>
+              <Input
+                type="password"
+                placeholder="Enter old password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">New Password</label>
+              <Input
+                type="password"
+                placeholder="Enter new password (min. 6 chars)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Confirm New Password</label>
+              <Input
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
+                required
+              />
+            </div>
+
+            {passwordError && (
+              <div className="text-xs font-bold text-red-500 dark:text-red-400 bg-red-500/10 px-4 py-2.5 rounded-xl border border-red-500/10">
+                {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div className="text-xs font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 px-4 py-2.5 rounded-xl border border-emerald-500/10">
+                {passwordSuccess}
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-5 w-full">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsPasswordModalOpen(false)}
+                className="flex-1 rounded-xl h-11 min-h-[44px] text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <button
+                type="submit"
+                disabled={isUpdatingPassword}
+                className="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-40 text-white rounded-xl h-11 min-h-[44px] text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+              >
+                {isUpdatingPassword ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Updating...</>
+                ) : (
+                  'Update Password'
+                )}
+              </button>
+            </div>
+          </form>
         </Modal>,
         document.body
       )}
