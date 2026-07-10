@@ -50,6 +50,10 @@ export default function SettingsPage() {
   const [selectedAvatar, setSelectedAvatar] = useState<string>(user?.avatar || '');
   const [displayName, setDisplayName] = useState(user?.name || '');
   const [nameError, setNameError] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -120,6 +124,7 @@ export default function SettingsPage() {
     setIsSaving(true);
     setSaveSuccess(false);
     setNameError(null);
+    setPasswordError(null);
 
     try {
       // 1. If name changed, update it first with strict 24h frequency check
@@ -134,6 +139,37 @@ export default function SettingsPage() {
           setNameError(nameData.error || 'Failed to update display name.');
           setIsSaving(false);
           return; // Stop the pipeline
+        }
+      }
+
+      // 1.5. If new password is provided, update it
+      if (newPassword) {
+        if (newPassword.length < 6) {
+          setPasswordError('Password must be at least 6 characters.');
+          setIsSaving(false);
+          return; // Stop the pipeline
+        }
+        if (newPassword !== confirmPassword) {
+          setPasswordError('Passwords do not match.');
+          setIsSaving(false);
+          return; // Stop the pipeline
+        }
+
+        const passwordRes = await fetch('http://localhost:5000/api/auth/password', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ password: newPassword }),
+        });
+        const passwordData = await passwordRes.json();
+        if (!passwordData.success) {
+          setPasswordError(passwordData.error || 'Failed to update password.');
+          setIsSaving(false);
+          return; // Stop the pipeline
+        } else {
+          setNewPassword('');
+          setConfirmPassword('');
+          setPasswordSuccess(true);
+          setTimeout(() => setPasswordSuccess(false), 3000);
         }
       }
 
@@ -280,6 +316,59 @@ export default function SettingsPage() {
                 <p className="text-[10px] text-slate-400 dark:text-gray-600 mt-1">Can be changed once every 24 hours.</p>
               )}
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">New Password</label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    setPasswordError(null);
+                  }}
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
+                  placeholder="New Password"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Confirm New Password</label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setPasswordError(null);
+                  }}
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
+                  placeholder="Confirm Password"
+                />
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {(passwordError || passwordSuccess) && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden w-full"
+                >
+                  {passwordError && (
+                    <p className="text-xs text-red-500 dark:text-red-400 mt-1 font-medium flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      {passwordError}
+                    </p>
+                  )}
+                  {passwordSuccess && (
+                    <p className="text-xs text-emerald-500 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Password updated successfully.
+                    </p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div>
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Email Address</label>
