@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
     Medal, TrendingUp, Flame, Star,
-    Clock, Award, Loader2
+    Clock, Award, Loader2, Target, Timer, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { PageTransition } from '@/components/animations/PageTransition';
 import { useAuth } from '@/context/AuthContext';
 import { clsx } from 'clsx';
@@ -77,9 +79,21 @@ export default function CommunityHub() {
         ao5: number | null;
         totalSolves: number;
         streak: number;
+        globalAverage: number | null;
+        pbSession: string;
     } | null>(null);
     const [achievements, setAchievements] = useState<AchievementData[]>([]);
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+    // Attachment states
+    const [attachedSolve, setAttachedSolve] = useState<any | null>(null);
+    const [attachedAlg, setAttachedAlg] = useState<{ alg: string; algType: string } | null>(null);
+    const [isSolvePickerOpen, setIsSolvePickerOpen] = useState(false);
+    const [isAlgInputOpen, setIsAlgInputOpen] = useState(false);
+    const [allSolves, setAllSolves] = useState<any[]>([]);
+    const [isLoadingSolves, setIsLoadingSolves] = useState(false);
+    const [algText, setAlgText] = useState('');
+    const [algName, setAlgName] = useState('');
 
     // --- FETCH COMMUNITY FEED ---
     useEffect(() => {
@@ -99,16 +113,16 @@ export default function CommunityHub() {
 
     // --- FETCH PROFILE DATA ---
     useEffect(() => {
-        if (activeTab !== 'profile' || profileStats) return;
+        if (activeTab !== 'profile') return;
         setIsLoadingProfile(true);
 
         const fetchProfile = async () => {
             try {
                 const headers = getAuthHeaders();
                 const [statsRes, achievRes, solvesRes] = await Promise.all([
-                    fetch('http://localhost:5000/api/solves/stats', { headers }),
+                    fetch('http://localhost:5000/api/solves/stats?sessionId=all', { headers }),
                     fetch('http://localhost:5000/api/achievements', { headers }),
-                    fetch('http://localhost:5000/api/solves', { headers }),
+                    fetch('http://localhost:5000/api/solves?sessionId=all', { headers }),
                 ]);
 
                 const statsData = await statsRes.json();
@@ -116,11 +130,32 @@ export default function CommunityHub() {
                 const solvesData = await solvesRes.json();
 
                 if (statsData.success) {
+                    let pbSession = 'main';
+                    if (solvesData.success && solvesData.data) {
+                        const activeSolves = solvesData.data.filter((s: any) => !s.isDeleted && s.penalty !== 'DNF');
+                        if (activeSolves.length > 0) {
+                            let minTime = Infinity;
+                            let bestSolve = null;
+                            activeSolves.forEach((s: any) => {
+                                const t = s.timeMs + (s.penalty === '+2' ? 2000 : 0);
+                                if (t < minTime) {
+                                    minTime = t;
+                                    bestSolve = s;
+                                }
+                            });
+                            if (bestSolve) {
+                                pbSession = bestSolve.sessionId || 'main';
+                            }
+                        }
+                    }
+
                     setProfileStats({
                         pb: statsData.stats.pb,
                         ao5: statsData.stats.ao5,
-                        totalSolves: solvesData.success ? solvesData.count : 0,
+                        totalSolves: solvesData.success ? solvesData.data.length : 0,
                         streak: statsData.stats.streak,
+                        globalAverage: statsData.stats.globalAverage,
+                        pbSession: pbSession
                     });
                 }
                 if (achievData.success) {
@@ -135,20 +170,62 @@ export default function CommunityHub() {
         fetchProfile();
     }, [activeTab]);
 
-    // --- CREATE POST ---
+    const openSolvePicker = async () => {
+        setIsSolvePickerOpen(true);
+        if (allSolves.length > 0) return;
+        setIsLoadingSolves(true);
+        try {
+            const res = await fetch('http://localhost:5000/api/solves?sessionId=all', { headers: getAuthHeaders() });
+            const data = await res.json();
+            if (data.success) {
+                const active = data.data.filter((s: any) => !s.isDeleted && s.penalty !== 'DNF');
+                setAllSolves(active);
+            }
+        } catch (err) {
+            console.error('Failed to load user solves for picking:', err);
+        } finally {
+            setIsLoadingSolves(false);
+        }
+    };
+
+    // --- CREATE POST WITH ATTACHMENTS ---
     const handleCreatePost = async () => {
         if (!newPostContent.trim() || isPosting) return;
         setIsPosting(true);
         try {
+            let postType = 'discussion';
+            let solveData = undefined;
+
+            if (attachedSolve) {
+                postType = 'solve';
+                solveData = {
+                    time: (attachedSolve.timeMs / 1000).toFixed(3) + 's',
+                    method: attachedSolve.method,
+                    scramble: attachedSolve.scramble
+                };
+            } else if (attachedAlg) {
+                postType = 'algorithm';
+                solveData = {
+                    alg: attachedAlg.alg,
+                    algType: attachedAlg.algType
+                };
+            }
+
             const res = await fetch('http://localhost:5000/api/community', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                body: JSON.stringify({ content: newPostContent.trim(), type: 'discussion' }),
+                body: JSON.stringify({ 
+                    content: newPostContent.trim(), 
+                    type: postType, 
+                    solveData 
+                }),
             });
             const data = await res.json();
             if (data.success) {
                 setPosts(prev => [data.data, ...prev]);
                 setNewPostContent('');
+                setAttachedSolve(null);
+                setAttachedAlg(null);
                 if (textareaRef.current) textareaRef.current.style.height = 'auto';
             }
         } catch (err) {
@@ -268,12 +345,68 @@ export default function CommunityHub() {
                                             target.style.height = target.scrollHeight + 'px';
                                         }}
                                     />
+
+                                    {/* Attachment Previews */}
+                                    {attachedSolve && (
+                                        <div className="w-full bg-primary/5 border border-primary/20 rounded-xl p-3.5 mb-2.5 flex items-center justify-between gap-3 text-left">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/20 shrink-0">
+                                                    <Clock className="w-4 h-4 text-primary" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <span className="text-xs font-bold text-slate-900 dark:text-white block leading-none mb-1.5">
+                                                        {(attachedSolve.timeMs / 1000).toFixed(3)}s Solve ({attachedSolve.method})
+                                                    </span>
+                                                    <span className="text-[10px] font-mono text-slate-400 dark:text-gray-550 block truncate max-w-full">
+                                                        {attachedSolve.scramble}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => setAttachedSolve(null)} 
+                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors shrink-0"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {attachedAlg && (
+                                        <div className="w-full bg-secondary/5 border border-secondary/20 rounded-xl p-3.5 mb-2.5 flex items-center justify-between gap-3 text-left">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className="w-9 h-9 rounded-lg bg-secondary/20 flex items-center justify-center border border-secondary/20 shrink-0">
+                                                    <Share2 className="w-4 h-4 text-secondary" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <span className="text-xs font-bold text-slate-900 dark:text-white block leading-none mb-1.5">
+                                                        {attachedAlg.algType || 'Algorithm'}
+                                                    </span>
+                                                    <code className="text-[11px] font-mono font-bold text-slate-700 dark:text-gray-300 block break-all">
+                                                        {attachedAlg.alg}
+                                                    </code>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => setAttachedAlg(null)} 
+                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors shrink-0"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+
                                     <div className="flex flex-col sm:flex-row gap-3.5 sm:items-center sm:justify-between border-t border-slate-200 dark:border-white/5 pt-3.5 mt-2 w-full">
                                         <div className="flex gap-2 w-full sm:w-auto">
-                                            <button className="flex-1 sm:flex-none text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:text-primary transition-colors flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-2 rounded-lg min-h-[38px] sm:min-h-0 uppercase tracking-wider">
+                                            <button 
+                                                onClick={openSolvePicker}
+                                                className="flex-1 sm:flex-none text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:text-primary transition-colors flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-2 rounded-lg min-h-[38px] sm:min-h-0 uppercase tracking-wider"
+                                            >
                                                 <Clock className="w-3.5 h-3.5" /> Attach Solve
                                             </button>
-                                            <button className="flex-1 sm:flex-none text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:text-secondary transition-colors flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-2 rounded-lg min-h-[38px] sm:min-h-0 uppercase tracking-wider">
+                                            <button 
+                                                onClick={() => setIsAlgInputOpen(true)}
+                                                className="flex-1 sm:flex-none text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:text-secondary transition-colors flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-2 rounded-lg min-h-[38px] sm:min-h-0 uppercase tracking-wider"
+                                            >
                                                 <Share2 className="w-3.5 h-3.5" /> Share Alg
                                             </button>
                                         </div>
@@ -281,7 +414,7 @@ export default function CommunityHub() {
                                             variant="glow"
                                             size="sm"
                                             onClick={handleCreatePost}
-                                            disabled={!newPostContent.trim() || isPosting}
+                                            disabled={(!newPostContent.trim() && !attachedSolve && !attachedAlg) || isPosting}
                                             className="w-full sm:w-auto h-9 min-h-[36px] text-xs font-bold uppercase tracking-wider justify-center"
                                         >
                                             {isPosting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Post'}
@@ -462,23 +595,74 @@ export default function CommunityHub() {
                                             </p>
                                         </div>
 
-                                        {/* Performance Metrics Tracker Rows Grid (2 cols mobile -> 4 cols desktop) */}
+                                        {/* Performance Metrics Tracker Rows Grid */}
                                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full">
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">PB Single</span>
-                                                <span className="font-display font-bold text-xl sm:text-2xl text-primary leading-none block">{profileStats?.pb ? `${profileStats.pb}s` : '--'}</span>
+                                            {/* PB Card */}
+                                            <div className="glass-panel-interactive glass-scroll-safe p-3.5 sm:p-5 flex flex-col justify-between group hover:border-yellow-500/40 transition-colors text-left min-h-[105px] sm:min-h-[140px]">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-yellow-500/20 text-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(234,179,8,0.15)] group-hover:scale-105 transition-transform duration-300">
+                                                        <Trophy className="w-3.5 h-3.5 sm:w-5 h-5" />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2.5 sm:mt-3">
+                                                    <span className="text-slate-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider block leading-none">
+                                                        PB ({profileStats?.pbSession ? profileStats.pbSession.toUpperCase() : 'ALL SESSION'})
+                                                    </span>
+                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white mt-1 block leading-none">
+                                                        {profileStats?.pb ? `${Number(profileStats.pb).toFixed(3)}s` : '--'}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Current Ao5</span>
-                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.ao5 ? `${profileStats.ao5}s` : '--'}</span>
+
+                                            {/* Total Solves Card */}
+                                            <div className="glass-panel-interactive glass-scroll-safe p-3.5 sm:p-5 flex flex-col justify-between group hover:border-emerald-500/40 transition-colors text-left min-h-[105px] sm:min-h-[140px]">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.15)] group-hover:scale-105 transition-transform duration-300">
+                                                        <Target className="w-3.5 h-3.5 sm:w-5 h-5 animate-pulse" />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2.5 sm:mt-3">
+                                                    <span className="text-slate-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider block leading-none">
+                                                        Total Solves
+                                                    </span>
+                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white mt-1 block leading-none">
+                                                        {profileStats?.totalSolves ?? 0}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Total Solves</span>
-                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.totalSolves ?? 0}</span>
+
+                                            {/* Solve Streak Card */}
+                                            <div className="glass-panel-interactive glass-scroll-safe p-3.5 sm:p-5 flex flex-col justify-between group hover:border-orange-500/40 transition-colors text-left min-h-[105px] sm:min-h-[140px]">
+                                                <div className="flex justify-between items-center w-full gap-2">
+                                                    <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-orange-500/20 text-orange-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.15)] group-hover:scale-105 transition-transform duration-300">
+                                                        <Flame className="w-3.5 h-3.5 sm:w-5 h-5 animate-pulse" />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2.5 sm:mt-3">
+                                                    <span className="text-slate-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider block leading-none">
+                                                        Solve Streak
+                                                    </span>
+                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white mt-1 block leading-none">
+                                                        {profileStats?.streak ?? 0} {profileStats?.streak === 1 ? 'Day' : 'Days'}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Solve Streak</span>
-                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.streak ?? 0} Days</span>
+
+                                            {/* Global Average Card */}
+                                            <div className="glass-panel-interactive glass-scroll-safe p-3.5 sm:p-5 flex flex-col justify-between group hover:border-blue-500/40 transition-colors text-left min-h-[105px] sm:min-h-[140px]">
+                                                <div className="flex justify-between items-center w-full gap-2">
+                                                    <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center shadow-[0_0_12px_rgba(59,130,246,0.15)] group-hover:scale-105 transition-transform duration-300">
+                                                        <Timer className="w-3.5 h-3.5 sm:w-5 h-5" />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2.5 sm:mt-3">
+                                                    <span className="text-slate-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider block leading-none">
+                                                        Global Average
+                                                    </span>
+                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white mt-1 block leading-none">
+                                                        {profileStats?.globalAverage ? `${Number(profileStats.globalAverage).toFixed(3)} s` : '--'}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -549,6 +733,155 @@ export default function CommunityHub() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Solve Picker Modal */}
+            {createPortal(
+                <Modal
+                    isOpen={isSolvePickerOpen}
+                    onClose={() => setIsSolvePickerOpen(false)}
+                    className="max-w-md p-5 xs:p-6 sm:p-8 flex flex-col gap-5 sm:gap-6 relative"
+                >
+                    <button
+                        onClick={() => setIsSolvePickerOpen(false)}
+                        className="absolute top-4 right-3 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-white transition-colors z-10"
+                        aria-label="Close modal content"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex items-center gap-3 text-left">
+                        <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/15 shrink-0">
+                            <Clock className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-tight">Attach Recent Solve</h3>
+                            <p className="text-[11px] text-slate-500 dark:text-gray-400 font-mono tracking-wide">SHARE YOUR PERFORMANCE</p>
+                        </div>
+                    </div>
+
+                    <div className="max-h-[300px] overflow-y-auto pr-1 flex flex-col gap-2.5">
+                        {isLoadingSolves ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-gray-400">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary mb-2.5" />
+                                <span className="text-xs">Loading solves...</span>
+                            </div>
+                        ) : allSolves.length === 0 ? (
+                            <div className="text-center py-12 text-slate-500 dark:text-gray-500 text-xs">
+                                No verified solves found. Solve the cube in the Timer tab first!
+                            </div>
+                        ) : (
+                            allSolves.map((s) => (
+                                <button
+                                    key={s._id}
+                                    onClick={() => {
+                                        setAttachedSolve(s);
+                                        setAttachedAlg(null);
+                                        setIsSolvePickerOpen(false);
+                                    }}
+                                    className="w-full flex flex-col gap-1 p-3.5 bg-slate-50/50 hover:bg-slate-100/80 dark:bg-white/[0.01] dark:hover:bg-white/5 border border-slate-100 hover:border-slate-200 dark:border-white/5 dark:hover:border-white/10 rounded-xl transition-all text-left"
+                                >
+                                    <div className="flex justify-between items-center w-full">
+                                        <span className="font-display font-bold text-sm text-primary">
+                                            {(s.timeMs / 1000).toFixed(3)}s
+                                        </span>
+                                        <span className="text-[9px] font-mono font-bold bg-slate-200/55 dark:bg-white/10 px-2 py-0.5 rounded text-slate-500 dark:text-gray-400 uppercase">
+                                            {s.method}
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-slate-400 dark:text-gray-500 block truncate w-full select-none">
+                                        {s.scramble}
+                                    </span>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </Modal>,
+                document.body
+            )}
+
+            {/* Share Alg Modal */}
+            {createPortal(
+                <Modal
+                    isOpen={isAlgInputOpen}
+                    onClose={() => setIsAlgInputOpen(false)}
+                    className="max-w-md p-5 xs:p-6 sm:p-8 flex flex-col gap-5 sm:gap-6 relative"
+                >
+                    <button
+                        onClick={() => setIsAlgInputOpen(false)}
+                        className="absolute top-4 right-3 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-white transition-colors z-10"
+                        aria-label="Close modal content"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex items-center gap-3 text-left">
+                        <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center border border-secondary/15 shrink-0">
+                            <Share2 className="w-5 h-5 text-secondary" />
+                        </div>
+                        <div>
+                            <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-tight">Share Algorithm</h3>
+                            <p className="text-[11px] text-slate-500 dark:text-gray-400 font-mono tracking-wide">POST AN ALGORITHM FORMULA</p>
+                        </div>
+                    </div>
+
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (!algText.trim()) return;
+                            setAttachedAlg({
+                                alg: algText.trim(),
+                                algType: algName.trim() || 'Algorithm'
+                            });
+                            setAttachedSolve(null);
+                            setAlgText('');
+                            setAlgName('');
+                            setIsAlgInputOpen(false);
+                        }}
+                        className="space-y-4 text-left"
+                    >
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Algorithm Name</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. Sune OLL 27"
+                                value={algName}
+                                onChange={(e) => setAlgName(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-secondary transition-colors placeholder-slate-400 dark:placeholder-gray-500 min-h-[44px]"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Algorithm Moves</label>
+                            <textarea
+                                placeholder="e.g. R U R' U R U2 R'"
+                                value={algText}
+                                onChange={(e) => setAlgText(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-secondary transition-colors placeholder-slate-400 dark:placeholder-gray-500 min-h-[80px] resize-none"
+                                required
+                            />
+                        </div>
+
+                        <div className="flex gap-3 mt-5 w-full">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setIsAlgInputOpen(false)}
+                                className="flex-1 rounded-xl h-11 min-h-[44px] text-xs font-bold"
+                            >
+                                Cancel
+                            </Button>
+                            <button
+                                type="submit"
+                                disabled={!algText.trim()}
+                                className="flex-1 bg-secondary hover:bg-secondary/90 disabled:opacity-40 text-white rounded-xl h-11 min-h-[44px] text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.2)]"
+                            >
+                                Attach
+                            </button>
+                        </div>
+                    </form>
+                </Modal>,
+                document.body
+            )}
         </PageTransition>
     );
 }

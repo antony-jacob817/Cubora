@@ -45,23 +45,11 @@ const userSchema = new mongoose.Schema({
   friends: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 
-  }],
-  username: {
-    type: String,
-    unique: true,
-    sparse: true
-  },
-  about: {
-    type: String,
-    default: ''
-  }
+  }]
 });
 
-// Encrypt password using bcrypt before saving and set default username
+// Encrypt password using bcrypt before saving
 userSchema.pre('save', async function() {
-  if (!this.username) {
-    this.username = this.email;
-  }
   if (!this.isModified('password')) {
     return;
   }
