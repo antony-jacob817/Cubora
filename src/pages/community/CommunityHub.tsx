@@ -1,62 +1,40 @@
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
     Medal, TrendingUp, Flame, Star,
-    Clock, Award, Loader2, X, User, Target, Timer
+    Clock, Award, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
 import { PageTransition } from '@/components/animations/PageTransition';
 import { useAuth } from '@/context/AuthContext';
 import { clsx } from 'clsx';
 
-const TierStyles: Record<string, string> = {
-    locked: 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01] opacity-40 grayscale',
-    bronze: 'text-[#CD7F32] bg-[#CD7F32]/5 border-[#CD7F32]/30 shadow-[0_0_15px_rgba(205,127,50,0.1)]',
-    silver: 'text-slate-400 bg-slate-400/5 border-slate-400/30 shadow-[0_0_15px_rgba(148,163,184,0.1)]',
-    gold: 'text-yellow-500 bg-yellow-500/5 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.15)]',
-    emerald: 'text-emerald-400 bg-emerald-400/5 border-emerald-400/30 shadow-[0_0_15px_rgba(52,211,153,0.15)]',
-    diamond: 'text-cyan-400 bg-cyan-400/5 border-cyan-400/30 shadow-[0_0_20px_rgba(34,211,238,0.2)]',
-    ruby: 'text-rose-500 bg-rose-500/5 border-rose-500/30 shadow-[0_0_25px_rgba(244,63,94,0.25)]'
+const RarityColors: Record<string, string> = {
+    common: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
+    rare: 'text-primary bg-primary/10 border-primary/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]',
+    epic: 'text-secondary bg-secondary/10 border-secondary/20 shadow-[0_0_15px_rgba(139,92,246,0.15)]',
+    legendary: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20 shadow-[0_0_20px_rgba(234,179,8,0.2)]'
 };
 
-const TierBadgeColors: Record<string, string> = {
-    bronze: 'text-[#CD7F32] bg-[#CD7F32]/10',
-    silver: 'text-slate-400 bg-slate-400/10',
-    gold: 'text-yellow-500 bg-yellow-500/10',
-    emerald: 'text-emerald-400 bg-emerald-400/10',
-    diamond: 'text-cyan-400 bg-cyan-400/10',
-    ruby: 'text-rose-500 bg-rose-500/10'
+const RARITY_MAP: Record<string, string> = {
+    'First Contact': 'common',
+    'Sub-30 Pioneer': 'rare',
+    'Sub-20 Expert': 'epic',
+    'Elite Speedcuber': 'legendary',
+    'Century Halfway': 'rare',
+    'Centurion Solver': 'epic',
 };
 
 const ICON_MAP: Record<string, any> = {
-    'Trophy': Trophy,
-    'Flame': Flame,
     'Sparkles': Star,
     'Zap': Flame,
+    'Flame': Flame,
+    'Trophy': Trophy,
     'Target': Clock,
-    'Check': CheckCircle2,
     'Crown': Award,
-    'Award': Award
 };
-
-// Simple stub for CheckCircle2 if not imported directly
-import { CheckCircle2 } from 'lucide-react';
-
-const AVATAR_PRESETS = [
-    '/Avatars/Cosmic Churn.png',
-    '/Avatars/Cube Guru.png',
-    '/Avatars/Cyber Scout.png',
-    '/Avatars/Guide Bot.png',
-    '/Avatars/Logic Buddy.png',
-    '/Avatars/Pixel Pal.png',
-    '/Avatars/Star Cuber.png',
-    '/Avatars/Swift Spark.png'
-];
 
 interface CommunityPost {
     _id: string;
@@ -76,33 +54,14 @@ interface AchievementData {
     icon: string;
     category: string;
     isUnlocked: boolean;
-    currentTier?: string;
-    isMaxed?: boolean;
     unlockedAt: string | null;
     progress: number;
     progressTarget: number;
 }
 
-// Helper function to calculate relative join date
-const getRelativeJoinDate = (dateString?: string) => {
-    if (!dateString) return 'Recently';
-    const joinedDate = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - joinedDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const diffMonths = Math.floor(diffDays / 30);
-    const diffYears = Math.floor(diffDays / 365);
-
-    if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
-    if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
-    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return 'Today';
-};
-
 export default function CommunityHub() {
-    const { user, getAuthHeaders, refetchUser } = useAuth();
+    const { user, getAuthHeaders } = useAuth();
     const navigate = useNavigate();
-    const location = useLocation();
     const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
 
     // Feed state
@@ -112,42 +71,15 @@ export default function CommunityHub() {
     const [isPosting, setIsPosting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Profile Identity Modal State
-    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [editName, setEditName] = useState('');
-    const [editAbout, setEditAbout] = useState('');
-    const [editAvatar, setEditAvatar] = useState('');
-    const [isSavingProfile, setIsSavingProfile] = useState(false);
-    const [profileError, setProfileError] = useState<string | null>(null);
-
     // Profile state
     const [profileStats, setProfileStats] = useState<{
         pb: number | null;
-        globalAverage: number | null;
+        ao5: number | null;
         totalSolves: number;
         streak: number;
     } | null>(null);
     const [achievements, setAchievements] = useState<AchievementData[]>([]);
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-
-    // Prefill shared PB from Dashboard
-    useEffect(() => {
-        if (location.state?.sharePb) {
-            setNewPostContent(`I just hit a new Personal Best of ${location.state.sharePb}s on Cubora! 🚀🔥`);
-            setActiveTab('feed');
-        }
-    }, [location.state]);
-
-    // Populate Modal with current user data when opened
-    useEffect(() => {
-        if (isProfileModalOpen && user) {
-            // Default to user.name, fallback to user.email
-            setEditName(user.name || user.email || '');
-            setEditAvatar(user.avatar || AVATAR_PRESETS[0]);
-            setEditAbout((user as any).about || '');
-            setProfileError(null);
-        }
-    }, [isProfileModalOpen, user]);
 
     // --- FETCH COMMUNITY FEED ---
     useEffect(() => {
@@ -186,8 +118,8 @@ export default function CommunityHub() {
                 if (statsData.success) {
                     setProfileStats({
                         pb: statsData.stats.pb,
-                        globalAverage: statsData.stats.globalAverage,
-                        totalSolves: solvesData.success ? (solvesData.count || solvesData.data?.length || 0) : 0,
+                        ao5: statsData.stats.ao5,
+                        totalSolves: solvesData.success ? solvesData.count : 0,
                         streak: statsData.stats.streak,
                     });
                 }
@@ -208,64 +140,21 @@ export default function CommunityHub() {
         if (!newPostContent.trim() || isPosting) return;
         setIsPosting(true);
         try {
-            const isSharePb = location.state?.sharePb && newPostContent.includes(location.state.sharePb);
             const res = await fetch('http://localhost:5000/api/community', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                body: JSON.stringify({ 
-                    content: newPostContent.trim(), 
-                    type: isSharePb ? 'solve' : 'discussion',
-                    solveData: isSharePb ? { time: location.state.sharePb, method: 'CFOP' } : undefined
-                }),
+                body: JSON.stringify({ content: newPostContent.trim(), type: 'discussion' }),
             });
             const data = await res.json();
             if (data.success) {
                 setPosts(prev => [data.data, ...prev]);
                 setNewPostContent('');
                 if (textareaRef.current) textareaRef.current.style.height = 'auto';
-                navigate('/community', { replace: true, state: {} });
             }
         } catch (err) {
             console.error('Failed to create post:', err);
         } finally {
             setIsPosting(false);
-        }
-    };
-
-    // --- UPDATE PROFILE IDENTITY ---
-    const handleSaveProfile = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editName.trim()) {
-            setProfileError('Username cannot be empty.');
-            return;
-        }
-
-        setIsSavingProfile(true);
-        setProfileError(null);
-
-        try {
-            const res = await fetch('http://localhost:5000/api/auth/updatedetails', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                body: JSON.stringify({ 
-                    name: editName.trim(), 
-                    avatar: editAvatar,
-                    about: editAbout.trim() 
-                }),
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                if (refetchUser) await refetchUser();
-                setIsProfileModalOpen(false);
-            } else {
-                setProfileError(data.error || 'Failed to update profile. The username might already be taken.');
-            }
-        } catch (err) {
-            console.error('Failed to update profile:', err);
-            setProfileError('A network error occurred. Please try again.');
-        } finally {
-            setIsSavingProfile(false);
         }
     };
 
@@ -301,8 +190,7 @@ export default function CommunityHub() {
         }
     };
 
-    // Use email as fallback for display name
-    const displayUsername = user?.name || user?.email || 'Cubora User';
+    const unlockedAchievements = achievements.filter(a => a.isUnlocked);
 
     return (
         <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0 text-left">
@@ -318,6 +206,7 @@ export default function CommunityHub() {
                     </p>
                 </div>
 
+                {/* Navigation Control Tabs */}
                 {/* Navigation Control Tabs */}
                 <div className="flex w-full md:w-auto bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-1 rounded-xl shrink-0 max-w-full">
                     {(['feed', 'profile'] as const).map((tab) => {
@@ -558,7 +447,7 @@ export default function CommunityHub() {
                                                     className="w-full h-full rounded-xl bg-slate-50 dark:bg-white/5 object-cover"
                                                 />
                                             </div>
-                                            <Button variant="secondary" size="sm" className="gap-1.5 min-h-[44px] sm:min-h-[32px] px-4 sm:px-3 ml-8" onClick={() => setIsProfileModalOpen(true)}>
+                                            <Button variant="secondary" size="sm" className="gap-1.5 min-h-[44px] sm:min-h-[32px] px-4 sm:px-3 ml-8" onClick={() => navigate('/settings')}>
                                                 <Edit2 className="w-3.5 h-3.5" /> Edit Profile
                                             </Button>
                                         </div>
@@ -566,62 +455,30 @@ export default function CommunityHub() {
                                         {/* Bio Identity Summary */}
                                         <div className="mb-6 sm:mb-8 w-full">
                                             <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-                                                {displayUsername} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
+                                                {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
                                             </h2>
                                             <p className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm mt-1">
-                                                Joined {getRelativeJoinDate(user?.createdAt)}
+                                                @{(user?.name || 'cubora').toLowerCase().replace(/\s+/g, '_')} • Speedcuber • Joined {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Recently'}
                                             </p>
-                                            {(user as any)?.about && (
-                                                <p className="text-sm text-slate-600 dark:text-gray-300 mt-3 leading-relaxed max-w-3xl whitespace-pre-wrap break-words">
-                                                    {(user as any).about}
-                                                </p>
-                                            )}
                                         </div>
 
-                                        {/* Performance Metrics Tracker Rows Grid */}
+                                        {/* Performance Metrics Tracker Rows Grid (2 cols mobile -> 4 cols desktop) */}
                                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full">
-                                            {/* PB Card */}
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 text-left flex flex-col justify-between min-h-[120px]">
-                                                <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center mb-4">
-                                                    <Trophy className="w-5 h-5 text-yellow-500" />
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest block mb-1">PB (ALL SESSION)</span>
-                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.pb ? `${profileStats.pb}s` : '--'}</span>
-                                                </div>
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">PB Single</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-primary leading-none block">{profileStats?.pb ? `${profileStats.pb}s` : '--'}</span>
                                             </div>
-
-                                            {/* Total Solves Card */}
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 text-left flex flex-col justify-between min-h-[120px]">
-                                                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4">
-                                                    <Target className="w-5 h-5 text-emerald-500" />
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest block mb-1">TOTAL SOLVES</span>
-                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.totalSolves ?? 0}</span>
-                                                </div>
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Current Ao5</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.ao5 ? `${profileStats.ao5}s` : '--'}</span>
                                             </div>
-
-                                            {/* Solve Streak Card */}
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 text-left flex flex-col justify-between min-h-[120px]">
-                                                <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center mb-4">
-                                                    <Flame className="w-5 h-5 text-orange-500" />
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest block mb-1">SOLVE STREAK</span>
-                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.streak ?? 0} Days</span>
-                                                </div>
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Total Solves</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.totalSolves ?? 0}</span>
                                             </div>
-
-                                            {/* Global Average Card */}
-                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 text-left flex flex-col justify-between min-h-[120px]">
-                                                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4">
-                                                    <Timer className="w-5 h-5 text-blue-500" />
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest block mb-1">GLOBAL AVERAGE</span>
-                                                    <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.globalAverage ? `${profileStats.globalAverage}s` : '--'}</span>
-                                                </div>
+                                            <div className="bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 text-left">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-500 uppercase tracking-widest block mb-1">Solve Streak</span>
+                                                <span className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white leading-none block">{profileStats?.streak ?? 0} Days</span>
                                             </div>
                                         </div>
                                     </div>
@@ -629,85 +486,58 @@ export default function CommunityHub() {
 
                                 {/* Achievements Showcase Trophy Case */}
                                 <div className="w-full text-left">
-                                    <div className="flex items-center justify-between gap-4 mb-5 w-full">
+                                    <div className="flex items-center justify-between gap-4 mb-4 w-full">
                                         <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-                                            <Award className="w-5 h-5 text-primary shrink-0" /> Trophy Case
+                                            <Award className="w-4 h-4 sm:w-5 sm:h-5 text-tertiary shrink-0" /> Trophy Case
                                         </h3>
-                                        <span className="text-xs font-mono font-bold text-slate-500 dark:text-gray-500">
-                                            {achievements.filter(a => a.isUnlocked).length} Active Tracks
-                                        </span>
+                                        <span className="text-xs font-mono font-bold text-slate-500 dark:text-gray-500">{unlockedAchievements.length} Unlocked</span>
                                     </div>
 
                                     {achievements.length === 0 ? (
                                         <div className="glass-panel p-8 text-center text-slate-500 w-full">
                                             <Trophy className="w-7 h-7 mx-auto mb-2 opacity-50" />
-                                            <p className="text-xs">Start practicing to activate progressive tracks.</p>
+                                            <p className="text-xs">Start solving to unlock achievements!</p>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-3 gap-4 w-full pb-4 snap-x hide-scrollbar -mx-1 px-1">
-                                            {achievements.map((achievement: any) => {
+                                        <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-3 gap-4 w-full pb-2 snap-x hide-scrollbar">
+                                            {/* CHANGED: Mobile horizontal flex container that snaps back to a grid on desktop (lg:) */}
+                                            {achievements.map((achievement) => {
+                                                const rarity = RARITY_MAP[achievement.title] || 'common';
                                                 const IconComponent = ICON_MAP[achievement.icon] || Trophy;
-                                                const currentTier = achievement.currentTier || 'locked';
-                                                
                                                 return (
                                                     <div
                                                         key={achievement.id}
                                                         className={clsx(
-                                                            "p-4 sm:p-5 rounded-2xl border flex flex-col relative overflow-hidden group transition-all duration-300 select-none min-h-[160px]",
-                                                            "flex-shrink-0 w-[250px] sm:w-[280px] lg:w-full snap-center",
-                                                            TierStyles[currentTier]
+                                                            "p-4 sm:p-5 rounded-2xl border flex flex-col items-center text-center relative overflow-hidden group transition-all cursor-pointer min-h-[150px]",
+                                                            // CHANGED: Force fixed widths for the mobile scroll, then allow w-full inside the desktop grid
+                                                            "flex-shrink-0 w-[240px] sm:w-[280px] lg:w-full snap-center",
+                                                            achievement.isUnlocked ? RarityColors[rarity] : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01] opacity-40 grayscale",
+                                                            achievement.isUnlocked && "sm:hover:scale-[1.02] sm:hover:shadow-md"
                                                         )}
                                                     >
-                                                        <div className="flex justify-between items-start w-full mb-3">
-                                                            <div className={clsx(
-                                                                "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-slate-200/10",
-                                                                currentTier !== 'locked' ? 'bg-white/10 dark:bg-black/20' : 'bg-slate-200 dark:bg-white/5'
-                                                            )}>
-                                                                <IconComponent className="w-4 h-4" />
-                                                            </div>
-                                                            {achievement.isUnlocked ? (
-                                                                <span className={clsx(
-                                                                    "text-[8px] font-black tracking-widest uppercase px-2 py-0.5 rounded leading-none shadow-sm",
-                                                                    TierBadgeColors[currentTier]
-                                                                )}>
-                                                                    {currentTier}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-[8px] font-mono font-bold text-slate-400 bg-slate-150 dark:bg-white/5 px-2 py-0.5 rounded leading-none uppercase tracking-wide">
-                                                                    Locked
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        <IconComponent className="w-8 h-8 sm:w-9 sm:h-9 mb-2.5 opacity-90 sm:group-hover:scale-105 transition-transform shrink-0" />
+                                                        <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm mb-0.5 relative z-10 truncate max-w-full">{achievement.title}</h4>
+                                                        <p className="text-[11px] opacity-70 mb-4 relative z-10 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed px-1">{achievement.description}</p>
 
-                                                        <h4 className="font-display font-bold text-slate-900 dark:text-white text-sm mb-1 truncate w-full">
-                                                            {achievement.title}
-                                                        </h4>
-                                                        <p className="text-[11px] text-slate-500 dark:text-gray-400 line-clamp-2 leading-relaxed mb-4">
-                                                            {achievement.description}
-                                                        </p>
-
-                                                        {/* Progressive Value Slider Logic */}
-                                                        <div className="w-full mt-auto pt-1">
-                                                            <div className="flex justify-between text-[9px] font-black font-mono text-slate-400 dark:text-gray-500 mb-1 leading-none uppercase">
-                                                                <span>Stats</span>
-                                                                <span>
-                                                                    {achievement.isMaxed ? 'MAXED' : `${achievement.progress} / ${achievement.progressTarget}`}
+                                                        {achievement.isUnlocked && achievement.unlockedAt ? (
+                                                            <span className="text-[10px] font-mono font-bold opacity-40 mt-auto leading-none">
+                                                                {new Date(achievement.unlockedAt).toLocaleDateString()}
+                                                            </span>
+                                                        ) : achievement.progressTarget > 0 ? (
+                                                            <div className="w-full mt-auto pt-1">
+                                                                <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className="h-full bg-primary transition-all"
+                                                                        style={{ width: `${Math.min(100, (achievement.progress / achievement.progressTarget) * 100)}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-[9px] font-mono font-bold opacity-40 mt-1 block leading-none">
+                                                                    {achievement.progress} / {achievement.progressTarget}
                                                                 </span>
                                                             </div>
-                                                            <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-                                                                <div
-                                                                    className={clsx(
-                                                                        "h-full transition-all duration-500 rounded-full",
-                                                                        currentTier !== 'locked' ? 'bg-current' : 'bg-slate-400'
-                                                                    )}
-                                                                    style={{ 
-                                                                        width: achievement.isMaxed 
-                                                                            ? '100%' 
-                                                                            : `${Math.min(100, (achievement.progress / achievement.progressTarget) * 100)}%` 
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
+                                                        ) : (
+                                                            <span className="text-[9px] font-mono font-bold opacity-40 mt-auto leading-none">Locked</span>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -719,122 +549,6 @@ export default function CommunityHub() {
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* --- PROFILE IDENTITY MODAL --- */}
-            {createPortal(
-                <Modal
-                    isOpen={isProfileModalOpen}
-                    onClose={() => !isSavingProfile && setIsProfileModalOpen(false)}
-                    className="max-w-2xl p-5 sm:p-8 flex flex-col w-[95vw] md:w-full"
-                >
-                    <button
-                        onClick={() => !isSavingProfile && setIsProfileModalOpen(false)}
-                        className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-white transition-colors z-10"
-                        aria-label="Close modal"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-
-                    <div className="flex items-center gap-3 mb-6 text-left">
-                        <User className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400 dark:text-gray-400 shrink-0" />
-                        <h2 className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white">Profile Identity</h2>
-                    </div>
-
-                    <form onSubmit={handleSaveProfile} className="flex flex-col gap-6 text-left">
-                        {/* Username Field */}
-                        <div>
-                            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest mb-2 block">Username</label>
-                            <Input 
-                                value={editName} 
-                                onChange={(e) => setEditName(e.target.value.replace(/\s+/g, '').toLowerCase())} 
-                                placeholder="Enter a unique username"
-                                className="w-full bg-slate-50 dark:bg-[#1C1E22] border-slate-200 dark:border-white/10 h-12"
-                                required
-                            />
-                            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-gray-500 mt-2">Must be unique.</p>
-                        </div>
-
-                        {/* Email Address Field (Disabled) */}
-                        <div>
-                            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest mb-2 block">Email Address</label>
-                            <Input 
-                                value={user?.email || ''} 
-                                disabled 
-                                className="w-full bg-slate-100 dark:bg-black/20 border-slate-200 dark:border-white/5 opacity-60 cursor-not-allowed h-12 text-slate-500 dark:text-gray-400"
-                            />
-                        </div>
-
-                        {/* About Field */}
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest block">About You</label>
-                                <span className="text-[10px] font-mono text-slate-400">{editAbout.length}/50</span>
-                            </div>
-                            <textarea 
-                                value={editAbout} 
-                                onChange={(e) => setEditAbout(e.target.value.slice(0, 50))} 
-                                maxLength={50}
-                                placeholder="A short bio..."
-                                className="w-full bg-slate-50 dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none min-h-[80px] placeholder:text-slate-400 dark:placeholder:text-gray-600"
-                            />
-                        </div>
-
-                        {/* Avatar Presets Mesh */}
-                        <div>
-                            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest mb-3 block">Avatar Presets Mesh</label>
-                            <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-3 sm:gap-4">
-                                {AVATAR_PRESETS.map((avatar) => (
-                                    <div 
-                                        key={avatar}
-                                        onClick={() => setEditAvatar(avatar)}
-                                        className={clsx(
-                                            "relative aspect-square sm:w-16 sm:h-16 rounded-2xl cursor-pointer transition-all duration-300 border-2 overflow-hidden flex items-center justify-center p-1 sm:p-2",
-                                            editAvatar === avatar 
-                                                ? "border-primary bg-primary/10 shadow-[0_0_15px_rgba(59,130,246,0.25)] scale-105" 
-                                                : "border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#1C1E22] hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-100 dark:hover:bg-white/5 opacity-80 hover:opacity-100"
-                                        )}
-                                    >
-                                        <img 
-                                            src={avatar} 
-                                            alt="Avatar option" 
-                                            className="w-full h-full object-contain"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {profileError && (
-                            <div className="text-xs font-bold text-red-500 dark:text-red-400 bg-red-500/10 px-4 py-3 rounded-xl border border-red-500/10">
-                                {profileError}
-                            </div>
-                        )}
-
-                        <div className="flex gap-3 pt-2">
-                            <Button 
-                                type="button" 
-                                variant="secondary" 
-                                onClick={() => setIsProfileModalOpen(false)}
-                                disabled={isSavingProfile}
-                                className="flex-1 min-h-[44px] sm:h-12"
-                            >
-                                Cancel
-                            </Button>
-                            <Button 
-                                type="submit" 
-                                variant="glow" 
-                                disabled={isSavingProfile}
-                                className="flex-1 min-h-[44px] sm:h-12 gap-2"
-                            >
-                                {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                {isSavingProfile ? 'Saving...' : 'Save Profile'}
-                            </Button>
-                        </div>
-                    </form>
-                </Modal>,
-                document.body
-            )}
-
         </PageTransition>
     );
 }
