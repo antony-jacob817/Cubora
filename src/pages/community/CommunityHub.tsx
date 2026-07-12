@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
@@ -9,9 +8,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
 import { PageTransition } from '@/components/animations/PageTransition';
 import { useAuth } from '@/context/AuthContext';
 import { clsx } from 'clsx';
+import { AVATAR_PRESETS } from '@/components/layout/AvatarSelectionModal';
 
 const RarityColors: Record<string, string> = {
     common: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
@@ -61,10 +62,54 @@ interface AchievementData {
     progressTarget: number;
 }
 
+const getJoinedDuration = (createdAt: string | Date | undefined) => {
+    if (!createdAt) return 'Joined recently';
+    const createdDate = new Date(createdAt);
+    const now = new Date();
+    
+    let years = now.getFullYear() - createdDate.getFullYear();
+    let months = now.getMonth() - createdDate.getMonth();
+    
+    if (now.getDate() < createdDate.getDate()) {
+        months -= 1;
+    }
+    
+    if (months < 0) {
+        years -= 1;
+        months += 12;
+    }
+    
+    const totalMonths = years * 12 + months;
+    
+    if (totalMonths < 1) {
+        return 'Joined recently';
+    }
+    
+    if (years < 1) {
+        return `Joined ${totalMonths} ${totalMonths === 1 ? 'month' : 'months'} ago`;
+    }
+    
+    const yearText = `${years} ${years === 1 ? 'year' : 'years'}`;
+    if (months === 0) {
+        return `Joined ${yearText} ago`;
+    }
+    
+    const monthText = `${months} ${months === 1 ? 'month' : 'months'}`;
+    return `Joined ${yearText} and ${monthText} ago`;
+};
+
 export default function CommunityHub() {
-    const { user, getAuthHeaders } = useAuth();
-    const navigate = useNavigate();
+    const { user, getAuthHeaders, refetchUser } = useAuth();
     const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
+
+    // Edit Profile Modal states
+    const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [editUsername, setEditUsername] = useState('');
+    const [editAbout, setEditAbout] = useState('');
+    const [editAvatar, setEditAvatar] = useState('');
+    const [editProfileError, setEditProfileError] = useState<string | null>(null);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
 
     // Feed state
     const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -232,6 +277,60 @@ export default function CommunityHub() {
             console.error('Failed to create post:', err);
         } finally {
             setIsPosting(false);
+        }
+    };
+
+    // --- EDIT PROFILE MODAL ---
+    const openEditProfileModal = () => {
+        setEditName(user?.name || '');
+        setEditUsername((user?.username || user?.email || '').split('@')[0]);
+        setEditAbout(user?.about || 'Speedcuber');
+        setEditAvatar(user?.avatar || '');
+        setEditProfileError(null);
+        setIsEditProfileOpen(true);
+    };
+
+    const handleSaveProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editName.trim()) {
+            setEditProfileError('Display Name is required.');
+            return;
+        }
+        if (!editUsername.trim()) {
+            setEditProfileError('Username is required.');
+            return;
+        }
+        if (editAbout.trim().length > 30) {
+            setEditProfileError('About bio cannot exceed 30 characters.');
+            return;
+        }
+
+        setIsSavingProfile(true);
+        setEditProfileError(null);
+
+        try {
+            const res = await fetch('http://localhost:5000/api/auth/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({
+                    name: editName.trim(),
+                    username: editUsername.trim().toLowerCase(),
+                    about: editAbout.trim() || 'Speedcuber',
+                    avatar: editAvatar
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                await refetchUser();
+                setIsEditProfileOpen(false);
+            } else {
+                setEditProfileError(data.error || 'Failed to update profile.');
+            }
+        } catch (err) {
+            console.error('Failed to update profile:', err);
+            setEditProfileError('A network error occurred. Please try again.');
+        } finally {
+            setIsSavingProfile(false);
         }
     };
 
@@ -580,7 +679,7 @@ export default function CommunityHub() {
                                                     className="w-full h-full rounded-xl bg-slate-50 dark:bg-white/5 object-cover"
                                                 />
                                             </div>
-                                            <Button variant="secondary" size="sm" className="gap-1.5 min-h-[44px] sm:min-h-[32px] px-4 sm:px-3 ml-8" onClick={() => navigate('/settings')}>
+                                            <Button variant="secondary" size="sm" className="gap-1.5 min-h-[44px] sm:min-h-[32px] px-4 sm:px-3 ml-8" onClick={openEditProfileModal}>
                                                 <Edit2 className="w-3.5 h-3.5" /> Edit Profile
                                             </Button>
                                         </div>
@@ -591,8 +690,13 @@ export default function CommunityHub() {
                                                 {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
                                             </h2>
                                             <p className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm mt-1">
-                                                @{(user?.name || 'cubora').toLowerCase().replace(/\s+/g, '_')} • Speedcuber • Joined {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Recently'}
+                                                @{(user?.username || user?.email || '').split('@')[0]} • {getJoinedDuration(user?.createdAt)}
                                             </p>
+                                            <div className="mt-3 text-left">
+                                                <span className="inline-block font-mono text-slate-600 dark:text-gray-400 text-xs sm:text-sm italic bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-xl px-4 py-3 w-fit">
+                                                    "{user?.about || 'Speedcuber'}"
+                                                </span>
+                                            </div>
                                         </div>
 
                                         {/* Performance Metrics Tracker Rows Grid */}
@@ -876,6 +980,140 @@ export default function CommunityHub() {
                                 className="flex-1 bg-secondary hover:bg-secondary/90 disabled:opacity-40 text-white rounded-xl h-11 min-h-[44px] text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.2)]"
                             >
                                 Attach
+                            </button>
+                        </div>
+                    </form>
+                </Modal>,
+                document.body
+            )}
+
+            {/* Edit Profile Modal */}
+            {createPortal(
+                <Modal
+                    isOpen={isEditProfileOpen}
+                    onClose={() => setIsEditProfileOpen(false)}
+                    className="max-w-md p-5 xs:p-6 sm:p-8 flex flex-col gap-5 sm:gap-6 relative"
+                >
+                    <button
+                        onClick={() => setIsEditProfileOpen(false)}
+                        className="absolute top-4 right-3 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-white transition-colors z-10"
+                        aria-label="Close modal content"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex items-center gap-3 text-left">
+                        <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/15 shrink-0">
+                            <Edit2 className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-tight">Edit Profile</h3>
+                            <p className="text-[11px] text-slate-500 dark:text-gray-400 font-mono tracking-wide">UPDATE YOUR COMMUNITY IDENTITY</p>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleSaveProfile} className="space-y-4 text-left">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Display Name</label>
+                            <Input
+                                type="text"
+                                placeholder="Display Name"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Username (Unique)</label>
+                            <Input
+                                type="text"
+                                placeholder="e.g. speedcuber"
+                                value={editUsername}
+                                onChange={(e) => setEditUsername(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Email Address (Not Editable)</label>
+                            <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-400 dark:text-gray-550 text-xs sm:text-sm min-h-[44px] flex items-center select-none cursor-not-allowed">
+                                {user?.email || 'Not available'}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-1.5">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">About Me (Bio)</label>
+                                <span className="text-[10px] font-bold font-mono text-gray-500">{editAbout.length}/30</span>
+                            </div>
+                            <textarea
+                                placeholder="Write a brief bio about yourself..."
+                                value={editAbout}
+                                onChange={(e) => setEditAbout(e.target.value)}
+                                maxLength={30}
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white hover:border-slate-300 dark:hover:border-white/20 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 focus:border-primary focus:shadow-[0_0_15px_var(--accent-glow-intense)] transition-all duration-200 placeholder-slate-400 dark:placeholder-gray-500 min-h-[80px] resize-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Avatar Presets Mesh</label>
+                            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 w-full mt-2">
+                                {AVATAR_PRESETS.map((preset) => {
+                                    const isSelected = editAvatar === preset.url;
+                                    return (
+                                        <button
+                                            key={preset.id}
+                                            type="button"
+                                            onClick={() => setEditAvatar(preset.url)}
+                                            className={clsx(
+                                                "relative p-0.5 rounded-lg border transition-all duration-300 group focus:outline-none min-w-[38px] min-h-[38px]",
+                                                isSelected
+                                                    ? "bg-primary/20 border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)] scale-105"
+                                                    : "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5 hover:border-slate-350 dark:hover:border-white/20 hover:bg-slate-200/50 dark:hover:bg-white/10"
+                                            )}
+                                        >
+                                            <div className="aspect-square w-full rounded-md bg-[#181A1D] overflow-hidden flex items-center justify-center">
+                                                <img
+                                                    src={preset.url}
+                                                    alt={preset.name}
+                                                    className="w-full h-full object-cover"
+                                                    loading="lazy"
+                                                />
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {editProfileError && (
+                            <div className="text-xs font-bold text-red-500 dark:text-red-400 bg-red-500/10 px-4 py-2.5 rounded-xl border border-red-500/10">
+                                {editProfileError}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 mt-5 w-full">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setIsEditProfileOpen(false)}
+                                className="flex-1 rounded-xl h-11 min-h-[44px] text-xs font-bold"
+                            >
+                                Cancel
+                            </Button>
+                            <button
+                                type="submit"
+                                disabled={isSavingProfile}
+                                className="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-40 text-white rounded-xl h-11 min-h-[44px] text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                            >
+                                {isSavingProfile ? (
+                                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+                                ) : (
+                                    'Save Profile'
+                                )}
                             </button>
                         </div>
                     </form>

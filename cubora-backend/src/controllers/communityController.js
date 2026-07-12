@@ -6,21 +6,23 @@ const CommunityPost = require('../models/CommunityPost');
 exports.getPosts = async (req, res) => {
   try {
     const posts = await CommunityPost.find()
-      .populate('author', 'name email')
+      .populate('author', 'name email username avatar')
       .sort({ createdAt: -1 })
       .limit(50);
 
-    // Transform to include author avatar seed and relative time
+    // Transform to include author avatar and relative time
     const transformed = posts.map(post => {
       const p = post.toObject();
       const authorName = p.author?.name || 'Anonymous';
+      const authorUsername = p.author?.username || p.author?.email?.split('@')[0] || authorName;
+      const authorAvatar = p.author?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
       return {
         ...p,
         author: {
           _id: p.author?._id,
           name: authorName,
-          handle: `@${authorName.toLowerCase().replace(/\s+/g, '_')}`,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`,
+          handle: `@${authorUsername.toLowerCase().replace(/\s+/g, '_')}`,
+          avatar: authorAvatar,
         },
         isLikedByMe: p.likedBy?.some(id => id.toString() === req.user.id) || false,
         timeAgo: getTimeAgo(p.createdAt),
@@ -52,16 +54,18 @@ exports.createPost = async (req, res) => {
     });
 
     // Populate the author before returning so the client has all the data it needs
-    await post.populate('author', 'name email');
+    await post.populate('author', 'name email username avatar');
 
     const authorName = post.author?.name || 'Anonymous';
+    const authorUsername = post.author?.username || post.author?.email?.split('@')[0] || authorName;
+    const authorAvatar = post.author?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
     const response = {
       ...post.toObject(),
       author: {
         _id: post.author?._id,
         name: authorName,
-        handle: `@${authorName.toLowerCase().replace(/\s+/g, '_')}`,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`,
+        handle: `@${authorUsername.toLowerCase().replace(/\s+/g, '_')}`,
+        avatar: authorAvatar,
       },
       isLikedByMe: false,
       timeAgo: 'Just now',

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
-  Bolt, User, Timer, Palette, Shield,
+  Bolt, Timer, Palette, Shield,
   Check, Loader2, LogOut, ChevronRight, ChevronDown,
   Trash2, AlertTriangle, X, Key
 } from 'lucide-react';
@@ -14,7 +14,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme, type Theme, type Accent } from '@/context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { AVATAR_PRESETS } from '@/components/layout/AvatarSelectionModal';
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -38,7 +37,7 @@ const METHODS = ['Beginner', 'Simplified CFOP', 'CFOP', 'Roux', 'ZZ'];
 const THEMES = ['dark', 'light', 'system'];
 
 export default function SettingsPage() {
-  const { user, logout, getAuthHeaders, refetchUser } = useAuth();
+  const { logout, getAuthHeaders, refetchUser } = useAuth();
   const { theme: activeTheme, setTheme: setActiveTheme, accent: activeAccent, setAccent: setActiveAccent } = useTheme();
   const navigate = useNavigate();
 
@@ -47,9 +46,6 @@ export default function SettingsPage() {
   const [smartCubeMessage, setSmartCubeMessage] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [selectedAvatar, setSelectedAvatar] = useState<string>(user?.avatar || '');
-  const [displayName, setDisplayName] = useState(user?.name || '');
-  const [nameError, setNameError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -110,43 +106,13 @@ export default function SettingsPage() {
     fetchSettings();
   }, []);
 
-  // Sync avatar state
-  useEffect(() => {
-    if (user?.avatar) {
-      setSelectedAvatar(user.avatar);
-    }
-  }, [user]);
-
-  // Sync display name state
-  useEffect(() => {
-    if (user?.name) {
-      setDisplayName(user.name);
-    }
-  }, [user]);
-
   const handleSave = async () => {
     if (!settings || isSaving) return;
     setIsSaving(true);
     setSaveSuccess(false);
-    setNameError(null);
 
     try {
-      // 1. If name changed, update it first with strict 24h frequency check
-      if (displayName && displayName !== user?.name) {
-        const nameRes = await fetch('http://localhost:5000/api/auth/name', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify({ name: displayName }),
-        });
-        const nameData = await nameRes.json();
-        if (!nameData.success) {
-          setNameError(nameData.error || 'Failed to update display name.');
-          setIsSaving(false);
-          return; // Stop the pipeline
-        }
-      }
-
-      // 2. Save settings
+      // Save settings
       const res = await fetch('http://localhost:5000/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -157,19 +123,6 @@ export default function SettingsPage() {
         }),
       });
       const data = await res.json();
-
-      // 3. Save avatar if changed
-      if (selectedAvatar && selectedAvatar !== user?.avatar) {
-        const avatarRes = await fetch('http://localhost:5000/api/auth/avatar', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify({ avatar: selectedAvatar }),
-        });
-        const avatarData = await avatarRes.json();
-        if (avatarData.success) {
-          // Sync handled in refetchUser
-        }
-      }
 
       await refetchUser();
 
@@ -303,76 +256,7 @@ export default function SettingsPage() {
           </Button>
         </motion.div>
 
-        {/* --- SECTION 1: PROFILE MANAGEMENT --- */}
-        <motion.div variants={itemVariants} className="glass-panel p-4 sm:p-6 w-full">
-          <div className="flex items-center gap-2.5 mb-5">
-            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-              <User className="w-4 h-4 text-primary" />
-            </div>
-            <h2 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white">Profile Identity</h2>
-          </div>
 
-          <div className="space-y-4 sm:space-y-5 w-full">
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Display Name</label>
-              <Input
-                type="text"
-                value={displayName}
-                onChange={(e) => {
-                  setDisplayName(e.target.value);
-                  setNameError(null);
-                }}
-                // CHANGED: text-xs to text-[16px] to prevent iOS zoom
-                className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
-                placeholder="Display Name"
-              />
-              {nameError ? (
-                <p className="text-xs text-red-500 dark:text-red-400 mt-1.5 font-medium">{nameError}</p>
-              ) : (
-                <p className="text-[10px] text-slate-400 dark:text-gray-600 mt-1">Can be changed once every 24 hours.</p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Email Address</label>
-              <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-500 dark:text-gray-400 text-xs sm:text-sm min-h-[44px] flex items-center select-all">
-                {user?.email || 'Not available'}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2.5 block">Avatar Presets Mesh</label>
-              {/* Responsive mesh sizing adjustments */}
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2.5 w-full">
-                {AVATAR_PRESETS.map((preset) => {
-                  const isSelected = selectedAvatar === preset.url;
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => setSelectedAvatar(preset.url)}
-                      className={clsx(
-                        "relative p-1 rounded-xl border transition-all duration-300 group focus:outline-none min-w-[44px] min-h-[44px]",
-                        isSelected
-                          ? "bg-primary/20 border-primary shadow-[0_0_15px_var(--accent-glow-intense)] scale-105"
-                          : "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-200/50 dark:hover:bg-white/10"
-                      )}
-                    >
-                      <div className="aspect-square w-full rounded-lg bg-surface overflow-hidden flex items-center justify-center">
-                        <img
-                          src={preset.url}
-                          alt={preset.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </motion.div>
 
         {/* --- SECTION 2: CUBING PREFERENCES --- */}
         <motion.div variants={itemVariants} className="glass-panel p-4 sm:p-6 w-full">

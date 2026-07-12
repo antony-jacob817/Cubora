@@ -15,6 +15,18 @@ const userSchema = new mongoose.Schema({
       'Please add a valid email'
     ]
   },
+  username: {
+    type: String,
+    unique: true,
+    sparse: true,
+    lowercase: true,
+    trim: true
+  },
+  about: {
+    type: String,
+    default: 'Speedcuber',
+    maxlength: [30, 'About bio cannot exceed 30 characters']
+  },
   password: {
     type: String,
     required: [true, 'Please add a password'],
@@ -34,6 +46,14 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  name_update_history: {
+    type: [Date],
+    default: []
+  },
+  username_update_history: {
+    type: [Date],
+    default: []
+  },
   created_at: {
     type: Date,
     default: Date.now
@@ -50,6 +70,9 @@ const userSchema = new mongoose.Schema({
 
 // Encrypt password using bcrypt before saving
 userSchema.pre('save', async function() {
+  if (!this.username) {
+    this.username = this.email.split('@')[0].toLowerCase();
+  }
   if (!this.isModified('password')) {
     return;
   }

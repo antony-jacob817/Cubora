@@ -4,6 +4,8 @@ interface User {
   _id: string;
   name: string;
   email: string;
+  username?: string;
+  about?: string;
   avatar?: string;
   createdAt: string;
 }

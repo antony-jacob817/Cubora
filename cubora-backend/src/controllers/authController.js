@@ -231,4 +231,110 @@ exports.changePassword = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// @desc    Update user profile (display name, username, about, avatar)
+// @route   PUT /api/auth/profile
+// @access  Private (Protected Route)
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, username, about, avatar } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // 1. Update display name (maximum 2 changes within a 14-day period)
+    if (name && name.trim() !== '') {
+      const trimmedName = name.trim();
+      if (trimmedName.length > 50) {
+        return res.status(400).json({ success: false, error: 'Display name cannot exceed 50 characters' });
+      }
+      
+      if (trimmedName !== user.name) {
+        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        const nameChangesInPeriod = (user.name_update_history || []).filter(date => date >= fourteenDaysAgo);
+        
+        if (nameChangesInPeriod.length >= 2) {
+          const oldestChange = nameChangesInPeriod.sort((a, b) => a - b)[0];
+          const nextAllowed = new Date(oldestChange.getTime() + 14 * 24 * 60 * 60 * 1000);
+          const remainingMs = nextAllowed - Date.now();
+          const days = Math.floor(remainingMs / (24 * 60 * 60 * 1000));
+          const hours = Math.floor((remainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+          const minutes = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+          
+          let waitStr = '';
+          if (days > 0) waitStr += `${days} day${days > 1 ? 's' : ''}`;
+          if (hours > 0) waitStr += `${waitStr ? ', ' : ''}${hours} hour${hours > 1 ? 's' : ''}`;
+          if (minutes > 0) waitStr += `${waitStr ? ' and ' : ''}${minutes} minute${minutes > 1 ? 's' : ''}`;
+          
+          return res.status(400).json({ 
+            success: false, 
+            error: `You can only change your display name twice within a 14-day period. Please wait ${waitStr || 'a moment'}.` 
+          });
+        }
+        
+        user.name = trimmedName;
+        user.name_update_history.push(new Date());
+        user.name_updated_at = Date.now();
+      }
+    }
+
+    // 2. Update username (must be unique, maximum 2 changes within a 14-day period)
+    if (username && username.trim() !== '') {
+      const trimmedUsername = username.trim().toLowerCase();
+      
+      if (trimmedUsername !== user.username) {
+        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        const usernameChangesInPeriod = (user.username_update_history || []).filter(date => date >= fourteenDaysAgo);
+        
+        if (usernameChangesInPeriod.length >= 2) {
+          const oldestChange = usernameChangesInPeriod.sort((a, b) => a - b)[0];
+          const nextAllowed = new Date(oldestChange.getTime() + 14 * 24 * 60 * 60 * 1000);
+          const remainingMs = nextAllowed - Date.now();
+          const days = Math.floor(remainingMs / (24 * 60 * 60 * 1000));
+          const hours = Math.floor((remainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+          const minutes = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+          
+          let waitStr = '';
+          if (days > 0) waitStr += `${days} day${days > 1 ? 's' : ''}`;
+          if (hours > 0) waitStr += `${waitStr ? ', ' : ''}${hours} hour${hours > 1 ? 's' : ''}`;
+          if (minutes > 0) waitStr += `${waitStr ? ' and ' : ''}${minutes} minute${minutes > 1 ? 's' : ''}`;
+          
+          return res.status(400).json({ 
+            success: false, 
+            error: `You can only change your username twice within a 14-day period. Please wait ${waitStr || 'a moment'}.` 
+          });
+        }
+        
+        // Check if username is already taken by another user
+        const existingUser = await User.findOne({ username: trimmedUsername, _id: { $ne: req.user.id } });
+        if (existingUser) {
+          return res.status(400).json({ success: false, error: 'Username is already taken' });
+        }
+        
+        user.username = trimmedUsername;
+        user.username_update_history.push(new Date());
+      }
+    }
+
+    // 3. Update about field
+    if (about !== undefined) {
+      const trimmedAbout = about.trim();
+      if (trimmedAbout.length > 30) {
+        return res.status(400).json({ success: false, error: 'About bio cannot exceed 30 characters' });
+      }
+      user.about = trimmedAbout || 'Speedcuber';
+    }
+
+    // 4. Update avatar
+    if (avatar !== undefined) {
+      user.avatar = avatar;
+    }
+
+    await user.save();
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
