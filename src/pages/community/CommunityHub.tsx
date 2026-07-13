@@ -743,7 +743,7 @@ export default function CommunityHub() {
 
                                     <div className="px-4 sm:px-8 pb-5 sm:pb-8 w-full flex flex-col lg:flex-row lg:items-center justify-start gap-6 lg:gap-12 mt-5 sm:mt-0">
                                         {/* Left Side: Avatar & Bio */}
-                                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 min-w-0 shrink-0">
+                                        <div className="flex flex-col items-center text-center gap-3 sm:gap-4 min-w-0 shrink-0">
                                             {/* Floating Avatar & Settings Link */}
                                             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full relative z-10 shadow-xl overflow-hidden shrink-0 -mt-8 sm:-mt-12">
                                                 <img
@@ -755,14 +755,14 @@ export default function CommunityHub() {
                                             </div>
 
                                             {/* Bio Identity Summary */}
-                                            <div className="flex flex-col items-center sm:items-start text-center sm:text-left min-w-0">
-                                                <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+                                            <div className="flex flex-col items-center text-center min-w-0">
+                                                <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center justify-center gap-2 tracking-tight">
                                                     {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
                                                 </h2>
                                                 <p className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm mt-1">
                                                     @{(user?.username || user?.email || '').split('@')[0]} • {getJoinedDuration(user?.createdAt)}
                                                 </p>
-                                                <div className="mt-3 text-left">
+                                                <div className="mt-3 text-center">
                                                     <span className="inline-block font-mono text-slate-600 dark:text-gray-400 text-xs sm:text-sm italic bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-xl px-4 py-2 w-fit">
                                                         "{user?.about || 'Speedcuber'}"
                                                     </span>
