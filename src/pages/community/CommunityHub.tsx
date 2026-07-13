@@ -741,9 +741,9 @@ export default function CommunityHub() {
                                         <Edit2 className="w-3.5 h-3.5 sm:w-4 h-4" />
                                     </button>
 
-                                    <div className="px-4 sm:px-8 pb-5 sm:pb-8 w-full flex flex-col lg:flex-row lg:items-center justify-between gap-6 sm:gap-8 mt-5 sm:mt-0">
+                                    <div className="px-4 sm:px-8 pb-5 sm:pb-8 w-full flex flex-col lg:flex-row lg:items-center justify-start gap-6 lg:gap-12 mt-5 sm:mt-0">
                                         {/* Left Side: Avatar & Bio */}
-                                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 min-w-0">
+                                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 min-w-0 shrink-0">
                                             {/* Floating Avatar & Settings Link */}
                                             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full relative z-10 shadow-xl overflow-hidden shrink-0 -mt-8 sm:-mt-12">
                                                 <img
@@ -771,7 +771,7 @@ export default function CommunityHub() {
                                         </div>
 
                                         {/* Right Side: Performance Metrics Grid */}
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3.5 sm:gap-4 shrink-0 lg:max-w-[65%] xl:max-w-none w-full lg:w-auto">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 sm:gap-4 flex-grow w-full">
                                             {/* PB Card */}
                                             <div className="glass-panel-interactive glass-scroll-safe p-3.5 sm:p-5 flex flex-col justify-between group hover:border-yellow-500/40 transition-colors text-left min-h-[105px] sm:min-h-[140px]">
                                                 <div className="flex justify-between items-center w-full">
