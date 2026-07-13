@@ -1,38 +1,308 @@
 const Achievement = require('../models/Achievement');
 const SolveHistory = require('../models/SolveHistory');
+const CubeScan = require('../models/CubeScan');
+const User = require('../models/User');
+const mongoose = require('mongoose');
 
-// BADGE METADATA LIST (to return status of both locked & unlocked badges)
-const ALL_BADGES = [
-  { id: 'first-solve', title: 'First Contact', description: 'Complete your first cube solve on Cubora.', icon: 'Sparkles', category: 'Milestone' },
-  { id: 'sub-30-solve', title: 'Sub-30 Pioneer', description: 'Achieve a solve time under 30 seconds.', icon: 'Zap', category: 'Speed' },
-  { id: 'sub-20-solve', title: 'Sub-20 Expert', description: 'Achieve a solve time under 20 seconds.', icon: 'Flame', category: 'Speed' },
-  { id: 'sub-10-solve', title: 'Elite Speedcuber', description: 'Achieve a solve time under 10 seconds.', icon: 'Trophy', category: 'Speed' },
-  { id: '50-solves-milestone', title: 'Century Halfway', description: 'Accumulate 50 validated solves.', icon: 'Target', category: 'Volume' },
-  { id: '100-solves-milestone', title: 'Centurion Solver', description: 'Accumulate 100 validated solves.', icon: 'Crown', category: 'Volume' },
+// BADGE METADATA GROUPS & TIERS
+const BADGE_GROUPS = [
+  {
+    group: 'solves-marathon',
+    title: 'Solves Marathon',
+    category: 'Volume',
+    description: 'Total verified speedcubing solves registered on your account.',
+    icon: 'Target',
+    tiers: [
+      { name: 'Bronze', target: 10 },
+      { name: 'Silver', target: 50 },
+      { name: 'Gold', target: 100 },
+      { name: 'Emerald', target: 500 },
+      { name: 'Diamond', target: 1000 },
+      { name: 'Ruby', target: 5000 }
+    ]
+  },
+  {
+    group: 'speed-frontier',
+    title: 'Speed Frontier',
+    category: 'Speed',
+    description: 'Break through overall single-solve time benchmarks.',
+    icon: 'Trophy',
+    tiers: [
+      { name: 'Bronze', target: 45, label: 'Sub-45s' },
+      { name: 'Silver', target: 30, label: 'Sub-30s' },
+      { name: 'Gold', target: 20, label: 'Sub-20s' },
+      { name: 'Emerald', target: 15, label: 'Sub-15s' },
+      { name: 'Diamond', target: 10, label: 'Sub-10s' },
+      { name: 'Ruby', target: 5, label: 'Sub-5s' }
+    ]
+  },
+  {
+    group: 'consistency-grind',
+    title: 'Consistency Grind',
+    category: 'Milestone',
+    description: 'Maintain a consecutive daily practice streak.',
+    icon: 'Flame',
+    tiers: [
+      { name: 'Bronze', target: 3, label: '3 Days' },
+      { name: 'Silver', target: 7, label: '7 Days' },
+      { name: 'Gold', target: 14, label: '14 Days' },
+      { name: 'Emerald', target: 30, label: '30 Days' },
+      { name: 'Diamond', target: 100, label: '100 Days' },
+      { name: 'Ruby', target: 365, label: '365 Days' }
+    ]
+  },
+  {
+    group: 'fingertrick-maestro',
+    title: 'Fingertrick Maestro',
+    category: 'Speed',
+    description: 'Reach maximum turning speed, measured in Turns Per Second (TPS).',
+    icon: 'Timer',
+    tiers: [
+      { name: 'Bronze', target: 2.0, label: '2.0 TPS' },
+      { name: 'Silver', target: 3.5, label: '3.5 TPS' },
+      { name: 'Gold', target: 5.0, label: '5.0 TPS' },
+      { name: 'Emerald', target: 6.5, label: '6.5 TPS' },
+      { name: 'Diamond', target: 8.0, label: '8.0 TPS' },
+      { name: 'Ruby', target: 10.0, label: '10.0 TPS' }
+    ]
+  },
+  {
+    group: 'session-marathoner',
+    title: 'Session Marathoner',
+    category: 'Volume',
+    description: 'Complete a high number of solves within a single continuous practice session.',
+    icon: 'Clock',
+    tiers: [
+      { name: 'Bronze', target: 10, label: '10 Solves' },
+      { name: 'Silver', target: 25, label: '25 Solves' },
+      { name: 'Gold', target: 50, label: '50 Solves' },
+      { name: 'Emerald', target: 100, label: '100 Solves' },
+      { name: 'Diamond', target: 250, label: '250 Solves' },
+      { name: 'Ruby', target: 500, label: '500 Solves' }
+    ]
+  },
+  {
+    group: 'flawless-execution',
+    title: 'Flawless Execution',
+    category: 'Consistency',
+    description: 'Land consecutive runs with zero penalties (No +2 or DNF).',
+    icon: 'Star',
+    tiers: [
+      { name: 'Bronze', target: 5, label: '5 Clean Solves' },
+      { name: 'Silver', target: 10, label: '10 Clean Solves' },
+      { name: 'Gold', target: 25, label: '25 Clean Solves' },
+      { name: 'Emerald', target: 50, label: '50 Clean Solves' },
+      { name: 'Diamond', target: 100, label: '100 Clean Solves' },
+      { name: 'Ruby', target: 200, label: '200 Clean Solves' }
+    ]
+  },
+  {
+    group: 'ao5-dominance',
+    title: 'Ao5 Dominance',
+    category: 'Consistency',
+    description: 'Push your rolling Average of 5 (Ao5) below competitive benchmarks.',
+    icon: 'TrendingUp',
+    tiers: [
+      { name: 'Bronze', target: 45, label: 'Sub-45s Ao5' },
+      { name: 'Silver', target: 30, label: 'Sub-30s Ao5' },
+      { name: 'Gold', target: 20, label: 'Sub-20s Ao5' },
+      { name: 'Emerald', target: 15, label: 'Sub-15s Ao5' },
+      { name: 'Diamond', target: 10, label: 'Sub-10s Ao5' },
+      { name: 'Ruby', target: 8, label: 'Sub-8s Ao5' }
+    ]
+  },
+  {
+    group: 'visionary-scanner',
+    title: 'Visionary Scanner',
+    category: 'Telemetry',
+    description: 'Use the camera AI to scan physical cube states into the app.',
+    icon: 'Award',
+    tiers: [
+      { name: 'Bronze', target: 1, label: '1 Scan' },
+      { name: 'Silver', target: 5, label: '5 Scans' },
+      { name: 'Gold', target: 10, label: '10 Scans' },
+      { name: 'Emerald', target: 25, label: '25 Scans' },
+      { name: 'Diamond', target: 50, label: '50 Scans' },
+      { name: 'Ruby', target: 100, label: '100 Scans' }
+    ]
+  },
+  {
+    group: 'gladiator-arena',
+    title: 'Gladiator Arena',
+    category: 'Multiplayer',
+    description: 'Accumulate live matchmaking arena wins against other users.',
+    icon: 'Medal',
+    tiers: [
+      { name: 'Bronze', target: 5, label: '5 Wins' },
+      { name: 'Silver', target: 15, label: '15 Wins' },
+      { name: 'Gold', target: 30, label: '30 Wins' },
+      { name: 'Emerald', target: 50, label: '50 Wins' },
+      { name: 'Diamond', target: 100, label: '100 Wins' },
+      { name: 'Ruby', target: 250, label: '250 Wins' }
+    ]
+  }
 ];
+
+// FLATTENED LIST FOR ROUTE MAPPINGS
+const ALL_BADGES = [];
+BADGE_GROUPS.forEach(g => {
+  g.tiers.forEach(tier => {
+    ALL_BADGES.push({
+      id: `${g.group}-${tier.name.toLowerCase()}`,
+      title: `${g.title} (${tier.name})`,
+      description: `${g.description} Requires: ${tier.label || (tier.target + ' Solves')}.`,
+      icon: g.icon,
+      category: g.category,
+      group: g.group,
+      tier: tier.name,
+      target: tier.target
+    });
+  });
+});
 
 // @desc    Get all user achievements (locked & unlocked status)
 // @route   GET /api/achievements
 // @access  Private
 exports.getAchievements = async (req, res) => {
   try {
-    const unlocked = await Achievement.find({ user: req.user.id });
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const unlocked = await Achievement.find({ user: userId });
     const unlockedIds = new Set(unlocked.map(a => a.badgeId));
 
-    const totalSolves = await SolveHistory.countDocuments({ user: req.user.id });
+    // Calculate metrics
+    const solves = await SolveHistory.find({ user: userId, isDeleted: false }).sort({ date: 1 });
+    const totalSolves = solves.length;
+    
+    const validSolves = solves.filter(s => s.penalty !== 'DNF');
+    const validTimes = validSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
+    
+    // 1. Best Single Solve
+    const bestTimeMs = validTimes.length > 0 ? Math.min(...validTimes) : null;
+    const bestTimeSec = bestTimeMs ? parseFloat((bestTimeMs / 1000).toFixed(3)) : null;
+
+    // 2. Best TPS
+    const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
+
+    // 3. Max session solves
+    const sessionCounts = await SolveHistory.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false } },
+      { $group: { _id: "$sessionId", count: { $sum: 1 } } }
+    ]);
+    const maxSessionSolves = sessionCounts.length > 0 ? Math.max(...sessionCounts.map(s => s.count)) : 0;
+
+    // 4. Max clean streak
+    let maxCleanStreak = 0;
+    let currentCleanStreak = 0;
+    for (const solve of solves) {
+      if (solve.penalty === 'None') {
+        currentCleanStreak++;
+        if (currentCleanStreak > maxCleanStreak) {
+          maxCleanStreak = currentCleanStreak;
+        }
+      } else {
+        currentCleanStreak = 0;
+      }
+    }
+
+    // 5. Best Ao5
+    let bestAo5Ms = null;
+    for (let i = 0; i <= validTimes.length - 5; i++) {
+      const group = validTimes.slice(i, i + 5);
+      const sorted = [...group].sort((a, b) => a - b);
+      const trimmed = sorted.slice(1, -1);
+      const avg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+      if (bestAo5Ms === null || avg < bestAo5Ms) {
+        bestAo5Ms = avg;
+      }
+    }
+    const bestAo5Sec = bestAo5Ms ? parseFloat((bestAo5Ms / 1000).toFixed(3)) : null;
+
+    // 6. Streak calculation (from history)
+    let currentStreak = 0;
+    const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const checkDate = new Date();
+      checkDate.setDate(today.getDate() - i);
+      if (uniqueDays.has(checkDate.toDateString())) {
+        currentStreak++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+
+    // 7. Scans count
+    const totalScans = await CubeScan.countDocuments({ user: userId });
+
+    // 8. Arena wins
+    const totalWins = user.multiplayerWins || 0;
 
     const achievementsList = ALL_BADGES.map(badge => {
       const unlockedRecord = unlocked.find(a => a.badgeId === badge.id);
+      let userValue = 0;
+      const isUnlocked = unlockedIds.has(badge.id);
+
+      switch (badge.group) {
+        case 'solves-marathon':
+          userValue = totalSolves;
+          break;
+        case 'speed-frontier':
+          userValue = bestTimeSec ? bestTimeSec : 0;
+          break;
+        case 'consistency-grind':
+          userValue = currentStreak;
+          break;
+        case 'fingertrick-maestro':
+          userValue = bestTps;
+          break;
+        case 'session-marathoner':
+          userValue = maxSessionSolves;
+          break;
+        case 'flawless-execution':
+          userValue = maxCleanStreak;
+          break;
+        case 'ao5-dominance':
+          userValue = bestAo5Sec ? bestAo5Sec : 0;
+          break;
+        case 'visionary-scanner':
+          userValue = totalScans;
+          break;
+        case 'gladiator-arena':
+          userValue = totalWins;
+          break;
+      }
+
+      // Calculate progress value relative to target
+      let progress = 0;
+      const progressTarget = badge.target;
+
+      if (badge.group === 'speed-frontier' || badge.group === 'ao5-dominance') {
+        if (isUnlocked) {
+          progress = progressTarget;
+        } else if (userValue > 0) {
+          progress = parseFloat(((progressTarget / userValue) * progressTarget).toFixed(2));
+        } else {
+          progress = 0;
+        }
+      } else {
+        progress = Math.min(userValue, progressTarget);
+      }
+
       return {
-        ...badge,
-        isUnlocked: unlockedIds.has(badge.id),
+        id: badge.id,
+        title: badge.title,
+        description: badge.description,
+        icon: badge.icon,
+        category: badge.category,
+        isUnlocked,
         unlockedAt: unlockedRecord ? unlockedRecord.unlockedAt : null,
-        progress: badge.id === 'first-solve' ? Math.min(totalSolves, 1) :
-                  badge.id === '50-solves-milestone' ? Math.min(totalSolves, 50) :
-                  badge.id === '100-solves-milestone' ? Math.min(totalSolves, 100) : 0,
-        progressTarget: badge.id === 'first-solve' ? 1 :
-                        badge.id === '50-solves-milestone' ? 50 :
-                        badge.id === '100-solves-milestone' ? 100 : 0
+        progress,
+        progressTarget
       };
     });
 
@@ -41,41 +311,129 @@ exports.getAchievements = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-exports.evaluateAchievements = async (userId, latestSolveTimeMs, totalSolvesCount) => {
+
+// HELPER FOR REAL-TIME ACHIEVEMENT TRIGGERS
+exports.evaluateAchievements = async (userId) => {
   try {
-    // Get currently unlocked achievements to avoid duplicates
+    const user = await User.findById(userId);
+    if (!user) return [];
+
     const unlocked = await Achievement.find({ user: userId });
     const unlockedIds = new Set(unlocked.map(a => a.badgeId));
     const newUnlocks = [];
 
-    const checkAndAward = async (badgeId) => {
+    const checkAndAward = async (badgeId, title) => {
       if (!unlockedIds.has(badgeId)) {
-        const badgeDef = ALL_BADGES.find(b => b.id === badgeId);
-        if (badgeDef) {
-          await Achievement.create({
-            user: userId,
-            badgeId: badgeId,
-            title: badgeDef.title
-          });
-          newUnlocks.push(badgeDef);
-        }
+        await Achievement.create({
+          user: userId,
+          badgeId: badgeId,
+          title: title
+        });
+        newUnlocks.push({ id: badgeId, title });
       }
     };
 
-    // 1. Check Volume Milestones
-    if (totalSolvesCount >= 1) await checkAndAward('first-solve');
-    if (totalSolvesCount >= 50) await checkAndAward('50-solves-milestone');
-    if (totalSolvesCount >= 100) await checkAndAward('100-solves-milestone');
+    // Calculate metrics
+    const solves = await SolveHistory.find({ user: userId, isDeleted: false }).sort({ date: 1 });
+    const totalSolves = solves.length;
+    
+    const validSolves = solves.filter(s => s.penalty !== 'DNF');
+    const validTimes = validSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
+    
+    const bestTimeMs = validTimes.length > 0 ? Math.min(...validTimes) : null;
+    const bestTimeSec = bestTimeMs ? parseFloat((bestTimeMs / 1000).toFixed(3)) : null;
 
-    // 2. Check Speed Milestones (Convert ms to seconds)
-    const timeSec = latestSolveTimeMs / 1000;
-    if (timeSec < 30) await checkAndAward('sub-30-solve');
-    if (timeSec < 20) await checkAndAward('sub-20-solve');
-    if (timeSec < 10) await checkAndAward('sub-10-solve');
+    const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
 
-    return newUnlocks; // Returns array of newly unlocked badges so the frontend can show a popup!
+    const sessionCounts = await SolveHistory.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false } },
+      { $group: { _id: "$sessionId", count: { $sum: 1 } } }
+    ]);
+    const maxSessionSolves = sessionCounts.length > 0 ? Math.max(...sessionCounts.map(s => s.count)) : 0;
+
+    let maxCleanStreak = 0;
+    let currentCleanStreak = 0;
+    for (const solve of solves) {
+      if (solve.penalty === 'None') {
+        currentCleanStreak++;
+        if (currentCleanStreak > maxCleanStreak) {
+          maxCleanStreak = currentCleanStreak;
+        }
+      } else {
+        currentCleanStreak = 0;
+      }
+    }
+
+    let bestAo5Ms = null;
+    for (let i = 0; i <= validTimes.length - 5; i++) {
+      const group = validTimes.slice(i, i + 5);
+      const sorted = [...group].sort((a, b) => a - b);
+      const trimmed = sorted.slice(1, -1);
+      const avg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+      if (bestAo5Ms === null || avg < bestAo5Ms) {
+        bestAo5Ms = avg;
+      }
+    }
+    const bestAo5Sec = bestAo5Ms ? parseFloat((bestAo5Ms / 1000).toFixed(3)) : null;
+
+    let currentStreak = 0;
+    const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const checkDate = new Date();
+      checkDate.setDate(today.getDate() - i);
+      if (uniqueDays.has(checkDate.toDateString())) {
+        currentStreak++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+
+    const totalScans = await CubeScan.countDocuments({ user: userId });
+    const totalWins = user.multiplayerWins || 0;
+
+    // Check all 54 badges
+    for (const badge of ALL_BADGES) {
+      let qualifies = false;
+      
+      switch (badge.group) {
+        case 'solves-marathon':
+          qualifies = totalSolves >= badge.target;
+          break;
+        case 'speed-frontier':
+          qualifies = bestTimeSec !== null && bestTimeSec <= badge.target;
+          break;
+        case 'consistency-grind':
+          qualifies = currentStreak >= badge.target;
+          break;
+        case 'fingertrick-maestro':
+          qualifies = bestTps >= badge.target;
+          break;
+        case 'session-marathoner':
+          qualifies = maxSessionSolves >= badge.target;
+          break;
+        case 'flawless-execution':
+          qualifies = maxCleanStreak >= badge.target;
+          break;
+        case 'ao5-dominance':
+          qualifies = bestAo5Sec !== null && bestAo5Sec <= badge.target;
+          break;
+        case 'visionary-scanner':
+          qualifies = totalScans >= badge.target;
+          break;
+        case 'gladiator-arena':
+          qualifies = totalWins >= badge.target;
+          break;
+      }
+
+      if (qualifies) {
+        await checkAndAward(badge.id, badge.title);
+      }
+    }
+
+    return newUnlocks;
   } catch (error) {
-    console.error('Achievement Evaluation Error:', error);
+    console.error('Error evaluating achievements:', error);
     return [];
   }
 };

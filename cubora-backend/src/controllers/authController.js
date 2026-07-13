@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { evaluateAchievements } = require('./achievementsController');
 const jwt = require('jsonwebtoken');
 
 // Helper function to generate JWT
@@ -333,6 +334,44 @@ exports.updateProfile = async (req, res) => {
 
     await user.save();
     res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Update multiplayer arena stats (wins and ELO rating)
+// @route   POST /api/auth/multiplayer-result
+// @access  Private
+exports.updateMultiplayerResult = async (req, res) => {
+  try {
+    const { won, elo } = req.body;
+    
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (won === true) {
+      user.multiplayerWins = (user.multiplayerWins || 0) + 1;
+    }
+    
+    if (elo !== undefined && typeof elo === 'number') {
+      user.elo = elo;
+    }
+
+    await user.save();
+
+    // Check if user unlocks Gladiator Arena achievements!
+    const newUnlocks = await evaluateAchievements(req.user.id);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        elo: user.elo,
+        multiplayerWins: user.multiplayerWins
+      },
+      newUnlocks
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

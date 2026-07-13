@@ -23,7 +23,7 @@ const MOCK_OPPONENT = {
 };
 
 export default function MultiplayerHub() {
-    const { user } = useAuth();
+    const { user, getAuthHeaders, refetchUser } = useAuth();
     const [matchState, setMatchState] = useState<MatchState>('LOBBY');
     const [scramble, setScramble] = useState('');
     const [countdown, setCountdown] = useState(3);
@@ -121,8 +121,25 @@ export default function MultiplayerHub() {
         return () => clearInterval(interval);
     }, [matchState]);
 
+    const saveMatchResult = async (won: boolean, nextElo: number) => {
+        try {
+            await fetch('http://localhost:5000/api/auth/multiplayer-result', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ won, elo: nextElo }),
+            });
+            await refetchUser();
+        } catch (err) {
+            console.error('Failed to save multiplayer result:', err);
+        }
+    };
+
     useEffect(() => {
         if (matchState === 'RACING' && timerState === 'STOPPED') {
+            const won = (playerTime / 1000) < MOCK_OPPONENT.finalTime;
+            const currentElo = user?.elo || 1200;
+            const nextElo = won ? currentElo + 14 : Math.max(100, currentElo - 11);
+            saveMatchResult(won, nextElo);
             setTimeout(() => setMatchState('RESULTS'), 1000);
         }
     }, [timerState, matchState]);
@@ -158,7 +175,7 @@ export default function MultiplayerHub() {
                                     <div className="min-w-0">
                                         <span className="text-[10px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Current Rating</span>
                                         <div className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white flex items-center gap-2">
-                                            {PLAYER_ELO} <span className="text-xs font-mono text-emerald-500 font-bold">+12</span>
+                                            {user?.elo || 1200} <span className="text-[10px] font-mono text-slate-400 font-bold">({user?.multiplayerWins || 0} Wins)</span>
                                         </div>
                                     </div>
                                 </div>

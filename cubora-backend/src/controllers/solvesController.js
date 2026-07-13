@@ -1,5 +1,6 @@
 const SolveHistory = require('../models/SolveHistory');
 const Achievement = require('../models/Achievement');
+const { evaluateAchievements } = require('./achievementsController');
 
 // @desc    Save a new solve record
 // @route   POST /api/solves
@@ -25,7 +26,7 @@ exports.saveSolve = async (req, res) => {
     });
 
     // Check & trigger achievements automatically
-    await checkAchievements(req.user.id, timeMs);
+    await evaluateAchievements(req.user.id);
 
     res.status(201).json({ success: true, data: solve });
   } catch (error) {
@@ -227,25 +228,3 @@ exports.getSolveStats = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-
-async function checkAchievements(userId, timeMs) {
-  try {
-    const totalSolves = await SolveHistory.countDocuments({ user: userId });
-    
-    const awardBadge = async (badgeId, title) => {
-      const exists = await Achievement.findOne({ user: userId, badgeId });
-      if (!exists) {
-        await Achievement.create({ user: userId, badgeId, title });
-      }
-    };
-
-    if (totalSolves >= 1) await awardBadge('first-solve', 'First Contact');
-    if (timeMs < 30000) await awardBadge('sub-30-solve', 'Sub-30 Pioneer');
-    if (timeMs < 20000) await awardBadge('sub-20-solve', 'Sub-20 Expert');
-    if (timeMs < 10000) await awardBadge('sub-10-solve', 'Elite Speedcuber');
-    if (totalSolves >= 50) await awardBadge('50-solves-milestone', 'Century Halfway');
-    if (totalSolves >= 100) await awardBadge('100-solves-milestone', 'Centurion Solver');
-  } catch (err) {
-    console.error('Error checking achievements:', err);
-  }
-}
