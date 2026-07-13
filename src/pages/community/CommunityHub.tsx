@@ -666,22 +666,29 @@ export default function CommunityHub() {
                                 {/* Profile Banner & Info Header Card Layout */}
                                 <div className="glass-panel p-0 relative overflow-hidden bg-white/30 dark:bg-white/[0.01] w-full text-left">
                                     {/* Backdrop Header Canvas Decor */}
-                                    <div className="h-24 sm:h-32 w-full bg-gradient-to-r from-primary/15 via-secondary/15 to-tertiary/15" />
+                                    <div className="h-14 sm:h-20 w-full bg-gradient-to-r from-primary/15 via-secondary/15 to-tertiary/15" />
+
+                                    {/* Edit Profile Button (Icon Only, Top Right Corner) */}
+                                    <button
+                                        onClick={openEditProfileModal}
+                                        className="absolute top-2 right-3 sm:top-3 sm:right-4 z-20 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl bg-white/40 dark:bg-black/30 hover:bg-white/60 dark:hover:bg-black/55 text-slate-700 dark:text-white border border-slate-200/40 dark:border-white/10 transition-colors shadow-sm cursor-pointer focus:outline-none"
+                                        title="Edit Profile"
+                                        aria-label="Edit Profile"
+                                    >
+                                        <Edit2 className="w-3.5 h-3.5 sm:w-4 h-4" />
+                                    </button>
 
                                     <div className="px-4 sm:px-8 pb-5 sm:pb-8 w-full">
                                         {/* Floating Avatar & Settings Link */}
-                                        <div className="flex justify-between items-end -mt-8 sm:-mt-12 mb-5 sm:mb-6 w-full">
-                                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 dark:bg-[#111315] border-4 border-slate-100 dark:border-[#111315] p-0.5 relative z-10 shadow-xl overflow-hidden shrink-0">
+                                        <div className="flex justify-start items-end -mt-8 sm:-mt-12 mb-5 sm:mb-6 w-full">
+                                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full relative z-10 shadow-xl overflow-hidden shrink-0">
                                                 <img
                                                     loading="lazy"
                                                     src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || 'Cubora')}`}
                                                     alt="Profile"
-                                                    className="w-full h-full rounded-xl bg-slate-50 dark:bg-white/5 object-cover"
+                                                    className="w-full h-full rounded-full bg-slate-50 dark:bg-white/5 object-cover"
                                                 />
                                             </div>
-                                            <Button variant="secondary" size="sm" className="gap-1.5 min-h-[44px] sm:min-h-[32px] px-4 sm:px-3 ml-8" onClick={openEditProfileModal}>
-                                                <Edit2 className="w-3.5 h-3.5" /> Edit Profile
-                                            </Button>
                                         </div>
 
                                         {/* Bio Identity Summary */}
