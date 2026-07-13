@@ -874,10 +874,7 @@ export default function CommunityHub() {
                                                                     : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01]"
                                                             )}
                                                         >
-                                                            <div className={clsx(
-                                                                "flex flex-col justify-between h-full w-full transition-transform duration-300",
-                                                                highestTierName && "group-hover:scale-[1.03] origin-center"
-                                                            )}>
+                                                            <div className="flex flex-col justify-between h-full w-full transition-transform duration-300 group-hover:scale-[1.03] origin-center">
                                                                 {/* Top Header Row */}
                                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                                     <div className={clsx(
@@ -908,7 +905,7 @@ export default function CommunityHub() {
                                                                             </div>
                                                                             <div className="flex justify-between items-center mt-1.5 leading-none">
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
-                                                                                    Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
+                                                                                    Target: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
                                                                                 </span>
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45">
                                                                                     {grouped.nextLocked.id.includes('speed-frontier') ? (
@@ -954,10 +951,7 @@ export default function CommunityHub() {
                                                                     : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01]"
                                                             )}
                                                         >
-                                                            <div className={clsx(
-                                                                "flex flex-col justify-between h-full w-full transition-transform duration-300",
-                                                                highestTierName && "group-hover:scale-[1.03] origin-center"
-                                                            )}>
+                                                            <div className="flex flex-col justify-between h-full w-full transition-transform duration-300 group-hover:scale-[1.03] origin-center">
                                                                 {/* Top Header Row */}
                                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                                     <div className={clsx(
@@ -988,7 +982,7 @@ export default function CommunityHub() {
                                                                             </div>
                                                                             <div className="flex justify-between items-center mt-1.5 leading-none">
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
-                                                                                    Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
+                                                                                    Target: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
                                                                                 </span>
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45">
                                                                                     {grouped.nextLocked.id.includes('speed-frontier') ? (
