@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,7 +16,7 @@ import { clsx } from 'clsx';
 import { AVATAR_PRESETS } from '@/components/layout/AvatarSelectionModal';
 
 const TierColors: Record<string, string> = {
-    bronze: 'text-amber-800 dark:text-amber-500 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25',
+    bronze: 'text-amber-800 dark:text-amber-800 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25',
     silver: 'text-slate-500 dark:text-slate-400 bg-slate-400/15 dark:bg-slate-400/[0.06] border-slate-400/35 dark:border-slate-400/25',
     gold: 'text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/[0.05] border-yellow-500/35 dark:border-yellow-500/25',
     emerald: 'text-emerald-600 dark:text-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/[0.05] border-emerald-500/35 dark:border-emerald-500/25',
@@ -25,7 +25,7 @@ const TierColors: Record<string, string> = {
 };
 
 const TierProgressBarColors: Record<string, string> = {
-    bronze: 'bg-amber-600 dark:bg-amber-500',
+    bronze: 'bg-amber-800 dark:bg-amber-800',
     silver: 'bg-slate-400 dark:bg-slate-500',
     gold: 'bg-yellow-500',
     emerald: 'bg-emerald-500',
