@@ -61,8 +61,8 @@ interface AchievementData {
     description: string;
     icon: string;
     category: string;
-    isUnlocked: boolean;
-    unlockedAt: string | null;
+    isAchieved: boolean;
+    achievedAt: string | null;
     progress: number;
     progressTarget: number;
 }
@@ -108,8 +108,8 @@ interface GroupedAchievement {
     title: string;
     category: string;
     icon: string;
-    highestUnlocked: AchievementData | null;
-    nextLocked: AchievementData | null;
+    highestAchieved: AchievementData | null;
+    nextMilestone: AchievementData | null;
     items: AchievementData[];
 }
 
@@ -135,14 +135,14 @@ const groupAchievements = (achList: AchievementData[]): GroupedAchievement[] => 
             return tierOrder.indexOf(tierA) - tierOrder.indexOf(tierB);
         });
 
-        // Find highest unlocked
-        const unlockedItems = groupItems.filter(a => a.isUnlocked);
-        const highestUnlocked = unlockedItems.length > 0 ? unlockedItems[unlockedItems.length - 1] : null;
+        // Find highest achieved
+        const achievedItems = groupItems.filter(a => a.isAchieved);
+        const highestAchieved = achievedItems.length > 0 ? achievedItems[achievedItems.length - 1] : null;
 
-        // Find next locked
-        const nextLocked = groupItems.find(a => !a.isUnlocked) || null;
+        // Find next milestone
+        const nextMilestone = groupItems.find(a => !a.isAchieved) || null;
 
-        const sample = nextLocked || highestUnlocked || groupItems[0];
+        const sample = nextMilestone || highestAchieved || groupItems[0];
         const cleanTitle = sample.title.substring(0, sample.title.indexOf(' (')) || sample.title;
 
         return {
@@ -150,8 +150,8 @@ const groupAchievements = (achList: AchievementData[]): GroupedAchievement[] => 
             title: cleanTitle,
             category: sample.category,
             icon: sample.icon,
-            highestUnlocked,
-            nextLocked,
+            highestAchieved,
+            nextMilestone,
             items: groupItems
         };
     });
@@ -262,8 +262,13 @@ export default function CommunityHub() {
                         pbSession: pbSession
                     });
                 }
-                if (achievData.success) {
-                    setAchievements(achievData.data);
+                if (achievData.success && achievData.data) {
+                    const mapped = achievData.data.map((ach: any) => ({
+                        ...ach,
+                        isAchieved: ach.isUnlocked,
+                        achievedAt: ach.unlockedAt
+                    }));
+                    setAchievements(mapped);
                 }
             } catch (err) {
                 console.error('Failed to load profile data:', err);
@@ -425,7 +430,6 @@ export default function CommunityHub() {
         }
     };
 
-    const unlockedAchievements = achievements.filter(a => a.isUnlocked);
 
     return (
         <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0 text-left">
@@ -844,23 +848,22 @@ export default function CommunityHub() {
                                         <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
                                             <Award className="w-4 h-4 sm:w-5 sm:h-5 text-tertiary shrink-0" /> Trophy Case
                                         </h3>
-                                        <span className="text-xs font-mono font-bold text-slate-500 dark:text-gray-500">{unlockedAchievements.length} Unlocked</span>
                                     </div>
                                     {achievements.length === 0 ? (
                                         <div className="glass-panel p-8 text-center text-slate-500 w-full">
                                             <Trophy className="w-7 h-7 mx-auto mb-2 opacity-50" />
-                                            <p className="text-xs">Start solving to unlock achievements!</p>
+                                            <p className="text-xs">Start solving to earn achievements!</p>
                                         </div>
                                     ) : (
                                         <div className="flex flex-col gap-5 w-full">
                                             {/* Row 1 (first 4 achievements) */}
                                             <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-4 gap-4 w-full pb-2 snap-x hide-scrollbar">
                                                 {groupAchievements(achievements).slice(0, 4).map((grouped) => {
-                                                    const highestTierName = grouped.highestUnlocked
-                                                        ? grouped.highestUnlocked.title.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || 'bronze'
+                                                    const highestTierName = grouped.highestAchieved
+                                                        ? grouped.highestAchieved.title.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || 'bronze'
                                                         : null;
                                                     const IconComponent = ICON_MAP[grouped.icon] || Trophy;
-                                                    const targetAch = grouped.nextLocked || grouped.highestUnlocked || grouped.items[0];
+                                                    const targetAch = grouped.nextMilestone || grouped.highestAchieved || grouped.items[0];
                                                     const progressBarColor = highestTierName ? TierProgressBarColors[highestTierName] : 'bg-primary';
 
                                                     return (
@@ -895,25 +898,25 @@ export default function CommunityHub() {
 
                                                                 {/* Progress Bar Area */}
                                                                 <div className="w-full mt-auto text-left">
-                                                                    {grouped.nextLocked ? (
+                                                                    {grouped.nextMilestone ? (
                                                                         <>
                                                                             <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
                                                                                 <div
                                                                                     className={clsx("h-full transition-all", progressBarColor)}
-                                                                                    style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
+                                                                                    style={{ width: `${Math.min(100, (grouped.nextMilestone.progress / grouped.nextMilestone.progressTarget) * 100)}%` }}
                                                                                 />
                                                                             </div>
                                                                             <div className="flex justify-between items-center mt-1.5 leading-none">
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
-                                                                                    Target: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
+                                                                                    Target: {grouped.nextMilestone.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
                                                                                 </span>
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45">
-                                                                                    {grouped.nextLocked.id.includes('speed-frontier') ? (
-                                                                                        `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
-                                                                                    ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
-                                                                                        `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
+                                                                                    {grouped.nextMilestone.id.includes('speed-frontier') ? (
+                                                                                        `Best: ${grouped.nextMilestone.progress > 0 ? ((grouped.nextMilestone.progressTarget * grouped.nextMilestone.progressTarget) / grouped.nextMilestone.progress).toFixed(2) : '--'}s / Target: ${grouped.nextMilestone.progressTarget}s`
+                                                                                    ) : grouped.nextMilestone.id.includes('fingertrick-maestro') ? (
+                                                                                        `Best TPS: ${(grouped.nextMilestone.progress).toFixed(1)} / Target: ${grouped.nextMilestone.progressTarget.toFixed(1)}`
                                                                                     ) : (
-                                                                                        `${grouped.nextLocked.progress} / ${grouped.nextLocked.progressTarget}`
+                                                                                        `${grouped.nextMilestone.progress} / ${grouped.nextMilestone.progressTarget}`
                                                                                     )}
                                                                                 </span>
                                                                             </div>
@@ -933,11 +936,11 @@ export default function CommunityHub() {
                                             {/* Row 2 (last 4 achievements) */}
                                             <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-4 gap-4 w-full pb-2 snap-x hide-scrollbar">
                                                 {groupAchievements(achievements).slice(4, 8).map((grouped) => {
-                                                    const highestTierName = grouped.highestUnlocked
-                                                        ? grouped.highestUnlocked.title.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || 'bronze'
+                                                    const highestTierName = grouped.highestAchieved
+                                                        ? grouped.highestAchieved.title.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || 'bronze'
                                                         : null;
                                                     const IconComponent = ICON_MAP[grouped.icon] || Trophy;
-                                                    const targetAch = grouped.nextLocked || grouped.highestUnlocked || grouped.items[0];
+                                                    const targetAch = grouped.nextMilestone || grouped.highestAchieved || grouped.items[0];
                                                     const progressBarColor = highestTierName ? TierProgressBarColors[highestTierName] : 'bg-primary';
 
                                                     return (
@@ -972,25 +975,25 @@ export default function CommunityHub() {
 
                                                                 {/* Progress Bar Area */}
                                                                 <div className="w-full mt-auto text-left">
-                                                                    {grouped.nextLocked ? (
+                                                                    {grouped.nextMilestone ? (
                                                                         <>
                                                                             <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
                                                                                 <div
                                                                                     className={clsx("h-full transition-all", progressBarColor)}
-                                                                                    style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
+                                                                                    style={{ width: `${Math.min(100, (grouped.nextMilestone.progress / grouped.nextMilestone.progressTarget) * 100)}%` }}
                                                                                 />
                                                                             </div>
                                                                             <div className="flex justify-between items-center mt-1.5 leading-none">
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
-                                                                                    Target: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
+                                                                                    Target: {grouped.nextMilestone.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
                                                                                 </span>
                                                                                 <span className="text-[9px] font-mono font-bold opacity-45">
-                                                                                    {grouped.nextLocked.id.includes('speed-frontier') ? (
-                                                                                        `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
-                                                                                    ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
-                                                                                        `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
+                                                                                    {grouped.nextMilestone.id.includes('speed-frontier') ? (
+                                                                                        `Best: ${grouped.nextMilestone.progress > 0 ? ((grouped.nextMilestone.progressTarget * grouped.nextMilestone.progressTarget) / grouped.nextMilestone.progress).toFixed(2) : '--'}s / Target: ${grouped.nextMilestone.progressTarget}s`
+                                                                                    ) : grouped.nextMilestone.id.includes('fingertrick-maestro') ? (
+                                                                                        `Best TPS: ${(grouped.nextMilestone.progress).toFixed(1)} / Target: ${grouped.nextMilestone.progressTarget.toFixed(1)}`
                                                                                     ) : (
-                                                                                        `${grouped.nextLocked.progress} / ${grouped.nextLocked.progressTarget}`
+                                                                                        `${grouped.nextMilestone.progress} / ${grouped.nextMilestone.progressTarget}`
                                                                                     )}
                                                                                 </span>
                                                                             </div>
