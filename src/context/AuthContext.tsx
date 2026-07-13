@@ -10,6 +10,7 @@ interface User {
   elo?: number;
   multiplayerWins?: number;
   createdAt: string;
+  equippedBadges?: (string | null)[];
 }
 
 interface AuthContextType {

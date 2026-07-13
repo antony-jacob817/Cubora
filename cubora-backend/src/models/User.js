@@ -69,7 +69,11 @@ const userSchema = new mongoose.Schema({
   friends: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 
-  }]
+  }],
+  equippedBadges: {
+    type: [String],
+    default: [null, null, null]
+  }
 });
 
 // Encrypt password using bcrypt before saving

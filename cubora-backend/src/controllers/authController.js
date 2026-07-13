@@ -238,7 +238,7 @@ exports.changePassword = async (req, res) => {
 // @access  Private (Protected Route)
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, username, about, avatar } = req.body;
+    const { name, username, about, avatar, equippedBadges } = req.body;
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
@@ -330,6 +330,13 @@ exports.updateProfile = async (req, res) => {
     // 4. Update avatar
     if (avatar !== undefined) {
       user.avatar = avatar;
+    }
+
+    // 5. Update equipped badges
+    if (equippedBadges !== undefined) {
+      if (Array.isArray(equippedBadges) && equippedBadges.length === 3) {
+        user.equippedBadges = equippedBadges;
+      }
     }
 
     await user.save();

@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
     Medal, Flame, Star,
     Clock, Award, Loader2, Target, Timer, X,
-    TrendingUp
+    TrendingUp, Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -188,6 +188,43 @@ export default function CommunityHub() {
     } | null>(null);
     const [achievements, setAchievements] = useState<AchievementData[]>([]);
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+    // Badge equip states
+    const [isEquipModalOpen, setIsEquipModalOpen] = useState(false);
+    const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
+
+    const handleEquipClick = (slotIndex: number) => {
+        setSelectedSlotIndex(slotIndex);
+        setIsEquipModalOpen(true);
+    };
+
+    const handleEquipBadge = async (badgeId: string | null) => {
+        if (selectedSlotIndex === null) return;
+        try {
+            const currentEquipped = [...(user?.equippedBadges || [null, null, null])];
+            while (currentEquipped.length < 3) currentEquipped.push(null);
+            
+            currentEquipped[selectedSlotIndex] = badgeId;
+
+            const res = await fetch('http://localhost:5000/api/auth/profile', {
+                method: 'PUT',
+                headers: {
+                    ...getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ equippedBadges: currentEquipped })
+            });
+            const data = await res.json();
+            if (data.success) {
+                await refetchUser();
+            }
+        } catch (err) {
+            console.error('Failed to equip badge:', err);
+        } finally {
+            setIsEquipModalOpen(false);
+            setSelectedSlotIndex(null);
+        }
+    };
 
     // Attachment states
     const [attachedSolve, setAttachedSolve] = useState<any | null>(null);
@@ -759,6 +796,45 @@ export default function CommunityHub() {
                                                 <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center justify-center gap-2 tracking-tight">
                                                     {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
                                                 </h2>
+
+                                                {/* Trophy Badge Slots Row */}
+                                                <div className="flex items-center justify-center gap-3 my-2.5">
+                                                    {[0, 1, 2].map((slotIndex) => {
+                                                        const badgeId = user?.equippedBadges?.[slotIndex] || null;
+                                                        const activeAch = achievements.find(a => a.id === badgeId);
+                                                        const IconComponent = activeAch ? (ICON_MAP[activeAch.icon] || Trophy) : null;
+                                                        
+                                                        const tier = badgeId ? badgeId.substring(badgeId.lastIndexOf('-') + 1).toLowerCase() : null;
+                                                        const badgeColorClass = tier ? {
+                                                            bronze: 'bg-amber-500/15 text-amber-800 dark:text-amber-500 border-amber-500/30',
+                                                            silver: 'bg-slate-400/15 text-slate-500 dark:text-slate-400 border-slate-400/30',
+                                                            gold: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-500 border-yellow-500/30',
+                                                            emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-500 border-emerald-500/30',
+                                                            diamond: 'bg-cyan-400/15 text-cyan-600 dark:text-cyan-400 border-cyan-400/30',
+                                                            ruby: 'bg-rose-500/15 text-rose-600 dark:text-rose-500 border-rose-500/30'
+                                                        }[tier] : '';
+
+                                                        return (
+                                                            <button
+                                                                key={slotIndex}
+                                                                onClick={() => handleEquipClick(slotIndex)}
+                                                                className={clsx(
+                                                                    "w-10 h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer",
+                                                                    badgeId 
+                                                                        ? `${badgeColorClass} hover:scale-105` 
+                                                                        : "border-dashed border-slate-300 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] hover:bg-slate-100 dark:hover:bg-white/[0.05] text-slate-400 dark:text-gray-500"
+                                                                )}
+                                                            >
+                                                                {IconComponent ? (
+                                                                    <IconComponent className="w-5 h-5" />
+                                                                ) : (
+                                                                    <Plus className="w-4 h-4 opacity-60" />
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+
                                                 <p className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm mt-1">
                                                     @{(user?.username || user?.email || '').split('@')[0]} • {getJoinedDuration(user?.createdAt)}
                                                 </p>
@@ -1276,28 +1352,122 @@ export default function CommunityHub() {
                             </div>
                         )}
 
-                        <div className="flex gap-3 mt-5 w-full">
+                        <div className="flex justify-center mt-5 w-full">
                             <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={() => setIsEditProfileOpen(false)}
-                                className="flex-1 rounded-xl h-11 min-h-[44px] text-xs font-bold"
-                            >
-                                Cancel
-                            </Button>
-                            <button
                                 type="submit"
+                                variant="glow"
+                                size="sm"
                                 disabled={isSavingProfile}
-                                className="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-40 text-white rounded-xl h-11 min-h-[44px] text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                                className={clsx(
+                                    "w-full max-w-[200px] h-auto px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 active:scale-95 !shadow-none bg-primary text-white hover:bg-primary/90 disabled:opacity-40"
+                                )}
                             >
                                 {isSavingProfile ? (
                                     <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
                                 ) : (
                                     'Save Profile'
                                 )}
-                            </button>
+                            </Button>
                         </div>
                     </form>
+                </Modal>,
+                document.body
+            )}
+
+            {/* Equip Trophy Badge Modal */}
+            {isEquipModalOpen && createPortal(
+                <Modal
+                    isOpen={isEquipModalOpen}
+                    onClose={() => {
+                        setIsEquipModalOpen(false);
+                        setSelectedSlotIndex(null);
+                    }}
+                    className="w-[92vw] max-w-[340px] p-4 flex flex-col gap-3 relative text-left"
+                >
+                    <button
+                        onClick={() => {
+                            setIsEquipModalOpen(false);
+                            setSelectedSlotIndex(null);
+                        }}
+                        className="absolute sm:top-5 sm:right-4 top-1 right-1 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-white transition-colors z-10"
+                        aria-label="Close modal content"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex flex-col w-full pr-10">
+                        <h3 className="font-display font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                            <Award className="w-4 h-4 text-primary" /> Equip Badge
+                            <span className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5">
+                                Slot {selectedSlotIndex !== null ? selectedSlotIndex + 1 : ''}
+                            </span>
+                        </h3>
+                    </div>
+
+                    <div className="w-full">
+                        {(() => {
+                            const groups = groupAchievements(achievements);
+                            // Only show badges that are achieved and not equipped in any OTHER slot
+                            const otherSlotsEquipped = (user?.equippedBadges || []).filter((_, idx) => idx !== selectedSlotIndex);
+                            const achievedGroups = groups.filter(g => {
+                                if (g.highestAchieved === null) return false;
+                                return !otherSlotsEquipped.includes(g.highestAchieved.id);
+                            });
+
+                            if (achievedGroups.length === 0) {
+                                return (
+                                    <div className="py-6 text-center text-slate-500 text-xs">
+                                        No new achievements available to equip.
+                                    </div>
+                                );
+                            }
+
+                             return (
+                                <div className="grid grid-cols-5 gap-2 w-full">
+                                    {achievedGroups.map((g) => {
+                                        const badge = g.highestAchieved!;
+                                        const tier = badge.id.substring(badge.id.lastIndexOf('-') + 1).toLowerCase();
+                                        const badgeColorClass = {
+                                            bronze: 'bg-amber-500/10 text-amber-800 dark:text-amber-500 border-amber-500/20 hover:bg-amber-500/15',
+                                            silver: 'bg-slate-400/10 text-slate-500 dark:text-slate-400 border-slate-400/20 hover:bg-slate-400/15',
+                                            gold: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/15',
+                                            emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/15',
+                                            diamond: 'bg-cyan-400/10 text-cyan-600 dark:text-cyan-400 border-cyan-400/20 hover:bg-cyan-400/15',
+                                            ruby: 'bg-rose-500/10 text-rose-600 dark:text-rose-500 border-rose-500/20 hover:bg-rose-500/15'
+                                        }[tier] || 'border-slate-200 dark:border-white/5';
+                                        const IconComponent = ICON_MAP[badge.icon] || Trophy;
+
+                                        return (
+                                            <button
+                                                key={badge.id}
+                                                onClick={() => handleEquipBadge(badge.id)}
+                                                className={clsx(
+                                                    "w-full aspect-square rounded-lg flex flex-col items-center justify-center p-1 border text-center transition-all hover:scale-105 active:scale-95 cursor-pointer gap-0.5 min-w-0 min-h-0",
+                                                    badgeColorClass
+                                                )}
+                                            >
+                                                <IconComponent className="w-5.5 h-5.5 shrink-0 animate-pulse" />
+                                                <span className="text-[8px] font-bold tracking-tight line-clamp-1 leading-none">
+                                                    {g.title.split(' ')[0]}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+
+                                    {/* The clear box (Empty action) */}
+                                    <button
+                                        onClick={() => handleEquipBadge(null)}
+                                        className="w-full aspect-square rounded-lg flex flex-col items-center justify-center p-1 border border-dashed border-red-500/30 bg-red-500/5 dark:bg-red-500/[0.02] hover:bg-red-500/10 text-red-500 text-center gap-0.5 cursor-pointer shrink-0 min-w-0 min-h-0"
+                                    >
+                                        <X className="w-5 h-5 shrink-0" />
+                                        <span className="text-[8px] font-bold tracking-tight leading-none">
+                                            Clear
+                                        </span>
+                                    </button>
+                                </div>
+                            );
+                        })()}
+                    </div>
                 </Modal>,
                 document.body
             )}
