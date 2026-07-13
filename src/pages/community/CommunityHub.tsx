@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -741,10 +741,11 @@ export default function CommunityHub() {
                                         <Edit2 className="w-3.5 h-3.5 sm:w-4 h-4" />
                                     </button>
 
-                                    <div className="px-4 sm:px-8 pb-5 sm:pb-8 w-full">
-                                        {/* Floating Avatar & Settings Link */}
-                                        <div className="flex justify-start items-end -mt-8 sm:-mt-12 mb-5 sm:mb-6 w-full">
-                                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full relative z-10 shadow-xl overflow-hidden shrink-0">
+                                    <div className="px-4 sm:px-8 pb-5 sm:pb-8 w-full flex flex-col lg:flex-row lg:items-center justify-between gap-6 sm:gap-8 mt-5 sm:mt-0">
+                                        {/* Left Side: Avatar & Bio */}
+                                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 min-w-0">
+                                            {/* Floating Avatar & Settings Link */}
+                                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full relative z-10 shadow-xl overflow-hidden shrink-0 -mt-8 sm:-mt-12">
                                                 <img
                                                     loading="lazy"
                                                     src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || 'Cubora')}`}
@@ -752,25 +753,25 @@ export default function CommunityHub() {
                                                     className="w-full h-full rounded-full bg-slate-50 dark:bg-white/5 object-cover"
                                                 />
                                             </div>
-                                        </div>
 
-                                        {/* Bio Identity Summary */}
-                                        <div className="mb-6 sm:mb-8 w-full">
-                                            <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-                                                {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
-                                            </h2>
-                                            <p className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm mt-1">
-                                                @{(user?.username || user?.email || '').split('@')[0]} • {getJoinedDuration(user?.createdAt)}
-                                            </p>
-                                            <div className="mt-3 text-left">
-                                                <span className="inline-block font-mono text-slate-600 dark:text-gray-400 text-xs sm:text-sm italic bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-xl px-4 py-3 w-fit">
-                                                    "{user?.about || 'Speedcuber'}"
-                                                </span>
+                                            {/* Bio Identity Summary */}
+                                            <div className="flex flex-col items-center sm:items-start text-center sm:text-left min-w-0">
+                                                <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+                                                    {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
+                                                </h2>
+                                                <p className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm mt-1">
+                                                    @{(user?.username || user?.email || '').split('@')[0]} • {getJoinedDuration(user?.createdAt)}
+                                                </p>
+                                                <div className="mt-3 text-left">
+                                                    <span className="inline-block font-mono text-slate-600 dark:text-gray-400 text-xs sm:text-sm italic bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-xl px-4 py-2 w-fit">
+                                                        "{user?.about || 'Speedcuber'}"
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Performance Metrics Tracker Rows Grid */}
-                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full">
+                                        {/* Right Side: Performance Metrics Grid */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3.5 sm:gap-4 shrink-0 lg:max-w-[65%] xl:max-w-none w-full lg:w-auto">
                                             {/* PB Card */}
                                             <div className="glass-panel-interactive glass-scroll-safe p-3.5 sm:p-5 flex flex-col justify-between group hover:border-yellow-500/40 transition-colors text-left min-h-[105px] sm:min-h-[140px]">
                                                 <div className="flex justify-between items-center w-full">
