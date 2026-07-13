@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,12 +16,12 @@ import { clsx } from 'clsx';
 import { AVATAR_PRESETS } from '@/components/layout/AvatarSelectionModal';
 
 const TierColors: Record<string, string> = {
-    bronze: 'text-amber-800 dark:text-amber-500 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25 shadow-[0_0_18px_rgba(245,158,11,0.08)]',
-    silver: 'text-slate-500 dark:text-slate-400 bg-slate-400/15 dark:bg-slate-400/[0.06] border-slate-400/35 dark:border-slate-400/25 shadow-[0_0_18px_rgba(148,163,184,0.08)]',
-    gold: 'text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/[0.05] border-yellow-500/35 dark:border-yellow-500/25 shadow-[0_0_20px_rgba(234,179,8,0.12)]',
-    emerald: 'text-emerald-600 dark:text-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/[0.05] border-emerald-500/35 dark:border-emerald-500/25 shadow-[0_0_20px_rgba(16,185,129,0.12)]',
-    diamond: 'text-cyan-600 dark:text-cyan-400 bg-cyan-400/12 dark:bg-cyan-400/[0.06] border-cyan-400/35 dark:border-cyan-400/25 shadow-[0_0_22px_rgba(34,211,238,0.15)]',
-    ruby: 'text-rose-600 dark:text-rose-500 bg-rose-500/12 dark:bg-rose-500/[0.06] border-rose-500/35 dark:border-rose-500/25 shadow-[0_0_25px_rgba(244,63,94,0.16)]'
+    bronze: 'text-amber-800 dark:text-amber-500 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25',
+    silver: 'text-slate-500 dark:text-slate-400 bg-slate-400/15 dark:bg-slate-400/[0.06] border-slate-400/35 dark:border-slate-400/25',
+    gold: 'text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/[0.05] border-yellow-500/35 dark:border-yellow-500/25',
+    emerald: 'text-emerald-600 dark:text-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/[0.05] border-emerald-500/35 dark:border-emerald-500/25',
+    diamond: 'text-cyan-600 dark:text-cyan-400 bg-cyan-400/12 dark:bg-cyan-400/[0.06] border-cyan-400/35 dark:border-cyan-400/25',
+    ruby: 'text-rose-600 dark:text-rose-500 bg-rose-500/12 dark:bg-rose-500/[0.06] border-rose-500/35 dark:border-rose-500/25'
 };
 
 const TierProgressBarColors: Record<string, string> = {
@@ -867,62 +867,66 @@ export default function CommunityHub() {
                                                         <div
                                                             key={grouped.groupKey}
                                                             className={clsx(
-                                                                "p-5 sm:p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden group transition-all min-h-[180px]",
+                                                                "p-5 sm:p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden group min-h-[180px]",
                                                                 "flex-shrink-0 w-[57%] sm:w-[45%] lg:w-full snap-center",
                                                                 highestTierName
                                                                     ? TierColors[highestTierName]
-                                                                    : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01] opacity-70",
-                                                                highestTierName && "sm:hover:scale-[1.01] sm:hover:shadow-md"
+                                                                    : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01]"
                                                             )}
                                                         >
-                                                            {/* Top Header Row */}
-                                                            <div className="flex items-center gap-2.5 min-w-0">
-                                                                <div className={clsx(
-                                                                    "p-2 rounded-xl shrink-0",
-                                                                    highestTierName ? "bg-white/40 dark:bg-black/20" : "bg-slate-200 dark:bg-white/5"
-                                                                )}>
-                                                                    <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 opacity-90 transition-transform sm:group-hover:scale-105" />
-                                                                </div>
-                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-tight">
-                                                                    {grouped.title}
-                                                                </h4>
-                                                            </div>
-
-                                                            {/* Description */}
-                                                            <p className="text-[11px] opacity-70 my-3 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed text-left">
-                                                                {targetAch.description}
-                                                            </p>
-
-                                                            {/* Progress Bar Area */}
-                                                            <div className="w-full mt-auto text-left">
-                                                                {grouped.nextLocked ? (
-                                                                    <>
-                                                                        <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-                                                                            <div
-                                                                                className={clsx("h-full transition-all", progressBarColor)}
-                                                                                style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="flex justify-between items-center mt-1.5 leading-none">
-                                                                            <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
-                                                                                Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
-                                                                            </span>
-                                                                            <span className="text-[9px] font-mono font-bold opacity-45">
-                                                                                {grouped.nextLocked.id.includes('speed-frontier') ? (
-                                                                                    `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
-                                                                                ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
-                                                                                    `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
-                                                                                ) : (
-                                                                                    `${grouped.nextLocked.progress} / ${grouped.nextLocked.progressTarget}`
-                                                                                )}
-                                                                            </span>
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <div className="flex items-center justify-center gap-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-lg py-1 text-[9px] font-bold uppercase tracking-wider">
-                                                                        👑 Max Level Reached! 👑
+                                                            <div className={clsx(
+                                                                "flex flex-col justify-between h-full w-full transition-transform duration-300",
+                                                                highestTierName && "group-hover:scale-[1.03] origin-center"
+                                                            )}>
+                                                                {/* Top Header Row */}
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <div className={clsx(
+                                                                        "p-2 rounded-xl shrink-0",
+                                                                        highestTierName ? "bg-white/40 dark:bg-black/20" : "bg-slate-200 dark:bg-white/5"
+                                                                    )}>
+                                                                        <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 opacity-90 transition-transform sm:group-hover:scale-105" />
                                                                     </div>
-                                                                )}
+                                                                    <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-tight">
+                                                                        {grouped.title}
+                                                                    </h4>
+                                                                </div>
+
+                                                                {/* Description */}
+                                                                <p className="text-[11px] opacity-70 my-3 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed text-left">
+                                                                    {targetAch.description}
+                                                                </p>
+
+                                                                {/* Progress Bar Area */}
+                                                                <div className="w-full mt-auto text-left">
+                                                                    {grouped.nextLocked ? (
+                                                                        <>
+                                                                            <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                                                                <div
+                                                                                    className={clsx("h-full transition-all", progressBarColor)}
+                                                                                    style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
+                                                                                />
+                                                                            </div>
+                                                                            <div className="flex justify-between items-center mt-1.5 leading-none">
+                                                                                <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
+                                                                                    Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
+                                                                                </span>
+                                                                                <span className="text-[9px] font-mono font-bold opacity-45">
+                                                                                    {grouped.nextLocked.id.includes('speed-frontier') ? (
+                                                                                        `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
+                                                                                    ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
+                                                                                        `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
+                                                                                    ) : (
+                                                                                        `${grouped.nextLocked.progress} / ${grouped.nextLocked.progressTarget}`
+                                                                                    )}
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="flex items-center justify-center gap-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-lg py-1 text-[9px] font-bold uppercase tracking-wider">
+                                                                            👑 Max Level Reached! 👑
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     );
@@ -943,62 +947,66 @@ export default function CommunityHub() {
                                                         <div
                                                             key={grouped.groupKey}
                                                             className={clsx(
-                                                                "p-5 sm:p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden group transition-all min-h-[180px]",
+                                                                "p-5 sm:p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden group min-h-[180px]",
                                                                 "flex-shrink-0 w-[57%] sm:w-[45%] lg:w-full snap-center",
                                                                 highestTierName
                                                                     ? TierColors[highestTierName]
-                                                                    : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01] opacity-70",
-                                                                highestTierName && "sm:hover:scale-[1.01] sm:hover:shadow-md"
+                                                                    : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01]"
                                                             )}
                                                         >
-                                                            {/* Top Header Row */}
-                                                            <div className="flex items-center gap-2.5 min-w-0">
-                                                                <div className={clsx(
-                                                                    "p-2 rounded-xl shrink-0",
-                                                                    highestTierName ? "bg-white/40 dark:bg-black/20" : "bg-slate-200 dark:bg-white/5"
-                                                                )}>
-                                                                    <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 opacity-90 transition-transform sm:group-hover:scale-105" />
-                                                                </div>
-                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-tight">
-                                                                    {grouped.title}
-                                                                </h4>
-                                                            </div>
-
-                                                            {/* Description */}
-                                                            <p className="text-[11px] opacity-70 my-3 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed text-left">
-                                                                {targetAch.description}
-                                                            </p>
-
-                                                            {/* Progress Bar Area */}
-                                                            <div className="w-full mt-auto text-left">
-                                                                {grouped.nextLocked ? (
-                                                                    <>
-                                                                        <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-                                                                            <div
-                                                                                className={clsx("h-full transition-all", progressBarColor)}
-                                                                                style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="flex justify-between items-center mt-1.5 leading-none">
-                                                                            <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
-                                                                                Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
-                                                                            </span>
-                                                                            <span className="text-[9px] font-mono font-bold opacity-45">
-                                                                                {grouped.nextLocked.id.includes('speed-frontier') ? (
-                                                                                    `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
-                                                                                ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
-                                                                                    `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
-                                                                                ) : (
-                                                                                    `${grouped.nextLocked.progress} / ${grouped.nextLocked.progressTarget}`
-                                                                                )}
-                                                                            </span>
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <div className="flex items-center justify-center gap-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-lg py-1 text-[9px] font-bold uppercase tracking-wider">
-                                                                        👑 Max Level Reached! 👑
+                                                            <div className={clsx(
+                                                                "flex flex-col justify-between h-full w-full transition-transform duration-300",
+                                                                highestTierName && "group-hover:scale-[1.03] origin-center"
+                                                            )}>
+                                                                {/* Top Header Row */}
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <div className={clsx(
+                                                                        "p-2 rounded-xl shrink-0",
+                                                                        highestTierName ? "bg-white/40 dark:bg-black/20" : "bg-slate-200 dark:bg-white/5"
+                                                                    )}>
+                                                                        <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 opacity-90 transition-transform sm:group-hover:scale-105" />
                                                                     </div>
-                                                                )}
+                                                                    <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-tight">
+                                                                        {grouped.title}
+                                                                    </h4>
+                                                                </div>
+
+                                                                {/* Description */}
+                                                                <p className="text-[11px] opacity-70 my-3 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed text-left">
+                                                                    {targetAch.description}
+                                                                </p>
+
+                                                                {/* Progress Bar Area */}
+                                                                <div className="w-full mt-auto text-left">
+                                                                    {grouped.nextLocked ? (
+                                                                        <>
+                                                                            <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                                                                <div
+                                                                                    className={clsx("h-full transition-all", progressBarColor)}
+                                                                                    style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
+                                                                                />
+                                                                            </div>
+                                                                            <div className="flex justify-between items-center mt-1.5 leading-none">
+                                                                                <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
+                                                                                    Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
+                                                                                </span>
+                                                                                <span className="text-[9px] font-mono font-bold opacity-45">
+                                                                                    {grouped.nextLocked.id.includes('speed-frontier') ? (
+                                                                                        `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
+                                                                                    ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
+                                                                                        `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
+                                                                                    ) : (
+                                                                                        `${grouped.nextLocked.progress} / ${grouped.nextLocked.progressTarget}`
+                                                                                    )}
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="flex items-center justify-center gap-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-lg py-1 text-[9px] font-bold uppercase tracking-wider">
+                                                                            👑 Max Level Reached! 👑
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     );
