@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
-    Medal, TrendingUp, Flame, Star,
-    Clock, Award, Loader2, Target, Timer, X
+    Medal, Flame, Star,
+    Clock, Award, Loader2, Target, Timer, X,
+    TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -15,12 +16,21 @@ import { clsx } from 'clsx';
 import { AVATAR_PRESETS } from '@/components/layout/AvatarSelectionModal';
 
 const TierColors: Record<string, string> = {
-    bronze: 'text-amber-700 dark:text-amber-600 bg-amber-700/5 border-amber-700/20 dark:border-amber-600/20 shadow-[0_0_10px_rgba(180,83,9,0.05)]',
-    silver: 'text-slate-400 bg-slate-400/5 border-slate-400/20',
-    gold: 'text-yellow-500 bg-yellow-500/5 border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.1)]',
-    emerald: 'text-emerald-500 bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]',
-    diamond: 'text-cyan-400 bg-cyan-400/5 border-cyan-400/20 shadow-[0_0_15px_rgba(34,211,238,0.15)]',
-    ruby: 'text-rose-500 bg-rose-500/5 border-rose-500/20 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
+    bronze: 'text-amber-800 dark:text-amber-500 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25 shadow-[0_0_18px_rgba(245,158,11,0.08)]',
+    silver: 'text-slate-500 dark:text-slate-400 bg-slate-400/15 dark:bg-slate-400/[0.06] border-slate-400/35 dark:border-slate-400/25 shadow-[0_0_18px_rgba(148,163,184,0.08)]',
+    gold: 'text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/[0.05] border-yellow-500/35 dark:border-yellow-500/25 shadow-[0_0_20px_rgba(234,179,8,0.12)]',
+    emerald: 'text-emerald-600 dark:text-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/[0.05] border-emerald-500/35 dark:border-emerald-500/25 shadow-[0_0_20px_rgba(16,185,129,0.12)]',
+    diamond: 'text-cyan-600 dark:text-cyan-400 bg-cyan-400/12 dark:bg-cyan-400/[0.06] border-cyan-400/35 dark:border-cyan-400/25 shadow-[0_0_22px_rgba(34,211,238,0.15)]',
+    ruby: 'text-rose-600 dark:text-rose-500 bg-rose-500/12 dark:bg-rose-500/[0.06] border-rose-500/35 dark:border-rose-500/25 shadow-[0_0_25px_rgba(244,63,94,0.16)]'
+};
+
+const TierProgressBarColors: Record<string, string> = {
+    bronze: 'bg-amber-600 dark:bg-amber-500',
+    silver: 'bg-slate-400 dark:bg-slate-500',
+    gold: 'bg-yellow-500',
+    emerald: 'bg-emerald-500',
+    diamond: 'bg-cyan-400',
+    ruby: 'bg-rose-500'
 };
 
 const ICON_MAP: Record<string, any> = {
@@ -30,7 +40,6 @@ const ICON_MAP: Record<string, any> = {
     'Timer': Timer,
     'Clock': Clock,
     'Star': Star,
-    'TrendingUp': TrendingUp,
     'Award': Award,
     'Medal': Medal
 };
@@ -178,7 +187,6 @@ export default function CommunityHub() {
         pbSession: string;
     } | null>(null);
     const [achievements, setAchievements] = useState<AchievementData[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<'All' | 'Volume' | 'Speed' | 'Consistency' | 'Telemetry' | 'Multiplayer' | 'Milestone'>('All');
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
     // Attachment states
@@ -231,7 +239,7 @@ export default function CommunityHub() {
                         const activeSolves = solvesData.data.filter((s: any) => !s.isDeleted && s.penalty !== 'DNF');
                         if (activeSolves.length > 0) {
                             let minTime = Infinity;
-                            let bestSolve = null;
+                            let bestSolve: any = null;
                             activeSolves.forEach((s: any) => {
                                 const t = s.timeMs + (s.penalty === '+2' ? 2000 : 0);
                                 if (t < minTime) {
@@ -663,7 +671,7 @@ export default function CommunityHub() {
                                 <div className="space-y-3.5 w-full">
                                     {[
                                         { rank: 1, name: 'Max Park', time: '5.21s' },
-                                        { rank: 2, name: 'Tymon Kolasiński', time: '5.43s' },
+                                        { rank: 2, name: 'Tymon KolasiÅ„ski', time: '5.43s' },
                                         { rank: 3, name: 'Ruihang Xu', time: '5.62s' }
                                     ].map(lbUser => (
                                         <div key={lbUser.rank} className="flex items-center justify-between group cursor-pointer w-full">
@@ -838,119 +846,60 @@ export default function CommunityHub() {
                                         </h3>
                                         <span className="text-xs font-mono font-bold text-slate-500 dark:text-gray-500">{unlockedAchievements.length} Unlocked</span>
                                     </div>
-
-                                    {/* Category Filter Chips */}
-                                    <div className="flex gap-2 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 mb-3">
-                                        {['All', 'Volume', 'Speed', 'Consistency', 'Telemetry', 'Multiplayer', 'Milestone'].map((cat) => (
-                                            <button
-                                                key={cat}
-                                                onClick={() => setSelectedCategory(cat as any)}
-                                                className={clsx(
-                                                    "px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border",
-                                                    selectedCategory === cat
-                                                        ? "bg-primary text-white border-primary shadow-sm"
-                                                        : "bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 border-transparent hover:bg-slate-200 dark:hover:bg-white/10"
-                                                )}
-                                            >
-                                                {cat}
-                                            </button>
-                                        ))}
-                                    </div>
-
                                     {achievements.length === 0 ? (
                                         <div className="glass-panel p-8 text-center text-slate-500 w-full">
                                             <Trophy className="w-7 h-7 mx-auto mb-2 opacity-50" />
                                             <p className="text-xs">Start solving to unlock achievements!</p>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-3 gap-4 w-full pb-2 snap-x hide-scrollbar">
-                                            {groupAchievements(achievements)
-                                                .filter(g => selectedCategory === 'All' || g.category === selectedCategory)
-                                                .map((grouped) => {
+                                        <div className="flex flex-col gap-5 w-full">
+                                            {/* Row 1 (first 4 achievements) */}
+                                            <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-4 gap-4 w-full pb-2 snap-x hide-scrollbar">
+                                                {groupAchievements(achievements).slice(0, 4).map((grouped) => {
                                                     const highestTierName = grouped.highestUnlocked
                                                         ? grouped.highestUnlocked.title.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || 'bronze'
                                                         : null;
                                                     const IconComponent = ICON_MAP[grouped.icon] || Trophy;
                                                     const targetAch = grouped.nextLocked || grouped.highestUnlocked || grouped.items[0];
+                                                    const progressBarColor = highestTierName ? TierProgressBarColors[highestTierName] : 'bg-primary';
 
                                                     return (
                                                         <div
                                                             key={grouped.groupKey}
                                                             className={clsx(
-                                                                "p-5 sm:p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden group transition-all min-h-[220px]",
-                                                                "flex-shrink-0 w-[260px] sm:w-[300px] lg:w-full snap-center",
+                                                                "p-5 sm:p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden group transition-all min-h-[180px]",
+                                                                "flex-shrink-0 w-[57%] sm:w-[45%] lg:w-full snap-center",
                                                                 highestTierName
                                                                     ? TierColors[highestTierName]
                                                                     : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01] opacity-70",
                                                                 highestTierName && "sm:hover:scale-[1.01] sm:hover:shadow-md"
                                                             )}
                                                         >
-                                                            {/* Top Header Row of Card */}
-                                                            <div className="flex items-start justify-between w-full gap-3">
-                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                    <div className={clsx(
-                                                                        "p-2 rounded-xl shrink-0",
-                                                                        highestTierName ? "bg-white/40 dark:bg-black/20" : "bg-slate-200 dark:bg-white/5"
-                                                                    )}>
-                                                                        <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 opacity-90 transition-transform sm:group-hover:scale-105" />
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-tight">
-                                                                            {grouped.title}
-                                                                        </h4>
-                                                                        <span className="text-[9px] opacity-50 font-bold tracking-wider uppercase leading-none mt-0.5 block">
-                                                                            {grouped.category}
-                                                                        </span>
-                                                                    </div>
+                                                            {/* Top Header Row */}
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <div className={clsx(
+                                                                    "p-2 rounded-xl shrink-0",
+                                                                    highestTierName ? "bg-white/40 dark:bg-black/20" : "bg-slate-200 dark:bg-white/5"
+                                                                )}>
+                                                                    <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 opacity-90 transition-transform sm:group-hover:scale-105" />
                                                                 </div>
+                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-tight">
+                                                                    {grouped.title}
+                                                                </h4>
                                                             </div>
 
-                                                            {/* Description of target tier */}
+                                                            {/* Description */}
                                                             <p className="text-[11px] opacity-70 my-3 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed text-left">
                                                                 {targetAch.description}
                                                             </p>
 
-                                                            {/* Visual Roadmap of the 6 Tiers */}
-                                                            <div className="flex justify-between items-center gap-1 w-full my-2 bg-slate-200/40 dark:bg-white/[0.02] p-2 rounded-xl border border-slate-200/40 dark:border-white/5">
-                                                                {grouped.items.map((item) => {
-                                                                    const itemTier = item.id.substring(item.id.lastIndexOf('-') + 1).toLowerCase();
-                                                                    const isUnlocked = item.isUnlocked;
-
-                                                                    const activeColor = {
-                                                                        bronze: 'bg-amber-700 dark:bg-amber-600 shadow-[0_0_8px_rgba(180,83,9,0.3)]',
-                                                                        silver: 'bg-slate-400 dark:bg-slate-500 shadow-[0_0_8px_rgba(148,163,184,0.3)]',
-                                                                        gold: 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.4)]',
-                                                                        emerald: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]',
-                                                                        diamond: 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.45)]',
-                                                                        ruby: 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'
-                                                                    }[itemTier] || 'bg-slate-500';
-
-                                                                    return (
-                                                                        <div
-                                                                            key={item.id}
-                                                                            className="flex flex-col items-center gap-0.5 flex-1 relative"
-                                                                        >
-                                                                            <div
-                                                                                className={clsx(
-                                                                                    "w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white transition-all cursor-help",
-                                                                                    isUnlocked ? activeColor : "bg-slate-200/60 dark:bg-white/5 text-slate-400 dark:text-gray-500 border border-slate-300/30 dark:border-white/5"
-                                                                                )}
-                                                                                title={item.title}
-                                                                            >
-                                                                                {itemTier[0].toUpperCase()}
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-
                                                             {/* Progress Bar Area */}
-                                                            <div className="w-full mt-2 text-left">
+                                                            <div className="w-full mt-auto text-left">
                                                                 {grouped.nextLocked ? (
                                                                     <>
                                                                         <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
                                                                             <div
-                                                                                className="h-full bg-primary transition-all"
+                                                                                className={clsx("h-full transition-all", progressBarColor)}
                                                                                 style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
                                                                             />
                                                                         </div>
@@ -959,7 +908,7 @@ export default function CommunityHub() {
                                                                                 Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
                                                                             </span>
                                                                             <span className="text-[9px] font-mono font-bold opacity-45">
-                                                                                {grouped.nextLocked.id.includes('speed-frontier') || grouped.nextLocked.id.includes('ao5-dominance') ? (
+                                                                                {grouped.nextLocked.id.includes('speed-frontier') ? (
                                                                                     `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
                                                                                 ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
                                                                                     `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
@@ -978,6 +927,83 @@ export default function CommunityHub() {
                                                         </div>
                                                     );
                                                 })}
+                                            </div>
+
+                                            {/* Row 2 (last 4 achievements) */}
+                                            <div className="flex flex-row overflow-x-auto lg:grid lg:grid-cols-4 gap-4 w-full pb-2 snap-x hide-scrollbar">
+                                                {groupAchievements(achievements).slice(4, 8).map((grouped) => {
+                                                    const highestTierName = grouped.highestUnlocked
+                                                        ? grouped.highestUnlocked.title.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || 'bronze'
+                                                        : null;
+                                                    const IconComponent = ICON_MAP[grouped.icon] || Trophy;
+                                                    const targetAch = grouped.nextLocked || grouped.highestUnlocked || grouped.items[0];
+                                                    const progressBarColor = highestTierName ? TierProgressBarColors[highestTierName] : 'bg-primary';
+
+                                                    return (
+                                                        <div
+                                                            key={grouped.groupKey}
+                                                            className={clsx(
+                                                                "p-5 sm:p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden group transition-all min-h-[180px]",
+                                                                "flex-shrink-0 w-[57%] sm:w-[45%] lg:w-full snap-center",
+                                                                highestTierName
+                                                                    ? TierColors[highestTierName]
+                                                                    : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01] opacity-70",
+                                                                highestTierName && "sm:hover:scale-[1.01] sm:hover:shadow-md"
+                                                            )}
+                                                        >
+                                                            {/* Top Header Row */}
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <div className={clsx(
+                                                                    "p-2 rounded-xl shrink-0",
+                                                                    highestTierName ? "bg-white/40 dark:bg-black/20" : "bg-slate-200 dark:bg-white/5"
+                                                                )}>
+                                                                    <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 opacity-90 transition-transform sm:group-hover:scale-105" />
+                                                                </div>
+                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-tight">
+                                                                    {grouped.title}
+                                                                </h4>
+                                                            </div>
+
+                                                            {/* Description */}
+                                                            <p className="text-[11px] opacity-70 my-3 text-slate-700 dark:text-slate-400 line-clamp-2 leading-relaxed text-left">
+                                                                {targetAch.description}
+                                                            </p>
+
+                                                            {/* Progress Bar Area */}
+                                                            <div className="w-full mt-auto text-left">
+                                                                {grouped.nextLocked ? (
+                                                                    <>
+                                                                        <div className="w-full h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                                                            <div
+                                                                                className={clsx("h-full transition-all", progressBarColor)}
+                                                                                style={{ width: `${Math.min(100, (grouped.nextLocked.progress / grouped.nextLocked.progressTarget) * 100)}%` }}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center mt-1.5 leading-none">
+                                                                            <span className="text-[9px] font-mono font-bold opacity-45 uppercase">
+                                                                                Next: {grouped.nextLocked.title.match(/\(([^)]+)\)/)?.[1] || 'Bronze'}
+                                                                            </span>
+                                                                            <span className="text-[9px] font-mono font-bold opacity-45">
+                                                                                {grouped.nextLocked.id.includes('speed-frontier') ? (
+                                                                                    `Best: ${grouped.nextLocked.progress > 0 ? ((grouped.nextLocked.progressTarget * grouped.nextLocked.progressTarget) / grouped.nextLocked.progress).toFixed(2) : '--'}s / Target: ${grouped.nextLocked.progressTarget}s`
+                                                                                ) : grouped.nextLocked.id.includes('fingertrick-maestro') ? (
+                                                                                    `Best TPS: ${(grouped.nextLocked.progress).toFixed(1)} / Target: ${grouped.nextLocked.progressTarget.toFixed(1)}`
+                                                                                ) : (
+                                                                                    `${grouped.nextLocked.progress} / ${grouped.nextLocked.progressTarget}`
+                                                                                )}
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <div className="flex items-center justify-center gap-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-lg py-1 text-[9px] font-bold uppercase tracking-wider">
+                                                                        👑 Max Level Reached! 👑
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                      )}
                                  </div>

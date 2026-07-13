@@ -97,21 +97,6 @@ const BADGE_GROUPS = [
     ]
   },
   {
-    group: 'ao5-dominance',
-    title: 'Ao5 Dominance',
-    category: 'Consistency',
-    description: 'Push your rolling Average of 5 (Ao5) below competitive benchmarks.',
-    icon: 'TrendingUp',
-    tiers: [
-      { name: 'Bronze', target: 45, label: 'Sub-45s Ao5' },
-      { name: 'Silver', target: 30, label: 'Sub-30s Ao5' },
-      { name: 'Gold', target: 20, label: 'Sub-20s Ao5' },
-      { name: 'Emerald', target: 15, label: 'Sub-15s Ao5' },
-      { name: 'Diamond', target: 10, label: 'Sub-10s Ao5' },
-      { name: 'Ruby', target: 8, label: 'Sub-8s Ao5' }
-    ]
-  },
-  {
     group: 'visionary-scanner',
     title: 'Visionary Scanner',
     category: 'Telemetry',
@@ -209,20 +194,7 @@ exports.getAchievements = async (req, res) => {
       }
     }
 
-    // 5. Best Ao5
-    let bestAo5Ms = null;
-    for (let i = 0; i <= validTimes.length - 5; i++) {
-      const group = validTimes.slice(i, i + 5);
-      const sorted = [...group].sort((a, b) => a - b);
-      const trimmed = sorted.slice(1, -1);
-      const avg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
-      if (bestAo5Ms === null || avg < bestAo5Ms) {
-        bestAo5Ms = avg;
-      }
-    }
-    const bestAo5Sec = bestAo5Ms ? parseFloat((bestAo5Ms / 1000).toFixed(3)) : null;
-
-    // 6. Streak calculation (from history)
+    // 5. Streak calculation (from history)
     let currentStreak = 0;
     const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
     const today = new Date();
@@ -236,16 +208,14 @@ exports.getAchievements = async (req, res) => {
       }
     }
 
-    // 7. Scans count
+    // 6. Scans count
     const totalScans = await CubeScan.countDocuments({ user: userId });
 
-    // 8. Arena wins
+    // 7. Arena wins
     const totalWins = user.multiplayerWins || 0;
 
     const achievementsList = ALL_BADGES.map(badge => {
-      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id);
       let userValue = 0;
-      const isUnlocked = unlockedIds.has(badge.id);
 
       switch (badge.group) {
         case 'solves-marathon':
@@ -266,9 +236,6 @@ exports.getAchievements = async (req, res) => {
         case 'flawless-execution':
           userValue = maxCleanStreak;
           break;
-        case 'ao5-dominance':
-          userValue = bestAo5Sec ? bestAo5Sec : 0;
-          break;
         case 'visionary-scanner':
           userValue = totalScans;
           break;
@@ -277,11 +244,52 @@ exports.getAchievements = async (req, res) => {
           break;
       }
 
+      // Auto-award: check if user qualifies but hasn't been awarded yet
+      let qualifies = false;
+      switch (badge.group) {
+        case 'solves-marathon':
+          qualifies = totalSolves >= badge.target;
+          break;
+        case 'speed-frontier':
+          qualifies = bestTimeSec !== null && bestTimeSec <= badge.target;
+          break;
+        case 'consistency-grind':
+          qualifies = currentStreak >= badge.target;
+          break;
+        case 'fingertrick-maestro':
+          qualifies = bestTps >= badge.target;
+          break;
+        case 'session-marathoner':
+          qualifies = maxSessionSolves >= badge.target;
+          break;
+        case 'flawless-execution':
+          qualifies = maxCleanStreak >= badge.target;
+          break;
+        case 'visionary-scanner':
+          qualifies = totalScans >= badge.target;
+          break;
+        case 'gladiator-arena':
+          qualifies = totalWins >= badge.target;
+          break;
+      }
+
+      if (qualifies && !unlockedIds.has(badge.id)) {
+        // Award on-the-fly (fire and forget)
+        Achievement.create({
+          user: userId,
+          badgeId: badge.id,
+          title: badge.title
+        }).catch(() => {});
+        unlockedIds.add(badge.id);
+      }
+
+      const isUnlocked = unlockedIds.has(badge.id);
+
       // Calculate progress value relative to target
       let progress = 0;
       const progressTarget = badge.target;
 
-      if (badge.group === 'speed-frontier' || badge.group === 'ao5-dominance') {
+      if (badge.group === 'speed-frontier') {
         if (isUnlocked) {
           progress = progressTarget;
         } else if (userValue > 0) {
@@ -292,6 +300,8 @@ exports.getAchievements = async (req, res) => {
       } else {
         progress = Math.min(userValue, progressTarget);
       }
+
+      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id);
 
       return {
         id: badge.id,
@@ -364,18 +374,6 @@ exports.evaluateAchievements = async (userId) => {
       }
     }
 
-    let bestAo5Ms = null;
-    for (let i = 0; i <= validTimes.length - 5; i++) {
-      const group = validTimes.slice(i, i + 5);
-      const sorted = [...group].sort((a, b) => a - b);
-      const trimmed = sorted.slice(1, -1);
-      const avg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
-      if (bestAo5Ms === null || avg < bestAo5Ms) {
-        bestAo5Ms = avg;
-      }
-    }
-    const bestAo5Sec = bestAo5Ms ? parseFloat((bestAo5Ms / 1000).toFixed(3)) : null;
-
     let currentStreak = 0;
     const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
     const today = new Date();
@@ -392,7 +390,7 @@ exports.evaluateAchievements = async (userId) => {
     const totalScans = await CubeScan.countDocuments({ user: userId });
     const totalWins = user.multiplayerWins || 0;
 
-    // Check all 54 badges
+    // Check all badges
     for (const badge of ALL_BADGES) {
       let qualifies = false;
       
@@ -414,9 +412,6 @@ exports.evaluateAchievements = async (userId) => {
           break;
         case 'flawless-execution':
           qualifies = maxCleanStreak >= badge.target;
-          break;
-        case 'ao5-dominance':
-          qualifies = bestAo5Sec !== null && bestAo5Sec <= badge.target;
           break;
         case 'visionary-scanner':
           qualifies = totalScans >= badge.target;

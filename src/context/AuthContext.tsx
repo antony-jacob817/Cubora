@@ -7,6 +7,8 @@ interface User {
   username?: string;
   about?: string;
   avatar?: string;
+  elo?: number;
+  multiplayerWins?: number;
   createdAt: string;
 }
 
