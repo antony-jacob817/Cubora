@@ -1,14 +1,14 @@
 const mongoose = require('mongoose');
 
 const commentSchema = new mongoose.Schema({
-  author: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
-  },
   post: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'CommunityPost', 
+    required: true 
+  },
+  author: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
     required: true 
   },
   content: { 
@@ -16,7 +16,7 @@ const commentSchema = new mongoose.Schema({
     required: true, 
     maxlength: 1000 
   },
-  parentComment: { 
+  parentId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Comment', 
     default: null 
@@ -26,8 +26,8 @@ const commentSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Indexes for faster loading of comments per post/parent
+// Indexes for fast retrieval
 commentSchema.index({ post: 1, createdAt: 1 });
-commentSchema.index({ parentComment: 1 });
+commentSchema.index({ parentId: 1 });
 
 module.exports = mongoose.model('Comment', commentSchema);

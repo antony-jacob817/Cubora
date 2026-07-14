@@ -5,7 +5,7 @@ import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
     Medal, Flame, Star,
     Clock, Award, Loader2, Target, Timer, X,
-    TrendingUp, Plus, Trash2, CornerDownRight
+    TrendingUp, Plus, Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -44,29 +44,29 @@ const ICON_MAP: Record<string, any> = {
     'Medal': Medal
 };
 
-interface Comment {
-    _id: string;
-    post: string;
-    author: { _id: string; name: string; handle: string; avatar: string };
-    content: string;
-    parentComment: string | null;
-    likes: number;
-    isLikedByMe: boolean;
-    timeAgo: string;
-    createdAt: string;
-}
-
 interface CommunityPost {
     _id: string;
     content: string;
     type: 'solve' | 'algorithm' | 'discussion';
     author: { _id: string; name: string; handle: string; avatar: string };
     solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string };
+    isPB?: boolean;
+    likes: number;
+    isLikedByMe: boolean;
+    timeAgo: string;
+    commentCount: number;
+}
+
+interface CommentData {
+    _id: string;
+    post: string;
+    author: { _id: string; name: string; handle: string; avatar: string };
+    content: string;
+    parentId: string | null;
     likes: number;
     isLikedByMe: boolean;
     timeAgo: string;
     createdAt: string;
-    commentsCount: number;
 }
 
 interface AchievementData {
@@ -115,25 +115,6 @@ const getJoinedDuration = (createdAt: string | Date | undefined) => {
     
     const monthText = `${months} ${months === 1 ? 'month' : 'months'}`;
     return `Joined ${yearText} and ${monthText} ago`;
-};
-
-const renderContentWithMentions = (content: string) => {
-    if (!content) return null;
-    const regex = /(@[a-zA-Z0-9_]+)/g;
-    const parts = content.split(regex);
-    return parts.map((part, index) => {
-        if (regex.test(part)) {
-            return (
-                <span 
-                    key={index} 
-                    className="text-primary font-bold hover:underline cursor-pointer transition-colors"
-                >
-                    {part}
-                </span>
-            );
-        }
-        return part;
-    });
 };
 
 interface GroupedAchievement {
@@ -189,6 +170,20 @@ const groupAchievements = (achList: AchievementData[]): GroupedAchievement[] => 
         };
     });
 };
+const renderContentWithMentions = (content: string) => {
+    if (!content) return '';
+    const parts = content.split(/(@\w+)/g);
+    return parts.map((part, index) => {
+        if (part.startsWith('@')) {
+            return (
+                <span key={index} className="text-primary font-bold hover:underline cursor-pointer select-all">
+                    {part}
+                </span>
+            );
+        }
+        return part;
+    });
+};
 
 export default function CommunityHub() {
     const { user, getAuthHeaders, refetchUser } = useAuth();
@@ -210,27 +205,34 @@ export default function CommunityHub() {
     const [isPosting, setIsPosting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Pagination & Filter States
-    const [feedFilter, setFeedFilter] = useState<'all' | 'solve' | 'algorithm' | 'discussion'>('all');
-    const [hasMore, setHasMore] = useState(true);
+    // Feed Pagination & Filtering states
+    const [feedFilter, setFeedFilter] = useState<'all' | 'pb' | 'algorithm' | 'discussion'>('all');
+    const [feedPage, setFeedPage] = useState(1);
+    const [hasMorePosts, setHasMorePosts] = useState(true);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
+    const [isPBChecked, setIsPBChecked] = useState(false);
 
-    // Comments States
-    const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
-    const [postComments, setPostComments] = useState<Record<string, Comment[]>>({});
-    const [newCommentText, setNewCommentText] = useState<Record<string, string>>({});
-    const [replyingToComment, setReplyingToComment] = useState<Record<string, Comment | null>>({});
+    // Comment states
+    const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentData[]>>({});
     const [isLoadingComments, setIsLoadingComments] = useState<Record<string, boolean>>({});
+    const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+    const [newCommentContent, setNewCommentContent] = useState<Record<string, string>>({});
+    const [replyingToComment, setReplyingToComment] = useState<Record<string, CommentData | null>>({});
 
-    // Edit States
+    // Inline Edit states
     const [editingPostId, setEditingPostId] = useState<string | null>(null);
-    const [editPostContent, setEditPostContent] = useState('');
+    const [editingPostContent, setEditingPostContent] = useState('');
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-    const [editCommentContent, setEditCommentContent] = useState('');
+    const [editingCommentContent, setEditingCommentContent] = useState('');
 
-    // Confirmation States (Custom Non-Localhost Confirm)
-    const [confirmDeletePostId, setConfirmDeletePostId] = useState<string | null>(null);
-    const [confirmDeleteCommentId, setConfirmDeleteCommentId] = useState<string | null>(null);
+    // Custom Modal Confirm states (no localhost alerts/popups)
+    const [confirmDeletePost, setConfirmDeletePost] = useState<CommunityPost | null>(null);
+    const [confirmDeleteComment, setConfirmDeleteComment] = useState<CommentData | null>(null);
+
+    // Mentions auto-suggest state
+    const [mentionSuggestions, setMentionSuggestions] = useState<any[]>([]);
+    const [activeMentionPostId, setActiveMentionPostId] = useState<string | null>(null);
+    const [activeMentionCommentId, setActiveMentionCommentId] = useState<string | null>(null);
 
     // Profile state
     const [profileStats, setProfileStats] = useState<{
@@ -292,32 +294,27 @@ export default function CommunityHub() {
     const [algName, setAlgName] = useState('');
 
     // --- FETCH COMMUNITY FEED ---
-    const fetchPosts = async (beforeTimestamp?: string, isLoadMore = false) => {
-        if (isLoadMore) setIsFetchingMore(true);
-        else setIsLoadingFeed(true);
+    const fetchPosts = async (page: number, filter: string, append = false) => {
+        if (page === 1) setIsLoadingFeed(true);
+        else setIsFetchingMore(true);
 
         try {
-            let url = `http://localhost:5000/api/community?limit=10`;
-            if (beforeTimestamp) {
-                url += `&before=${encodeURIComponent(beforeTimestamp)}`;
-            }
-            if (feedFilter !== 'all') {
-                url += `&type=${feedFilter}`;
-            }
-
-            const res = await fetch(url, { headers: getAuthHeaders() });
+            const res = await fetch(`http://localhost:5000/api/community?page=${page}&limit=10&filter=${filter}`, { 
+                headers: getAuthHeaders() 
+            });
             const data = await res.json();
             if (data.success) {
-                if (isLoadMore) {
-                    setPosts(prev => [...prev, ...data.data]);
+                if (append) {
+                    setPosts(prev => {
+                        const existingIds = new Set(prev.map(p => p._id));
+                        const filteredNew = data.data.filter((p: any) => !existingIds.has(p._id));
+                        return [...prev, ...filteredNew];
+                    });
                 } else {
                     setPosts(data.data);
                 }
-                if (data.data.length < 10) {
-                    setHasMore(false);
-                } else {
-                    setHasMore(true);
-                }
+                setHasMorePosts(data.pagination.hasMore);
+                setFeedPage(data.pagination.page);
             }
         } catch (err) {
             console.error('Failed to load community feed:', err);
@@ -327,233 +324,69 @@ export default function CommunityHub() {
         }
     };
 
-    // Refetch feed when filter changes
+    // Trigger fetch on filter change
     useEffect(() => {
-        fetchPosts();
-    }, [feedFilter]);
-
-    // --- POST ACTIONS ---
-    const handleUpdatePost = async (postId: string) => {
-        if (!editPostContent.trim()) return;
-        try {
-            const res = await fetch(`http://localhost:5000/api/community/${postId}`, {
-                method: 'PUT',
-                headers: {
-                    ...getAuthHeaders(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ content: editPostContent.trim() })
-            });
-            const data = await res.json();
-            if (data.success) {
-                setPosts(prev => prev.map(p => {
-                    if (p._id === postId) {
-                        return { ...p, content: data.data.content };
-                    }
-                    return p;
-                }));
-                setEditingPostId(null);
-                setEditPostContent('');
-            }
-        } catch (err) {
-            console.error('Failed to update post:', err);
+        if (activeTab === 'feed') {
+            fetchPosts(1, feedFilter, false);
         }
-    };
+    }, [feedFilter, activeTab]);
 
-    const handleDeletePost = async (postId: string) => {
+    // Infinite scroll listener
+    useEffect(() => {
+        const handleScroll = () => {
+            if (activeTab !== 'feed' || !hasMorePosts || isFetchingMore || isLoadingFeed) return;
+            
+            const threshold = 150;
+            const isNearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - threshold;
+            if (isNearBottom) {
+                fetchPosts(feedPage + 1, feedFilter, true);
+            }
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [activeTab, feedPage, feedFilter, hasMorePosts, isFetchingMore, isLoadingFeed]);
+
+    // --- MENTIONS AUTOCOMPLETE HANDLERS ---
+    const handleSearchMentions = async (query: string) => {
+        if (!query || query.length < 1) {
+            setMentionSuggestions([]);
+            return;
+        }
         try {
-            const res = await fetch(`http://localhost:5000/api/community/${postId}`, {
-                method: 'DELETE',
+            const res = await fetch(`http://localhost:5000/api/community/users/search?query=${encodeURIComponent(query)}`, {
                 headers: getAuthHeaders()
             });
             const data = await res.json();
             if (data.success) {
-                setPosts(prev => prev.filter(p => p._id !== postId));
-                setConfirmDeletePostId(null);
+                setMentionSuggestions(data.data);
             }
         } catch (err) {
-            console.error('Failed to delete post:', err);
+            console.error('Failed to search user mentions:', err);
         }
     };
 
-    // --- COMMENT ACTIONS ---
-    const fetchComments = async (postId: string) => {
-        setIsLoadingComments(prev => ({ ...prev, [postId]: true }));
-        try {
-            const res = await fetch(`http://localhost:5000/api/community/${postId}/comments`, {
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (data.success) {
-                setPostComments(prev => ({ ...prev, [postId]: data.data }));
-            }
-        } catch (err) {
-            console.error('Failed to load comments:', err);
-        } finally {
-            setIsLoadingComments(prev => ({ ...prev, [postId]: false }));
+    const handleInputText = (text: string, setContent: (val: string) => void, postId: string | null = null, commentId: string | null = null) => {
+        setContent(text);
+        
+        const match = text.match(/@(\w*)$/);
+        if (match) {
+            const query = match[1];
+            setActiveMentionPostId(postId);
+            setActiveMentionCommentId(commentId);
+            handleSearchMentions(query);
+        } else {
+            setMentionSuggestions([]);
+            setActiveMentionPostId(null);
+            setActiveMentionCommentId(null);
         }
     };
 
-    const toggleComments = async (postId: string) => {
-        const isExpanded = !expandedComments[postId];
-        setExpandedComments(prev => ({ ...prev, [postId]: isExpanded }));
-        if (isExpanded) {
-            await fetchComments(postId);
-        }
-    };
-
-    const handleReplyClick = (postId: string, comment: Comment) => {
-        // Find top-level parent comment to ensure replies are nested under the correct parent thread
-        const topLevelParent = comment.parentComment
-            ? (postComments[postId] || []).find(c => c._id === comment.parentComment) || comment
-            : comment;
-
-        setReplyingToComment(prev => ({ ...prev, [postId]: topLevelParent }));
-
-        // Append handle to comment text input
-        const authorHandle = comment.author.handle;
-        setNewCommentText(prev => {
-            const currentText = prev[postId] || '';
-            if (currentText.includes(authorHandle)) return prev;
-            return { ...prev, [postId]: `${currentText}${authorHandle} `.trimStart() };
-        });
-
-        // Focus the textarea input field
-        setTimeout(() => {
-            const el = document.querySelector(`textarea[data-post-id="${postId}"]`) as HTMLTextAreaElement;
-            if (el) {
-                el.focus();
-                const len = el.value.length;
-                el.setSelectionRange(len, len);
-            }
-        }, 50);
-    };
-
-    const handleCreateComment = async (postId: string) => {
-        const content = newCommentText[postId] || '';
-        if (!content.trim()) return;
-
-        const parent = replyingToComment[postId];
-        try {
-            const res = await fetch(`http://localhost:5000/api/community/${postId}/comments`, {
-                method: 'POST',
-                headers: {
-                    ...getAuthHeaders(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    content: content.trim(),
-                    parentComment: parent ? parent._id : null
-                })
-            });
-            const data = await res.json();
-            if (data.success) {
-                setPostComments(prev => {
-                    const list = prev[postId] || [];
-                    return { ...prev, [postId]: [...list, data.data] };
-                });
-                setNewCommentText(prev => ({ ...prev, [postId]: '' }));
-                setReplyingToComment(prev => ({ ...prev, [postId]: null }));
-                setPosts(prev => prev.map(p => {
-                    if (p._id === postId) {
-                        return { ...p, commentsCount: (p.commentsCount || 0) + 1 };
-                    }
-                    return p;
-                }));
-            }
-        } catch (err) {
-            console.error('Failed to create comment:', err);
-        }
-    };
-
-    const handleToggleCommentLike = async (postId: string, commentId: string) => {
-        try {
-            const res = await fetch(`http://localhost:5000/api/community/comments/${commentId}/like`, {
-                method: 'PUT',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (data.success) {
-                setPostComments(prev => {
-                    const list = prev[postId] || [];
-                    return {
-                        ...prev,
-                        [postId]: list.map(c => {
-                            if (c._id === commentId) {
-                                return { ...c, likes: data.data.likes, isLikedByMe: data.data.isLikedByMe };
-                            }
-                            return c;
-                        })
-                    };
-                });
-            }
-        } catch (err) {
-            console.error('Failed to toggle comment like:', err);
-        }
-    };
-
-    const handleUpdateComment = async (postId: string, commentId: string) => {
-        if (!editCommentContent.trim()) return;
-        try {
-            const res = await fetch(`http://localhost:5000/api/community/comments/${commentId}`, {
-                method: 'PUT',
-                headers: {
-                    ...getAuthHeaders(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ content: editCommentContent.trim() })
-            });
-            const data = await res.json();
-            if (data.success) {
-                setPostComments(prev => {
-                    const list = prev[postId] || [];
-                    return {
-                        ...prev,
-                        [postId]: list.map(c => {
-                            if (c._id === commentId) {
-                                return { ...c, content: data.data.content };
-                            }
-                            return c;
-                        })
-                    };
-                });
-                setEditingCommentId(null);
-                setEditCommentContent('');
-            }
-        } catch (err) {
-            console.error('Failed to update comment:', err);
-        }
-    };
-
-    const handleDeleteComment = async (postId: string, commentId: string) => {
-        try {
-            const res = await fetch(`http://localhost:5000/api/community/comments/${commentId}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (data.success) {
-                setPostComments(prev => {
-                    const list = prev[postId] || [];
-                    return {
-                        ...prev,
-                        [postId]: list.filter(c => c._id !== commentId && c.parentComment !== commentId)
-                    };
-                });
-                setPosts(prev => prev.map(p => {
-                    if (p._id === postId) {
-                        const originalList = postComments[postId] || [];
-                        const childrenCount = originalList.filter(c => c.parentComment === commentId).length;
-                        const countToSubtract = 1 + childrenCount;
-                        return { ...p, commentsCount: Math.max(0, (p.commentsCount || 0) - countToSubtract) };
-                    }
-                    return p;
-                }));
-                setConfirmDeleteCommentId(null);
-            }
-        } catch (err) {
-            console.error('Failed to delete comment:', err);
-        }
+    const handleSelectMention = (userHandle: string, currentText: string, setContent: (val: string) => void) => {
+        const newText = currentText.replace(/@\w*$/, `@${userHandle} `);
+        setContent(newText);
+        setMentionSuggestions([]);
+        setActiveMentionPostId(null);
+        setActiveMentionCommentId(null);
     };
 
     // --- FETCH PROFILE DATA ---
@@ -667,7 +500,8 @@ export default function CommunityHub() {
                 body: JSON.stringify({ 
                     content: newPostContent.trim(), 
                     type: postType, 
-                    solveData 
+                    solveData,
+                    isPB: isPBChecked
                 }),
             });
             const data = await res.json();
@@ -676,6 +510,7 @@ export default function CommunityHub() {
                 setNewPostContent('');
                 setAttachedSolve(null);
                 setAttachedAlg(null);
+                setIsPBChecked(false);
                 if (textareaRef.current) textareaRef.current.style.height = 'auto';
             }
         } catch (err) {
@@ -771,6 +606,175 @@ export default function CommunityHub() {
         }
     };
 
+    // --- FETCH COMMENTS ---
+    const fetchComments = async (postId: string) => {
+        setIsLoadingComments(prev => ({ ...prev, [postId]: true }));
+        try {
+            const res = await fetch(`http://localhost:5000/api/community/${postId}/comments`, {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (data.success) {
+                setCommentsByPost(prev => ({ ...prev, [postId]: data.data }));
+            }
+        } catch (err) {
+            console.error('Failed to fetch comments:', err);
+        } finally {
+            setIsLoadingComments(prev => ({ ...prev, [postId]: false }));
+        }
+    };
+
+    const toggleCommentsExpand = (postId: string) => {
+        const isExpanded = !expandedComments[postId];
+        setExpandedComments(prev => ({ ...prev, [postId]: isExpanded }));
+        if (isExpanded) {
+            fetchComments(postId);
+        }
+    };
+
+    // --- CREATE COMMENT ---
+    const handleCreateComment = async (postId: string) => {
+        const content = newCommentContent[postId] || '';
+        if (!content.trim()) return;
+
+        const replyingTo = replyingToComment[postId];
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/community/${postId}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({
+                    content: content.trim(),
+                    parentId: replyingTo ? replyingTo._id : null
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setCommentsByPost(prev => ({
+                    ...prev,
+                    [postId]: [...(prev[postId] || []), data.data]
+                }));
+                setNewCommentContent(prev => ({ ...prev, [postId]: '' }));
+                setReplyingToComment(prev => ({ ...prev, [postId]: null }));
+                setPosts(prev => prev.map(p => p._id === postId ? { ...p, commentCount: p.commentCount + 1 } : p));
+            }
+        } catch (err) {
+            console.error('Failed to create comment:', err);
+        }
+    };
+
+    // --- TOGGLE COMMENT LIKE ---
+    const handleToggleCommentLike = async (postId: string, commentId: string) => {
+        setCommentsByPost(prev => {
+            const postComments = prev[postId] || [];
+            return {
+                ...prev,
+                [postId]: postComments.map(c => c._id === commentId ? {
+                    ...c,
+                    isLikedByMe: !c.isLikedByMe,
+                    likes: c.isLikedByMe ? c.likes - 1 : c.likes + 1
+                } : c)
+            };
+        });
+
+        try {
+            await fetch(`http://localhost:5000/api/community/comments/${commentId}/like`, {
+                method: 'PUT',
+                headers: getAuthHeaders()
+            });
+        } catch (err) {
+            console.error('Failed to toggle comment like:', err);
+        }
+    };
+
+    // --- EDIT POST ---
+    const handleEditPost = async (postId: string, newContent: string) => {
+        if (!newContent.trim()) return;
+        try {
+            const res = await fetch(`http://localhost:5000/api/community/${postId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ content: newContent.trim() })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPosts(prev => prev.map(p => p._id === postId ? { ...p, content: data.data.content } : p));
+                setEditingPostId(null);
+                setEditingPostContent('');
+            }
+        } catch (err) {
+            console.error('Failed to edit post:', err);
+        }
+    };
+
+    // --- DELETE POST ---
+    const handleDeletePost = async (postId: string) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/community/${postId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPosts(prev => prev.filter(p => p._id !== postId));
+                setConfirmDeletePost(null);
+            }
+        } catch (err) {
+            console.error('Failed to delete post:', err);
+        }
+    };
+
+    // --- EDIT COMMENT ---
+    const handleEditComment = async (postId: string, commentId: string, newContent: string) => {
+        if (!newContent.trim()) return;
+        try {
+            const res = await fetch(`http://localhost:5000/api/community/comments/${commentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ content: newContent.trim() })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setCommentsByPost(prev => ({
+                    ...prev,
+                    [postId]: (prev[postId] || []).map(c => c._id === commentId ? { ...c, content: data.data.content } : c)
+                }));
+                setEditingCommentId(null);
+                setEditingCommentContent('');
+            }
+        } catch (err) {
+            console.error('Failed to edit comment:', err);
+        }
+    };
+
+    // --- DELETE COMMENT ---
+    const handleDeleteComment = async (postId: string, commentId: string) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/community/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (data.success) {
+                setCommentsByPost(prev => {
+                    const commentsList = prev[postId] || [];
+                    const deletedRepliesCount = commentsList.filter(c => c.parentId === commentId).length;
+                    const totalDeleted = 1 + deletedRepliesCount;
+                    
+                    setPosts(prevPosts => prevPosts.map(p => p._id === postId ? { ...p, commentCount: Math.max(0, p.commentCount - totalDeleted) } : p));
+                    
+                    return {
+                        ...prev,
+                        [postId]: commentsList.filter(c => c._id !== commentId && c.parentId !== commentId)
+                    };
+                });
+                setConfirmDeleteComment(null);
+            }
+        } catch (err) {
+            console.error('Failed to delete comment:', err);
+        }
+    };
+
 
     return (
         <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0 text-left">
@@ -836,41 +840,76 @@ export default function CommunityHub() {
                                     className="w-9 h-9 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 object-cover shrink-0 mt-0.5"
                                 />
                                 <div className="flex-1 min-w-0 w-full">
-                                    <textarea
-                                        ref={textareaRef}
-                                        value={newPostContent}
-                                        onChange={(e) => setNewPostContent(e.target.value)}
-                                        placeholder="Share a solve, algorithm, or thought..."
-                                        className="w-full bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 outline-none resize-none min-h-[64px] text-sm leading-relaxed"
-                                        onInput={(e) => {
-                                            const target = e.target as HTMLTextAreaElement;
-                                            target.style.height = 'auto';
-                                            target.style.height = target.scrollHeight + 'px';
-                                        }}
-                                    />
+                                    <div className="relative w-full">
+                                        <textarea
+                                            ref={textareaRef}
+                                            value={newPostContent}
+                                            onChange={(e) => handleInputText(e.target.value, setNewPostContent, null, null)}
+                                            placeholder="Share a solve, algorithm, or thought..."
+                                            className="w-full bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 outline-none resize-none min-h-[64px] text-sm leading-relaxed"
+                                            onInput={(e) => {
+                                                const target = e.target as HTMLTextAreaElement;
+                                                target.style.height = 'auto';
+                                                target.style.height = target.scrollHeight + 'px';
+                                            }}
+                                        />
+
+                                        {mentionSuggestions.length > 0 && activeMentionPostId === null && activeMentionCommentId === null && (
+                                            <div className="absolute z-[100] left-0 top-full mt-1 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
+                                                {mentionSuggestions.map((u) => (
+                                                    <button
+                                                        key={u._id}
+                                                        type="button"
+                                                        onClick={() => handleSelectMention(u.handle, newPostContent, setNewPostContent)}
+                                                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
+                                                    >
+                                                        <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
+                                                            <span className="text-[10px] text-slate-500 dark:text-gray-400 block truncate">@{u.handle}</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Attachment Previews */}
                                     {attachedSolve && (
-                                        <div className="w-full bg-primary/5 border border-primary/20 rounded-xl p-3.5 mb-2.5 flex items-center justify-between gap-3 text-left">
-                                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/20 shrink-0">
-                                                    <Clock className="w-4 h-4 text-primary" />
+                                        <div className="w-full bg-primary/5 border border-primary/20 rounded-xl p-3.5 mb-2.5 flex flex-col gap-2 text-left">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                    <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/20 shrink-0">
+                                                        <Clock className="w-4 h-4 text-primary" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <span className="text-xs font-bold text-slate-900 dark:text-white block leading-none mb-1.5">
+                                                            {(attachedSolve.timeMs / 1000).toFixed(3)}s Solve ({attachedSolve.method})
+                                                        </span>
+                                                        <span className="text-[10px] font-mono text-slate-400 dark:text-gray-550 block truncate max-w-full">
+                                                            {attachedSolve.scramble}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <span className="text-xs font-bold text-slate-900 dark:text-white block leading-none mb-1.5">
-                                                        {(attachedSolve.timeMs / 1000).toFixed(3)}s Solve ({attachedSolve.method})
-                                                    </span>
-                                                    <span className="text-[10px] font-mono text-slate-400 dark:text-gray-550 block truncate max-w-full">
-                                                        {attachedSolve.scramble}
-                                                    </span>
-                                                </div>
+                                                <button 
+                                                    onClick={() => { setAttachedSolve(null); setIsPBChecked(false); }} 
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors shrink-0"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
                                             </div>
-                                            <button 
-                                                onClick={() => setAttachedSolve(null)} 
-                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors shrink-0"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex items-center gap-2 border-t border-primary/10 pt-2 mt-1">
+                                                <input
+                                                    type="checkbox"
+                                                    id="pb-checkbox"
+                                                    checked={isPBChecked}
+                                                    onChange={(e) => setIsPBChecked(e.target.checked)}
+                                                    className="rounded border-slate-350 dark:border-white/10 text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
+                                                />
+                                                <label htmlFor="pb-checkbox" className="text-[10px] font-bold text-slate-650 dark:text-gray-300 cursor-pointer flex items-center gap-1">
+                                                    🏆 Mark as Personal Best (PB)
+                                                </label>
+                                            </div>
                                         </div>
                                     )}
 
@@ -924,32 +963,30 @@ export default function CommunityHub() {
                                         </Button>
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Feed Filtering Tabs */}
-                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 w-full no-scrollbar">
+                            </div>                            {/* Feed Filters Toggle Row */}
+                            <div className="flex gap-2 overflow-x-auto pb-1.5 w-full border-b border-slate-200 dark:border-white/5 scrollbar-none">
                                 {[
                                     { id: 'all', label: 'All Feed' },
-                                    { id: 'solve', label: 'PBs Only' },
-                                    { id: 'algorithm', label: 'Algorithms' },
-                                    { id: 'discussion', label: 'Discussions' }
-                                ].map((tab) => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => {
-                                            setFeedFilter(tab.id as any);
-                                            setPosts([]);
-                                        }}
-                                        className={clsx(
-                                            "px-3.5 py-1.5 rounded-lg font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all whitespace-nowrap",
-                                            feedFilter === tab.id
-                                                ? "bg-primary text-white shadow-sm"
-                                                : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white"
-                                        )}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
+                                    { id: 'pb', label: '🏆 PBs Only' },
+                                    { id: 'algorithm', label: '🧠 Algorithms' },
+                                    { id: 'discussion', label: '💬 Discussions' }
+                                ].map((filterItem) => {
+                                    const isSelected = feedFilter === filterItem.id;
+                                    return (
+                                        <button
+                                            key={filterItem.id}
+                                            onClick={() => setFeedFilter(filterItem.id as any)}
+                                            className={clsx(
+                                                "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer border active:scale-95",
+                                                isSelected 
+                                                    ? "bg-primary text-white border-primary shadow-[0_0_15px_rgba(59,130,246,0.2)]" 
+                                                    : "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5 text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
+                                            )}
+                                        >
+                                            {filterItem.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             {/* Feed Content Stream */}
@@ -973,82 +1010,95 @@ export default function CommunityHub() {
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover" />
                                                         <div className="min-w-0">
-                                                            <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-snug">{post.author.name}</h4>
-                                                            <span className="text-[11px] text-slate-400 dark:text-gray-500 font-mono block truncate mt-0.5">{post.author.handle} • {post.timeAgo}</span>
+                                                            <div className="flex items-center flex-wrap gap-1">
+                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-snug">{post.author.name}</h4>
+                                                                {post.isPB && (
+                                                                    <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1 py-0.2 rounded ml-1">🏆 PB</span>
+                                                                )}
+                                                            </div>
+                                                            <span className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block truncate mt-0.5">{post.author.handle} • {post.timeAgo}</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
                                                         {post.type === 'solve' && <span className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/5 dark:bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">Verified</span>}
                                                         {post.type === 'algorithm' && <span className="text-[9px] font-bold uppercase tracking-widest text-secondary bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 px-2 py-0.5 rounded">Alg</span>}
                                                         {post.author._id === user?._id && (
-                                                            <div className="flex items-center gap-1.5 ml-1 border-l border-slate-200 dark:border-white/10 pl-2">
+                                                            <div className="flex items-center gap-1 border-l border-slate-200 dark:border-white/5 pl-2 ml-1">
                                                                 <button
                                                                     onClick={() => {
                                                                         setEditingPostId(post._id);
-                                                                        setEditPostContent(post.content);
+                                                                        setEditingPostContent(post.content);
                                                                     }}
-                                                                    className="text-slate-400 hover:text-primary transition-colors p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5"
+                                                                    className="p-1 text-slate-400 hover:text-primary dark:text-gray-500 dark:hover:text-white transition-colors cursor-pointer"
                                                                     title="Edit Post"
                                                                 >
                                                                     <Edit2 className="w-3.5 h-3.5" />
                                                                 </button>
-                                                                {confirmDeletePostId === post._id ? (
-                                                                    <div className="flex items-center gap-1.5 animate-pulse">
-                                                                        <button
-                                                                            onClick={() => handleDeletePost(post._id)}
-                                                                            className="text-red-500 hover:text-red-650 font-bold text-[10px] bg-red-500/10 px-2 py-0.5 rounded transition-colors"
-                                                                        >
-                                                                            Confirm?
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => setConfirmDeletePostId(null)}
-                                                                            className="text-slate-400 hover:text-slate-600 font-bold text-[10px] bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded transition-colors"
-                                                                        >
-                                                                            Cancel
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        onClick={() => setConfirmDeletePostId(post._id)}
-                                                                        className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5"
-                                                                        title="Delete Post"
-                                                                    >
-                                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                )}
+                                                                <button
+                                                                    onClick={() => setConfirmDeletePost(post)}
+                                                                    className="p-1 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                                                                    title="Delete Post"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
 
                                                 {editingPostId === post._id ? (
-                                                    <div className="flex flex-col gap-2 mb-4 w-full">
+                                                    <div className="flex flex-col gap-2 mb-4 w-full relative">
                                                         <textarea
-                                                            value={editPostContent}
-                                                            onChange={(e) => setEditPostContent(e.target.value)}
-                                                            className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none min-h-[80px]"
+                                                            value={editingPostContent}
+                                                            onChange={(e) => handleInputText(e.target.value, setEditingPostContent, post._id, null)}
+                                                            className="w-full bg-slate-50 dark:bg-black/45 border border-slate-200 dark:border-white/10 rounded-xl p-3 text-xs sm:text-sm text-slate-900 dark:text-white focus:border-primary outline-none resize-y min-h-[72px]"
                                                         />
-                                                        <div className="flex gap-2 justify-end">
+                                                        
+                                                        {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === null && (
+                                                            <div className="absolute z-[100] left-0 top-full mt-1 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
+                                                                {mentionSuggestions.map((u) => (
+                                                                    <button
+                                                                        key={u._id}
+                                                                        type="button"
+                                                                        onClick={() => handleSelectMention(u.handle, editingPostContent, setEditingPostContent)}
+                                                                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
+                                                                    >
+                                                                        <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
+                                                                            <span className="text-[10px] text-slate-500 dark:text-gray-400 block truncate">@{u.handle}</span>
+                                                                        </div>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex justify-end gap-2">
                                                             <Button
                                                                 variant="secondary"
                                                                 size="sm"
-                                                                onClick={() => setEditingPostId(null)}
-                                                                className="px-3 py-1 h-auto text-[10px]"
+                                                                onClick={() => {
+                                                                    setEditingPostId(null);
+                                                                    setEditingPostContent('');
+                                                                }}
+                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider"
                                                             >
                                                                 Cancel
                                                             </Button>
                                                             <Button
                                                                 variant="glow"
                                                                 size="sm"
-                                                                onClick={() => handleUpdatePost(post._id)}
-                                                                className="px-3 py-1 h-auto text-[10px]"
+                                                                onClick={() => handleEditPost(post._id, editingPostContent)}
+                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider"
                                                             >
                                                                 Save
                                                             </Button>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <p className="text-slate-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed mb-4 whitespace-pre-wrap break-words w-full">{renderContentWithMentions(post.content)}</p>
+                                                    <p className="text-slate-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed mb-4 whitespace-pre-wrap break-words w-full">
+                                                        {renderContentWithMentions(post.content)}
+                                                    </p>
                                                 )}
 
                                                 {/* Rich Data Feed Attachments Layout Row */}
@@ -1060,7 +1110,7 @@ export default function CommunityHub() {
                                                             </div>
                                                             <div className="min-w-0 flex-1">
                                                                 <span className="text-[11px] font-bold text-slate-500 dark:text-gray-400 block leading-none mb-1.5">{post.solveData.method || 'CFOP'} Method</span>
-                                                                <span className="text-xs font-mono text-slate-400 dark:text-gray-500 block truncate max-w-full select-all" title={post.solveData.scramble}>{post.solveData.scramble}</span>
+                                                                <span className="text-xs font-mono text-slate-400 dark:text-gray-550 block truncate max-w-full select-all" title={post.solveData.scramble}>{post.solveData.scramble}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1078,219 +1128,234 @@ export default function CommunityHub() {
                                                     <button
                                                         onClick={() => handleToggleLike(post._id)}
                                                         className={clsx(
-                                                            "flex items-center gap-1.5 transition-colors group min-h-[32px] px-1",
+                                                            "flex items-center gap-1.5 transition-colors group min-h-[32px] px-1 cursor-pointer",
                                                             post.isLikedByMe ? "text-red-400" : "text-slate-500 dark:text-gray-400 sm:hover:text-red-400"
                                                         )}
                                                     >
                                                         <Heart className={clsx("w-4 h-4 shrink-0", post.isLikedByMe && "fill-current")} />
                                                         <span className="text-xs font-bold font-mono">{post.likes}</span>
                                                     </button>
-                                                    <button
-                                                        onClick={() => toggleComments(post._id)}
+                                                    <button 
+                                                        onClick={() => toggleCommentsExpand(post._id)}
                                                         className={clsx(
-                                                            "flex items-center gap-1.5 transition-colors min-h-[32px] px-1",
+                                                            "flex items-center gap-1.5 transition-colors min-h-[32px] px-1 cursor-pointer",
                                                             expandedComments[post._id] ? "text-primary" : "text-slate-500 dark:text-gray-400 sm:hover:text-primary"
                                                         )}
                                                     >
                                                         <MessageSquare className="w-4 h-4 shrink-0" />
-                                                        <span className="text-xs font-bold font-mono">{post.commentsCount || 0}</span>
+                                                        <span className="text-xs font-bold font-mono">{post.commentCount || 0}</span>
                                                     </button>
-                                                    <button className="flex items-center gap-1.5 text-slate-500 dark:text-gray-400 sm:hover:text-slate-900 dark:sm:hover:text-white ml-auto min-h-[32px] px-1" aria-label="Share post link">
+                                                    <button className="flex items-center gap-1.5 text-slate-500 dark:text-gray-400 sm:hover:text-slate-900 dark:sm:hover:text-white ml-auto min-h-[32px] px-1 cursor-pointer" aria-label="Share post link">
                                                         <Share2 className="w-4 h-4 shrink-0" />
                                                     </button>
                                                 </div>
 
-                                                {/* Dynamic Comments Drawer Section */}
+                                                {/* Instagram threaded comments section */}
                                                 {expandedComments[post._id] && (
-                                                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5 flex flex-col gap-4 w-full text-left">
-                                                        <h5 className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-1">
-                                                            Discussion Thread
+                                                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5 flex flex-col gap-4 text-left w-full">
+                                                        <h5 className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                                                            Comments ({post.commentCount || 0})
                                                         </h5>
 
-                                                        {/* Comments Loader */}
                                                         {isLoadingComments[post._id] ? (
-                                                            <div className="flex justify-center py-4">
-                                                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                                            <div className="flex items-center justify-center py-4 text-slate-500">
+                                                                <Loader2 className="w-5 h-5 animate-spin text-primary mr-2" />
+                                                                <span className="text-xs">Loading comments...</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="flex flex-col gap-3.5">
+                                                            <div className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-1">
                                                                 {(() => {
-                                                                    const comments = postComments[post._id] || [];
-                                                                    const parentComments = comments.filter(c => !c.parentComment);
-
-                                                                    if (parentComments.length === 0) {
-                                                                        return <p className="text-xs text-slate-405 dark:text-gray-500 italic py-2">No comments yet. Start the discussion!</p>;
+                                                                    const postComments = commentsByPost[post._id] || [];
+                                                                    if (postComments.length === 0) {
+                                                                        return (
+                                                                            <div className="text-center py-4 text-slate-500 text-xs">
+                                                                                No comments yet. Write one below!
+                                                                            </div>
+                                                                        );
                                                                     }
 
-                                                                    return parentComments.map(parent => {
-                                                                        const replies = comments.filter(c => c.parentComment === parent._id);
+                                                                    // Filter into top-level and replies
+                                                                    const topLevel = postComments.filter(c => c.parentId === null);
+                                                                    const replies = postComments.filter(c => c.parentId !== null);
 
+                                                                    return topLevel.map((comment) => {
+                                                                        const commentReplies = replies.filter(r => r.parentId === comment._id);
+                                                                        const hasReplies = commentReplies.length > 0;
+                                                                        
                                                                         return (
-                                                                            <div key={parent._id} className="flex flex-col gap-2">
-                                                                                {/* Parent Comment */}
-                                                                                <div className="flex items-start gap-3">
-                                                                                    <img src={parent.author.avatar} alt={parent.author.name} className="w-7 h-7 rounded-full border border-slate-200 dark:border-white/10 shrink-0" />
-                                                                                    <div className="flex-1 min-w-0 bg-slate-50 dark:bg-white/[0.02] border border-slate-200/50 dark:border-white/5 rounded-2xl px-3 py-2">
-                                                                                        <div className="flex justify-between items-center mb-1">
-                                                                                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{parent.author.name}</span>
-                                                                                            <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono shrink-0">{parent.timeAgo}</span>
+                                                                            <div key={comment._id} className="flex flex-col gap-1.5">
+                                                                                {/* Top level comment card */}
+                                                                                <div className="flex items-start gap-2.5">
+                                                                                    <img src={comment.author.avatar} alt={comment.author.name} className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
+                                                                                    <div className="flex-1 min-w-0 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-2xl px-3 py-2">
+                                                                                        <div className="flex justify-between items-start gap-2 mb-1">
+                                                                                            <div>
+                                                                                                <span className="font-bold text-slate-900 dark:text-white text-xs block leading-none">{comment.author.name}</span>
+                                                                                                <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono">@{comment.author.handle.replace('@', '')} • {comment.timeAgo}</span>
+                                                                                            </div>
+                                                                                            
+                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                {comment.author._id === user?._id && (
+                                                                                                    <div className="flex items-center gap-1 shrink-0">
+                                                                                                        <button
+                                                                                                            onClick={() => {
+                                                                                                                setEditingCommentId(comment._id);
+                                                                                                                setEditingCommentContent(comment.content);
+                                                                                                            }}
+                                                                                                            className="p-0.5 text-slate-400 hover:text-primary dark:text-gray-500 dark:hover:text-white transition-colors cursor-pointer"
+                                                                                                            title="Edit Comment"
+                                                                                                        >
+                                                                                                            <Edit2 className="w-3 h-3" />
+                                                                                                        </button>
+                                                                                                        <button
+                                                                                                            onClick={() => setConfirmDeleteComment(comment)}
+                                                                                                            className="p-0.5 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-450 transition-colors cursor-pointer"
+                                                                                                            title="Delete Comment"
+                                                                                                        >
+                                                                                                            <Trash2 className="w-3 h-3" />
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
                                                                                         </div>
-                                                                                        {editingCommentId === parent._id ? (
-                                                                                            <div className="flex flex-col gap-1.5 mt-1">
-                                                                                                <textarea
-                                                                                                    value={editCommentContent}
-                                                                                                    onChange={(e) => setEditCommentContent(e.target.value)}
-                                                                                                    className="w-full bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/15 rounded-lg px-2 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-primary resize-none min-h-[44px]"
+
+                                                                                        {editingCommentId === comment._id ? (
+                                                                                            <div className="flex flex-col gap-1.5 mt-1 w-full">
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    value={editingCommentContent}
+                                                                                                    onChange={(e) => handleInputText(e.target.value, setEditingCommentContent, post._id, comment._id)}
+                                                                                                    className="w-full bg-slate-100 dark:bg-black/35 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:border-primary outline-none"
                                                                                                 />
-                                                                                                <div className="flex gap-1.5 justify-end">
-                                                                                                    <button onClick={() => setEditingCommentId(null)} className="text-[10px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-white">Cancel</button>
-                                                                                                    <button onClick={() => handleUpdateComment(post._id, parent._id)} className="text-[10px] font-bold text-primary hover:text-primary/95">Save</button>
+                                                                                                <div className="flex justify-end gap-1.5">
+                                                                                                    <button
+                                                                                                        onClick={() => {
+                                                                                                            setEditingCommentId(null);
+                                                                                                            setEditingCommentContent('');
+                                                                                                        }}
+                                                                                                        className="text-[9px] font-bold text-slate-500 dark:text-gray-400 hover:underline cursor-pointer"
+                                                                                                    >
+                                                                                                        Cancel
+                                                                                                    </button>
+                                                                                                    <button
+                                                                                                        onClick={() => handleEditComment(post._id, comment._id, editingCommentContent)}
+                                                                                                        className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
+                                                                                                    >
+                                                                                                        Save
+                                                                                                    </button>
                                                                                                 </div>
                                                                                             </div>
                                                                                         ) : (
-                                                                                            <p className="text-xs text-slate-700 dark:text-gray-300 break-words leading-relaxed whitespace-pre-wrap">{renderContentWithMentions(parent.content)}</p>
+                                                                                            <p className="text-slate-700 dark:text-gray-300 text-xs leading-relaxed whitespace-pre-wrap break-words">
+                                                                                                {renderContentWithMentions(comment.content)}
+                                                                                            </p>
                                                                                         )}
 
-                                                                                        {/* Actions for Comment */}
-                                                                                        <div className="flex items-center gap-3 mt-1.5 pt-1 border-t border-slate-200/20 dark:border-white/[0.02]">
+                                                                                        <div className="flex items-center gap-3.5 mt-1.5 pt-1 border-t border-slate-100 dark:border-white/[0.02]">
                                                                                             <button
-                                                                                                onClick={() => handleToggleCommentLike(post._id, parent._id)}
+                                                                                                onClick={() => handleToggleCommentLike(post._id, comment._id)}
                                                                                                 className={clsx(
-                                                                                                    "flex items-center gap-1 text-[10px] font-bold transition-colors",
-                                                                                                    parent.isLikedByMe ? "text-red-400" : "text-slate-400 dark:text-gray-500 hover:text-red-400"
+                                                                                                    "flex items-center gap-1 text-[10px] font-mono transition-colors cursor-pointer",
+                                                                                                    comment.isLikedByMe ? "text-red-400" : "text-slate-500 dark:text-gray-400 hover:text-red-400"
                                                                                                 )}
                                                                                             >
-                                                                                                <Heart className={clsx("w-3 h-3", parent.isLikedByMe && "fill-current")} />
-                                                                                                <span>{parent.likes}</span>
+                                                                                                <Heart className={clsx("w-3 h-3 shrink-0", comment.isLikedByMe && "fill-current")} />
+                                                                                                <span>{comment.likes || 0}</span>
                                                                                             </button>
                                                                                             <button
-                                                                                                onClick={() => handleReplyClick(post._id, parent)}
-                                                                                                className="text-[10px] font-bold text-slate-400 dark:text-gray-500 hover:text-primary transition-colors flex items-center gap-0.5"
+                                                                                                onClick={() => {
+                                                                                                    setReplyingToComment(prev => ({ ...prev, [post._id]: comment }));
+                                                                                                    setNewCommentContent(prev => ({
+                                                                                                        ...prev,
+                                                                                                        [post._id]: `@${comment.author.handle.replace('@', '')} `
+                                                                                                    }));
+                                                                                                }}
+                                                                                                className="text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:text-primary transition-colors cursor-pointer"
                                                                                             >
-                                                                                                <MessageSquare className="w-3 h-3" /> Reply
+                                                                                                Reply
                                                                                             </button>
-                                                                                            {parent.author._id === user?._id && (
-                                                                                                <div className="flex items-center gap-2 ml-auto">
-                                                                                                    <button
-                                                                                                        onClick={() => {
-                                                                                                            setEditingCommentId(parent._id);
-                                                                                                            setEditCommentContent(parent.content);
-                                                                                                        }}
-                                                                                                        className="text-[10px] font-bold text-slate-400 dark:text-gray-550 hover:text-primary"
-                                                                                                    >
-                                                                                                        Edit
-                                                                                                    </button>
-                                                                                                    {confirmDeleteCommentId === parent._id ? (
-                                                                                                        <span className="flex items-center gap-1.5 animate-pulse">
-                                                                                                            <button
-                                                                                                                onClick={() => handleDeleteComment(post._id, parent._id)}
-                                                                                                                className="text-red-500 hover:text-red-650 font-bold"
-                                                                                                            >
-                                                                                                                Confirm?
-                                                                                                            </button>
-                                                                                                            <button
-                                                                                                                onClick={() => setConfirmDeleteCommentId(null)}
-                                                                                                                className="text-slate-400 dark:text-gray-500 hover:text-slate-600 font-bold"
-                                                                                                            >
-                                                                                                                Cancel
-                                                                                                            </button>
-                                                                                                        </span>
-                                                                                                    ) : (
-                                                                                                        <button
-                                                                                                            onClick={() => setConfirmDeleteCommentId(parent._id)}
-                                                                                                            className="text-[10px] font-bold text-slate-400 dark:text-gray-555 hover:text-red-500"
-                                                                                                        >
-                                                                                                            Delete
-                                                                                                        </button>
-                                                                                                    )}
-                                                                                                </div>
-                                                                                            )}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
 
-                                                                                {/* Replies list */}
-                                                                                {replies.length > 0 && (
-                                                                                    <div className="pl-6 border-l-2 border-slate-200 dark:border-white/5 flex flex-col gap-2.5 mt-1 ml-3.5">
-                                                                                        {replies.map(reply => (
-                                                                                            <div key={reply._id} className="flex items-start gap-2.5">
-                                                                                                <CornerDownRight className="w-3.5 h-3.5 text-slate-350 dark:text-gray-600 mt-1.5 shrink-0" />
-                                                                                                <img src={reply.author.avatar} alt={reply.author.name} className="w-6 h-6 rounded-full border border-slate-200 dark:border-white/10 shrink-0" />
-                                                                                                <div className="flex-1 min-w-0 bg-slate-50 dark:bg-white/[0.01] border border-slate-200/50 dark:border-white/5 rounded-2xl px-3 py-2">
-                                                                                                    <div className="flex justify-between items-center mb-1">
-                                                                                                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{reply.author.name}</span>
-                                                                                                        <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono shrink-0">{reply.timeAgo}</span>
-                                                                                                    </div>
-                                                                                                    {editingCommentId === reply._id ? (
-                                                                                                        <div className="flex flex-col gap-1.5 mt-1">
-                                                                                                            <textarea
-                                                                                                                value={editCommentContent}
-                                                                                                                onChange={(e) => setEditCommentContent(e.target.value)}
-                                                                                                                className="w-full bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/15 rounded-lg px-2 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-primary resize-none min-h-[44px]"
-                                                                                                            />
-                                                                                                            <div className="flex gap-1.5 justify-end">
-                                                                                                                <button onClick={() => setEditingCommentId(null)} className="text-[10px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-white">Cancel</button>
-                                                                                                                <button onClick={() => handleUpdateComment(post._id, reply._id)} className="text-[10px] font-bold text-primary hover:text-primary/95">Save</button>
-                                                                                                            </div>
+                                                                                {/* Nested replies list */}
+                                                                                {hasReplies && (
+                                                                                    <div className="pl-9 flex flex-col gap-2 mt-1">
+                                                                                        {commentReplies.map((reply) => (
+                                                                                            <div key={reply._id} className="flex items-start gap-2">
+                                                                                                <img src={reply.author.avatar} alt={reply.author.name} className="w-5 h-5 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
+                                                                                                <div className="flex-1 min-w-0 bg-slate-50/50 dark:bg-white/[0.01] border border-slate-100 dark:border-white/5 rounded-xl px-3 py-1.5">
+                                                                                                    <div className="flex justify-between items-start gap-2 mb-0.5">
+                                                                                                        <div>
+                                                                                                            <span className="font-bold text-slate-900 dark:text-white text-[11px] block leading-none">{reply.author.name}</span>
+                                                                                                            <span className="text-[8px] text-slate-400 dark:text-gray-550 font-mono">@{reply.author.handle.replace('@', '')} • {reply.timeAgo}</span>
                                                                                                         </div>
-                                                                                                    ) : (
-                                                                                                        <p className="text-xs text-slate-700 dark:text-gray-300 break-words leading-relaxed whitespace-pre-wrap">{renderContentWithMentions(reply.content)}</p>
-                                                                                                    )}
-
-                                                                                                    {/* Actions for Reply */}
-                                                                                                    <div className="flex items-center gap-3 mt-1.5 pt-1 border-t border-slate-200/20 dark:border-white/[0.02]">
-                                                                                                        <button
-                                                                                                            onClick={() => handleToggleCommentLike(post._id, reply._id)}
-                                                                                                            className={clsx(
-                                                                                                                "flex items-center gap-1 text-[10px] font-bold transition-colors",
-                                                                                                                reply.isLikedByMe ? "text-red-400" : "text-slate-400 dark:text-gray-500 hover:text-red-400"
-                                                                                                            )}
-                                                                                                        >
-                                                                                                            <Heart className={clsx("w-3 h-3", reply.isLikedByMe && "fill-current")} />
-                                                                                                            <span>{reply.likes}</span>
-                                                                                                        </button>
-                                                                                                        <button
-                                                                                                            onClick={() => handleReplyClick(post._id, reply)}
-                                                                                                            className="text-[10px] font-bold text-slate-400 dark:text-gray-550 hover:text-primary transition-colors flex items-center gap-0.5"
-                                                                                                        >
-                                                                                                            <MessageSquare className="w-3 h-3" /> Reply
-                                                                                                        </button>
                                                                                                         {reply.author._id === user?._id && (
-                                                                                                            <div className="flex items-center gap-2 ml-auto">
+                                                                                                            <div className="flex items-center gap-1 shrink-0">
                                                                                                                 <button
                                                                                                                     onClick={() => {
                                                                                                                         setEditingCommentId(reply._id);
-                                                                                                                        setEditCommentContent(reply.content);
+                                                                                                                        setEditingCommentContent(reply.content);
                                                                                                                     }}
-                                                                                                                    className="text-[10px] font-bold text-slate-400 dark:text-gray-555 hover:text-primary"
+                                                                                                                    className="p-0.5 text-slate-400 hover:text-primary dark:text-gray-550 dark:hover:text-white transition-colors cursor-pointer"
+                                                                                                                    title="Edit Reply"
                                                                                                                 >
-                                                                                                                    Edit
+                                                                                                                    <Edit2 className="w-2.5 h-2.5" />
                                                                                                                 </button>
-                                                                                                                    {confirmDeleteCommentId === reply._id ? (
-                                                                                                                        <span className="flex items-center gap-1.5 animate-pulse">
-                                                                                                                            <button
-                                                                                                                                onClick={() => handleDeleteComment(post._id, reply._id)}
-                                                                                                                                className="text-red-500 hover:text-red-650 font-bold"
-                                                                                                                            >
-                                                                                                                                Confirm?
-                                                                                                                            </button>
-                                                                                                                            <button
-                                                                                                                                onClick={() => setConfirmDeleteCommentId(null)}
-                                                                                                                                className="text-slate-400 dark:text-gray-500 hover:text-slate-600 font-bold"
-                                                                                                                            >
-                                                                                                                                Cancel
-                                                                                                                            </button>
-                                                                                                                        </span>
-                                                                                                                    ) : (
-                                                                                                                        <button
-                                                                                                                            onClick={() => setConfirmDeleteCommentId(reply._id)}
-                                                                                                                            className="text-[10px] font-bold text-slate-400 dark:text-gray-555 hover:text-red-500"
-                                                                                                                        >
-                                                                                                                            Delete
-                                                                                                                        </button>
-                                                                                                                    )}
-                                                                                                                </div>
+                                                                                                                <button
+                                                                                                                    onClick={() => setConfirmDeleteComment(reply)}
+                                                                                                                    className="p-0.5 text-slate-400 hover:text-red-500 dark:text-gray-550 dark:hover:text-red-400 transition-colors cursor-pointer"
+                                                                                                                    title="Delete Reply"
+                                                                                                                >
+                                                                                                                    <Trash2 className="w-2.5 h-2.5" />
+                                                                                                                </button>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+
+                                                                                                    {editingCommentId === reply._id ? (
+                                                                                                        <div className="flex flex-col gap-1.5 mt-1 w-full">
+                                                                                                            <input
+                                                                                                                type="text"
+                                                                                                                value={editingCommentContent}
+                                                                                                                onChange={(e) => handleInputText(e.target.value, setEditingCommentContent, post._id, reply._id)}
+                                                                                                                className="w-full bg-slate-100 dark:bg-black/35 border border-slate-200 dark:border-white/10 rounded-xl px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:border-primary outline-none"
+                                                                                                            />
+                                                                                                            <div className="flex justify-end gap-1.5">
+                                                                                                                <button
+                                                                                                                    onClick={() => {
+                                                                                                                        setEditingCommentId(null);
+                                                                                                                        setEditingCommentContent('');
+                                                                                                                    }}
+                                                                                                                    className="text-[9px] font-bold text-slate-500 dark:text-gray-400 hover:underline cursor-pointer"
+                                                                                                                >
+                                                                                                                    Cancel
+                                                                                                                </button>
+                                                                                                                <button
+                                                                                                                    onClick={() => handleEditComment(post._id, reply._id, editingCommentContent)}
+                                                                                                                    className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
+                                                                                                                >
+                                                                                                                    Save
+                                                                                                                </button>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ) : (
+                                                                                                        <p className="text-slate-700 dark:text-gray-300 text-[11px] leading-relaxed whitespace-pre-wrap break-words">
+                                                                                                            {renderContentWithMentions(reply.content)}
+                                                                                                        </p>
+                                                                                                    )}
+
+                                                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                                                        <button
+                                                                                                            onClick={() => handleToggleCommentLike(post._id, reply._id)}
+                                                                                                            className={clsx(
+                                                                                                                "flex items-center gap-0.5 text-[9px] font-mono transition-colors cursor-pointer",
+                                                                                                                reply.isLikedByMe ? "text-red-400" : "text-slate-500 dark:text-gray-400 hover:text-red-400"
                                                                                                             )}
+                                                                                                        >
+                                                                                                            <Heart className={clsx("w-2.5 h-2.5 shrink-0", reply.isLikedByMe && "fill-current")} />
+                                                                                                            <span>{reply.likes || 0}</span>
+                                                                                                        </button>
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </div>
@@ -1304,68 +1369,75 @@ export default function CommunityHub() {
                                                             </div>
                                                         )}
 
-                                                        {/* Reply indicator indicator header */}
+                                                        {/* Replying banner */}
                                                         {replyingToComment[post._id] && (
-                                                            <div className="flex items-center justify-between bg-slate-100/50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-xl px-3 py-1.5 mt-2">
-                                                                <span className="text-[10px] text-slate-500 dark:text-gray-400 font-bold flex items-center gap-1">
-                                                                    <CornerDownRight className="w-3 h-3 text-primary shrink-0" /> Replying to @{replyingToComment[post._id]?.author.name}
-                                                                </span>
+                                                            <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 text-[10px] text-primary w-full">
+                                                                <span>Replying to <strong>@{replyingToComment[post._id]?.author.name}</strong></span>
                                                                 <button
-                                                                    onClick={() => setReplyingToComment(prev => ({ ...prev, [post._id]: null }))}
-                                                                    className="text-[10px] font-bold text-red-500 hover:text-red-650"
+                                                                    onClick={() => {
+                                                                        setReplyingToComment(prev => ({ ...prev, [post._id]: null }));
+                                                                        setNewCommentContent(prev => ({ ...prev, [post._id]: '' }));
+                                                                    }}
+                                                                    className="font-bold hover:underline cursor-pointer"
                                                                 >
                                                                     Cancel
                                                                 </button>
                                                             </div>
                                                         )}
 
-                                                        {/* Create comment form */}
-                                                        <div className="flex gap-2.5 items-end mt-2">
-                                                            <img src={user?.avatar} alt={user?.name} className="w-8 h-8 rounded-full border border-slate-200 dark:border-white/10" />
-                                                            <div className="flex-1 relative">
+                                                        {/* Comment entry textarea and send action */}
+                                                        <div className="flex gap-2 items-end w-full relative">
+                                                            <img src={user?.avatar} alt="Me" className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5 mb-1" />
+                                                            <div className="flex-1 relative min-w-0">
                                                                 <textarea
-                                                                    data-post-id={post._id}
-                                                                    placeholder={replyingToComment[post._id] ? "Write a reply..." : "Write a comment..."}
-                                                                    value={newCommentText[post._id] || ''}
-                                                                    onChange={(e) => {
-                                                                        const txt = e.target.value;
-                                                                        setNewCommentText(prev => ({ ...prev, [post._id]: txt }));
-                                                                    }}
-                                                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl pl-4 pr-12 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none min-h-[38px] max-h-[120px]"
                                                                     rows={1}
+                                                                    value={newCommentContent[post._id] || ''}
+                                                                    onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
+                                                                    placeholder="Write a comment..."
+                                                                    className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal max-h-24"
                                                                 />
-                                                                <button
-                                                                    onClick={() => handleCreateComment(post._id)}
-                                                                    disabled={!(newCommentText[post._id] || '').trim()}
-                                                                    className="absolute right-2 bottom-1.5 text-primary hover:text-primary/80 disabled:text-slate-350 dark:disabled:text-slate-600 transition-colors font-bold text-xs p-1"
-                                                                >
-                                                                    Send
-                                                                </button>
+
+                                                                {/* Autocomplete mention suggest box inside active comment */}
+                                                                {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === 'commentInput' && (
+                                                                    <div className="absolute z-[100] left-0 bottom-full mb-1.5 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
+                                                                        {mentionSuggestions.map((u) => (
+                                                                            <button
+                                                                                key={u._id}
+                                                                                type="button"
+                                                                                onClick={() => handleSelectMention(u.handle, newCommentContent[post._id] || '', (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })))}
+                                                                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
+                                                                            >
+                                                                                <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
+                                                                                    <span className="text-[10px] text-slate-500 dark:text-gray-400 block truncate">@{u.handle}</span>
+                                                                                </div>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
                                                             </div>
+                                                            
+                                                            <Button
+                                                                variant="glow"
+                                                                size="sm"
+                                                                disabled={!(newCommentContent[post._id] || '').trim()}
+                                                                onClick={() => handleCreateComment(post._id)}
+                                                                className="h-8 rounded-xl px-3 text-[10px] font-bold"
+                                                            >
+                                                                Send
+                                                            </Button>
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
                                         ))}
 
-                                        {/* Pagination load more button */}
-                                        {hasMore && (
-                                            <div className="flex justify-center py-4">
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        if (posts.length > 0) {
-                                                            const oldestPost = posts[posts.length - 1];
-                                                            fetchPosts(oldestPost.createdAt, true);
-                                                        }
-                                                    }}
-                                                    disabled={isFetchingMore}
-                                                    className="w-full sm:w-auto px-6 font-bold"
-                                                >
-                                                    {isFetchingMore ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                                                    {isFetchingMore ? 'Loading More...' : 'Load More Posts'}
-                                                </Button>
+                                        {/* Infinite Scroll Fetching Indicator */}
+                                        {isFetchingMore && (
+                                            <div className="flex justify-center py-4 w-full text-slate-500">
+                                                <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+                                                <span className="text-xs">Loading more posts...</span>
                                             </div>
                                         )}
                                     </>
@@ -1479,14 +1551,15 @@ export default function CommunityHub() {
                                                         const IconComponent = activeAch ? (ICON_MAP[activeAch.icon] || Trophy) : null;
                                                         
                                                         const tier = badgeId ? badgeId.substring(badgeId.lastIndexOf('-') + 1).toLowerCase() : null;
-                                                        const badgeColorClass = tier ? {
+                                                        const colors: Record<string, string> = {
                                                             bronze: 'bg-amber-500/15 text-amber-800 dark:text-amber-500 border-amber-500/30',
                                                             silver: 'bg-slate-400/15 text-slate-500 dark:text-slate-400 border-slate-400/30',
                                                             gold: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-500 border-yellow-500/30',
                                                             emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-500 border-emerald-500/30',
                                                             diamond: 'bg-cyan-400/15 text-cyan-600 dark:text-cyan-400 border-cyan-400/30',
                                                             ruby: 'bg-rose-500/15 text-rose-600 dark:text-rose-500 border-rose-500/30'
-                                                        }[tier] : '';
+                                                        };
+                                                        const badgeColorClass = tier ? (colors[tier] || '') : '';
 
                                                         return (
                                                             <button
@@ -1950,7 +2023,7 @@ export default function CommunityHub() {
                                 type="text"
                                 placeholder="Display Name"
                                 value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
+                                onChange={(e: any) => setEditName(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
                                 required
                             />
@@ -1962,7 +2035,7 @@ export default function CommunityHub() {
                                 type="text"
                                 placeholder="e.g. speedcuber"
                                 value={editUsername}
-                                onChange={(e) => setEditUsername(e.target.value)}
+                                onChange={(e: any) => setEditUsername(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[16px] sm:text-sm"
                                 required
                             />
@@ -1992,7 +2065,7 @@ export default function CommunityHub() {
                         <div>
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Avatar Presets Mesh</label>
                             <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 w-full mt-2">
-                                {AVATAR_PRESETS.map((preset) => {
+                                {AVATAR_PRESETS.map((preset: any) => {
                                     const isSelected = editAvatar === preset.url;
                                     return (
                                         <button
@@ -2082,7 +2155,7 @@ export default function CommunityHub() {
                         {(() => {
                             const groups = groupAchievements(achievements);
                             // Only show badges that are achieved and not equipped in any OTHER slot
-                            const otherSlotsEquipped = (user?.equippedBadges || []).filter((_, idx) => idx !== selectedSlotIndex);
+                            const otherSlotsEquipped = (user?.equippedBadges || []).filter((_: any, idx: number) => idx !== selectedSlotIndex);
                             const achievedGroups = groups.filter(g => {
                                 if (g.highestAchieved === null) return false;
                                 return !otherSlotsEquipped.includes(g.highestAchieved.id);
@@ -2101,14 +2174,15 @@ export default function CommunityHub() {
                                     {achievedGroups.map((g) => {
                                         const badge = g.highestAchieved!;
                                         const tier = badge.id.substring(badge.id.lastIndexOf('-') + 1).toLowerCase();
-                                        const badgeColorClass = {
+                                        const colors: Record<string, string> = {
                                             bronze: 'bg-amber-500/10 text-amber-800 dark:text-amber-500 border-amber-500/20 hover:bg-amber-500/15',
                                             silver: 'bg-slate-400/10 text-slate-500 dark:text-slate-400 border-slate-400/20 hover:bg-slate-400/15',
                                             gold: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/15',
                                             emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/15',
                                             diamond: 'bg-cyan-400/10 text-cyan-600 dark:text-cyan-400 border-cyan-400/20 hover:bg-cyan-400/15',
                                             ruby: 'bg-rose-500/10 text-rose-600 dark:text-rose-500 border-rose-500/20 hover:bg-rose-500/15'
-                                        }[tier] || 'border-slate-200 dark:border-white/5';
+                                        };
+                                        const badgeColorClass = colors[tier] || 'border-slate-200 dark:border-white/5';
                                         const IconComponent = ICON_MAP[badge.icon] || Trophy;
 
                                         return (
@@ -2141,6 +2215,74 @@ export default function CommunityHub() {
                                 </div>
                             );
                         })()}
+                    </div>
+                </Modal>,
+                document.body
+            )}
+
+            {/* Custom Post Delete Confirmation Modal */}
+            {confirmDeletePost && createPortal(
+                <Modal
+                    isOpen={!!confirmDeletePost}
+                    onClose={() => setConfirmDeletePost(null)}
+                    className="w-[90vw] max-w-sm p-5 flex flex-col gap-4 relative text-left"
+                >
+                    <div className="flex flex-col gap-2">
+                        <h3 className="font-display font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                            Delete Post
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+                            Are you sure you want to delete this post? This will permanently remove the post and all its comments. This action cannot be undone.
+                        </p>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setConfirmDeletePost(null)}
+                            className="rounded-xl px-4 py-2 text-xs font-bold"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => handleDeletePost(confirmDeletePost._id)}
+                            className="rounded-xl px-4 py-2 text-xs font-bold bg-red-500 text-white hover:bg-red-600"
+                        >
+                            Delete
+                        </Button>
+                    </div>
+                </Modal>,
+                document.body
+            )}
+
+            {/* Custom Comment Delete Confirmation Modal */}
+            {confirmDeleteComment && createPortal(
+                <Modal
+                    isOpen={!!confirmDeleteComment}
+                    onClose={() => setConfirmDeleteComment(null)}
+                    className="w-[90vw] max-w-sm p-5 flex flex-col gap-4 relative text-left"
+                >
+                    <div className="flex flex-col gap-2">
+                        <h3 className="font-display font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                            Delete Comment
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+                            Are you sure you want to delete this comment? This will permanently remove the comment and any replies. This action cannot be undone.
+                        </p>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setConfirmDeleteComment(null)}
+                            className="rounded-xl px-4 py-2 text-xs font-bold"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => handleDeleteComment(confirmDeleteComment.post, confirmDeleteComment._id)}
+                            className="rounded-xl px-4 py-2 text-xs font-bold bg-red-500 text-white hover:bg-red-600"
+                        >
+                            Delete
+                        </Button>
                     </div>
                 </Modal>,
                 document.body

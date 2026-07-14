@@ -23,6 +23,7 @@ const communityPostSchema = new mongoose.Schema({
     alg: String,
     algType: String,
   },
+  isPB: { type: Boolean, default: false },
   likes: { type: Number, default: 0 },
   likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdAt: { type: Date, default: Date.now }
