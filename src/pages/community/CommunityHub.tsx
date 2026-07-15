@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
     Medal, Flame, Star,
     Clock, Award, Loader2, Target, Timer, X,
-    TrendingUp, Plus, Trash2, Brain, ChevronDown, ChevronUp
+    TrendingUp, Plus, Trash2, Brain, ChevronDown, ChevronUp,
+    ChevronLeft, ChevronRight, Play, Pause, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -14,6 +15,12 @@ import { PageTransition } from '@/components/animations/PageTransition';
 import { useAuth } from '@/context/AuthContext';
 import { clsx } from 'clsx';
 import { AVATAR_PRESETS } from '@/components/layout/AvatarSelectionModal';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, ContactShadows } from '@react-three/drei';
+import * as THREE from 'three';
+import { AnimatedCube } from '@/components/3d/AnimatedCube';
+import { useSolvePlayback } from '@/hooks/useSolvePlayback';
+import { useTheme } from '@/context/ThemeContext';
 
 const TierColors: Record<string, string> = {
     bronze: 'text-amber-800 dark:text-amber-800 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25',
@@ -217,6 +224,211 @@ const renderContentWithMentions = (content: string) => {
     });
 };
 
+function AmbientParticles() {
+  const count = 50;
+  const pointsRef = useRef<THREE.Points>(null);
+  const [positions, speeds] = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const spd = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 6;     
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 6; 
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 6; 
+      spd[i] = 0.15 + Math.random() * 0.25;
+    }
+    return [pos, spd];
+  }, []);
+
+  useFrame((state) => {
+    if (!pointsRef.current) return;
+    const time = state.clock.getElapsedTime();
+    const posAttr = pointsRef.current.geometry.attributes.position;
+    for (let i = 0; i < count; i++) {
+      posAttr.array[i * 3 + 1] += Math.sin(time * speeds[i]) * 0.0015;
+      posAttr.array[i * 3] += Math.cos(time * speeds[i] * 0.5) * 0.0008;
+      posAttr.array[i * 3 + 2] += Math.sin(time * speeds[i] * 0.7) * 0.0008;
+    }
+    posAttr.needsUpdate = true;
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
+      <pointsMaterial size={0.045} color="#F5F7FA" transparent opacity={0.4} sizeAttenuation depthWrite={false} />
+    </points>
+  );
+}
+
+interface PostCubeRendererProps {
+  action: any;
+  speed: number;
+  initialScramble: string[];
+  currentTimelineIndex: number;
+}
+
+function PostCubeRenderer({ action, speed, initialScramble, currentTimelineIndex }: PostCubeRendererProps) {
+  const { accent } = useTheme();
+  const [controlsEnabled, setControlsEnabled] = useState(true);
+
+  const rimColor = useMemo(() => {
+    switch (accent) {
+      case 'blue': return '#5B7CFA'; 
+      case 'purple': return '#A78BFA'; 
+      case 'matte-black': return '#9CA3AF'; 
+      default: return '#FFFFFF';
+    }
+  }, [accent]);
+
+  return (
+    <div className="w-full h-full relative cursor-default touch-none select-none">
+      <Canvas 
+        camera={{ position: [3.8, 3.15, 5.0], fov: 40 }} 
+        gl={{ antialias: true, alpha: true, stencil: false }} 
+        dpr={[1, 1.5]} 
+        shadows
+      >
+        <directionalLight position={[10, 15, 10]} intensity={3.2} color="#FFF6E9" castShadow shadow-mapSize-width={128} shadow-mapSize-height={128} shadow-bias={-0.0001} />
+        <directionalLight position={[-12, 8, -12]} intensity={2.5} color={rimColor} />
+        <ambientLight intensity={1.0} color="#94A3B8" />
+        <hemisphereLight color="#ffffff" groundColor="#0B0F19" intensity={0.6} />
+        
+        <AmbientParticles />
+        <Suspense fallback={null}>
+          <AnimatedCube 
+            action={action} 
+            speed={speed} 
+            currentTimelineIndex={currentTimelineIndex}
+            setControlsEnabled={setControlsEnabled}
+            isLocked={true} 
+            initialScramble={initialScramble} 
+          />
+        </Suspense>
+        
+        <ContactShadows position={[0, -1.8, 0]} opacity={0.65} scale={8} blur={2.0} far={3} color="#0B0F19" frames={1} resolution={128} />
+        
+        <OrbitControls 
+          makeDefault
+          enablePan={false} 
+          enableZoom={false} 
+          enableRotate={false} 
+          dampingFactor={0.06} 
+          autoRotate={false} 
+          enabled={controlsEnabled} 
+          target={[0, 0, 0]}
+        />
+      </Canvas>
+    </div>
+  );
+}
+
+function PostCubePlayback({ alg, onReset }: { alg: string; onReset: () => void }) {
+  const steps = useMemo(() => [{ phase: 'Alg', explanation: '', moves: alg }], [alg]);
+  
+  const { 
+    isPlaying, 
+    togglePlay, 
+    speed, 
+    nextMove, 
+    prevMove, 
+    currentTimelineIndex, 
+    totalMoves, 
+    action 
+  } = useSolvePlayback(steps);
+
+  const initialScramble = useMemo(() => {
+    const allMoves = alg.split(' ').filter(Boolean);
+    const invert = (m: string) => m.includes("'") ? m.replace("'", "") : m.includes("2") ? m : m + "'";
+    return allMoves.reverse().map(invert);
+  }, [alg]);
+
+  return (
+    <div className="w-full h-full bg-transparent border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden flex flex-col relative">
+      {/* 3D Canvas viewport */}
+      <div className="flex-1 w-full relative touch-none select-none">
+        <PostCubeRenderer 
+          action={action} 
+          speed={speed} 
+          initialScramble={initialScramble} 
+          currentTimelineIndex={currentTimelineIndex} 
+        />
+        
+        {/* Step indicator in top-right */}
+        <div className="absolute top-2.5 right-2.5 bg-black/40 dark:bg-black/60 border border-slate-200/20 dark:border-white/10 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 pointer-events-none select-none">
+          {Math.max(0, currentTimelineIndex + 1)} / {totalMoves}
+        </div>
+      </div>
+
+      {/* Control panel */}
+      <div className="shrink-0 w-full px-3 py-1.5 bg-slate-100/50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/5 flex items-center justify-center gap-3.5 z-10">
+        <button 
+          onClick={prevMove} 
+          disabled={currentTimelineIndex < 0}
+          className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+          title="Step Back"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        
+        <button 
+          onClick={togglePlay} 
+          className="p-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white transition-all active:scale-95 flex items-center justify-center cursor-pointer"
+          title={isPlaying ? "Pause" : "Play"}
+        >
+          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+        </button>
+
+        <button 
+          onClick={nextMove} 
+          disabled={currentTimelineIndex >= totalMoves - 1}
+          className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+          title="Step Forward"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+
+        <div className="w-[1px] h-4 bg-slate-300 dark:bg-white/10 self-center" />
+
+        <button 
+          onClick={onReset} 
+          className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+          title="Reset Cube"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PostCubeViewer({ alg }: { alg: string }) {
+  const [resetKey, setResetKey] = useState(0);
+  const [isBooted, setIsBooted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsBooted(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleReset = () => {
+    setResetKey(prev => prev + 1);
+  };
+
+  if (!isBooted) {
+    return (
+      <div className="w-full h-48 flex flex-col items-center justify-center gap-2 bg-slate-50/50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-xl mb-4">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+        <span className="text-[10px] font-mono font-bold tracking-widest text-slate-400 dark:text-gray-500 uppercase animate-pulse">Booting 3D View...</span>
+      </div>
+    );
+  }
+
+  return (
+    <PostCubePlayback key={resetKey} alg={alg} onReset={handleReset} />
+  );
+}
+
 export default function CommunityHub() {
     const { user, getAuthHeaders, refetchUser } = useAuth();
     const [activeTab, setActiveTab] = useState<'feed' | 'profile'>('feed');
@@ -326,6 +538,22 @@ export default function CommunityHub() {
     const [isLoadingSolves, setIsLoadingSolves] = useState(false);
     const [algText, setAlgText] = useState('');
     const [algName, setAlgName] = useState('');
+
+    const handleAppendMove = (move: string) => {
+        setAlgText(prev => {
+            const trimmed = prev.trim();
+            return trimmed ? `${trimmed} ${move}` : move;
+        });
+    };
+
+    const handleBackspaceMove = () => {
+        setAlgText(prev => {
+            const moves = prev.trim().split(' ').filter(Boolean);
+            if (moves.length === 0) return '';
+            moves.pop();
+            return moves.join(' ');
+        });
+    };
 
     // --- FETCH COMMUNITY FEED ---
     const fetchPosts = async (cursor: string | null, filter: string, append = false) => {
@@ -1337,12 +1565,18 @@ export default function CommunityHub() {
                                                     </div>
                                                 )}
 
-                                                {post.type === 'algorithm' && post.solveData?.alg && (
-                                                    <div className="bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 mb-4 w-full overflow-hidden">
-                                                        <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 block leading-none mb-2 uppercase tracking-wide">{post.solveData.algType || 'Algorithm'}</span>
-                                                        <code className="text-slate-900 dark:text-white font-mono font-bold tracking-wider text-xs sm:text-sm block break-all select-all">{post.solveData.alg}</code>
-                                                    </div>
-                                                )}
+                                                 {post.type === 'algorithm' && post.solveData?.alg && (
+                                                      <div className="flex flex-col md:flex-row gap-3.5 mb-4 w-full items-stretch">
+                                                          <div className="flex-1 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-4 flex flex-col justify-center min-h-[140px] overflow-hidden">
+                                                              <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 block leading-none mb-2.5 uppercase tracking-wide">{post.solveData.algType || 'Algorithm'}</span>
+                                                              <code className="text-slate-900 dark:text-white font-mono font-bold tracking-wider text-xs sm:text-sm block break-all select-all leading-relaxed">{post.solveData.alg}</code>
+                                                          </div>
+                                                          <div className="w-full md:w-44 h-48 shrink-0">
+                                                              <PostCubeViewer alg={post.solveData.alg} />
+                                                          </div>
+                                                      </div>
+                                                  )}
+
                                                 <div className="flex items-center gap-5 sm:gap-6 mt-1 pt-3.5 border-t border-slate-200 dark:border-white/5 w-full">
                                                     <button
                                                         onClick={() => handleToggleLike(post._id)}
@@ -2192,12 +2426,60 @@ export default function CommunityHub() {
                         <div>
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Algorithm Moves</label>
                             <textarea
-                                placeholder="e.g. R U R' U R U2 R'"
+                                placeholder="Click the move buttons below to build your algorithm..."
                                 value={algText}
                                 onChange={(e) => setAlgText(e.target.value)}
-                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-secondary transition-colors placeholder-slate-400 dark:placeholder-gray-500 min-h-[80px] resize-none"
+                                readOnly={true}
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-secondary transition-colors placeholder-slate-400 dark:placeholder-gray-500 min-h-[80px] resize-none select-none"
                                 required
                             />
+                            
+                            <div className="mt-3.5 space-y-2">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Move Pad</label>
+                                <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl">
+                                    {/* Outer Layer Moves */}
+                                    {['R', "R'", 'R2', 'L', "L'", 'L2', 'U', "U'", 'U2', 'D', "D'", 'D2', 'F', "F'", 'F2', 'B', "B'", 'B2'].map((m) => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => handleAppendMove(m)}
+                                            className="px-2.5 py-1 text-xs font-mono font-bold bg-white dark:bg-white/[0.04] hover:bg-slate-100 hover:dark:bg-white/[0.1] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/10 rounded-lg transition-colors cursor-pointer select-none"
+                                        >
+                                            {m}
+                                        </button>
+                                    ))}
+                                    {/* Middle Layer & Rotation Moves */}
+                                    {['M', "M'", 'M2', 'E', "E'", 'E2', 'S', "S'", 'S2', 'x', "x'", 'y', "y'", 'z', "z'"].map((m) => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => handleAppendMove(m)}
+                                            className="px-2.5 py-1 text-xs font-mono font-bold bg-white dark:bg-white/[0.04] hover:bg-slate-100 hover:dark:bg-white/[0.1] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/10 rounded-lg transition-colors cursor-pointer select-none"
+                                        >
+                                            {m}
+                                        </button>
+                                    ))}
+                                    <div className="w-full h-[1px] bg-slate-200/60 dark:bg-white/10 my-1" />
+                                    <div className="flex gap-2 w-full mt-1">
+                                        <button
+                                            type="button"
+                                            onClick={handleBackspaceMove}
+                                            className="flex-1 py-1.5 text-xs font-mono font-bold bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg transition-colors cursor-pointer select-none"
+                                            title="Delete last move"
+                                        >
+                                            ⌫ Delete
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAlgText('')}
+                                            className="flex-1 py-1.5 text-xs font-mono font-bold bg-slate-500/10 hover:bg-slate-500/20 text-slate-500 border border-slate-500/20 rounded-lg transition-colors cursor-pointer select-none"
+                                            title="Clear all"
+                                        >
+                                            Clear All
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="flex gap-3 mt-5 w-full">
