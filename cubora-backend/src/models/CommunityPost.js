@@ -22,6 +22,7 @@ const communityPostSchema = new mongoose.Schema({
     scramble: String,
     alg: String,
     algType: String,
+    phaseSplits: mongoose.Schema.Types.Mixed,
   },
   isPB: { type: Boolean, default: false },
   likes: { type: Number, default: 0 },

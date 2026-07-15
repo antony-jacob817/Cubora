@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -41,15 +41,47 @@ const ICON_MAP: Record<string, any> = {
     'Clock': Clock,
     'Star': Star,
     'Award': Award,
-    'Medal': Medal
 };
+const mapPhaseToStandardName = (phase: string, method: string): string => {
+    const p = phase.toLowerCase();
+    const m = (method || 'CFOP').toUpperCase();
+    
+    if (m === 'CFOP' || m === 'SIMPLIFIED CFOP') {
+        if (p === 'cross') return 'Setup (Cross)';
+        if (p === 'f2l') return 'Transition (F2L)';
+        if (p === 'oll') return 'Orientation (OLL)';
+        if (p === 'pll') return 'Permutation (PLL)';
+    } else if (m === 'ROUX') {
+        if (p === 'first block' || p === 'fb') return 'Setup (FB)';
+        if (p === 'second block' || p === 'sb') return 'Transition (SB)';
+        if (p === 'cmll') return 'Orientation (CMLL)';
+        if (p === 'lse') return 'Permutation (LSE)';
+    } else if (m === 'ZZ') {
+        if (p === 'eoline') return 'Setup (EOLine)';
+        if (p === 'z2l') return 'Transition (Z2L)';
+        if (p === 'll') return 'Orientation/Permutation (LL)';
+    } else if (m === 'BEGINNER') {
+        if (p === 'first layer') return 'Setup (1st Layer)';
+        if (p === 'second layer') return 'Transition (2nd Layer)';
+        if (p === 'third layer') return 'Orientation/Permutation (3rd Layer)';
+    }
+    
+    // Fallbacks
+    if (p.includes('cross') || p.includes('first')) return 'Setup';
+    if (p.includes('second') || p.includes('f2l') || p.includes('sb') || p.includes('transition')) return 'Transition';
+    if (p.includes('oll') || p.includes('cmll') || p.includes('orientation')) return 'Orientation';
+    if (p.includes('pll') || p.includes('lse') || p.includes('permutation')) return 'Permutation';
+    
+    return phase;
+};
+
 
 interface CommunityPost {
     _id: string;
     content: string;
     type: 'solve' | 'algorithm' | 'discussion';
     author: { _id: string; name: string; handle: string; avatar: string };
-    solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string };
+    solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string; phaseSplits?: Record<string, number> };
     isPB?: boolean;
     likes: number;
     isLikedByMe: boolean;
@@ -207,7 +239,7 @@ export default function CommunityHub() {
 
     // Feed Pagination & Filtering states
     const [feedFilter, setFeedFilter] = useState<'all' | 'solve' | 'pb' | 'algorithm' | 'discussion'>('all');
-    const [feedPage, setFeedPage] = useState(1);
+    const [feedCursor, setFeedCursor] = useState<string | null>(null);
     const [hasMorePosts, setHasMorePosts] = useState(true);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
     const [isPBChecked, setIsPBChecked] = useState(false);
@@ -296,12 +328,13 @@ export default function CommunityHub() {
     const [algName, setAlgName] = useState('');
 
     // --- FETCH COMMUNITY FEED ---
-    const fetchPosts = async (page: number, filter: string, append = false) => {
-        if (page === 1) setIsLoadingFeed(true);
+    const fetchPosts = async (cursor: string | null, filter: string, append = false) => {
+        if (!cursor) setIsLoadingFeed(true);
         else setIsFetchingMore(true);
 
         try {
-            const res = await fetch(`http://localhost:5000/api/community?page=${page}&limit=10&filter=${filter}`, { 
+            const url = `http://localhost:5000/api/community?limit=10&filter=${filter}${cursor ? `&cursor=${cursor}` : ''}`;
+            const res = await fetch(url, { 
                 headers: getAuthHeaders() 
             });
             const data = await res.json();
@@ -316,7 +349,7 @@ export default function CommunityHub() {
                     setPosts(data.data);
                 }
                 setHasMorePosts(data.pagination.hasMore);
-                setFeedPage(data.pagination.page);
+                setFeedCursor(data.pagination.nextCursor);
             }
         } catch (err) {
             console.error('Failed to load community feed:', err);
@@ -329,7 +362,7 @@ export default function CommunityHub() {
     // Trigger fetch on filter change
     useEffect(() => {
         if (activeTab === 'feed') {
-            fetchPosts(1, feedFilter, false);
+            fetchPosts(null, feedFilter, false);
         }
     }, [feedFilter, activeTab]);
 
@@ -340,13 +373,13 @@ export default function CommunityHub() {
             
             const threshold = 150;
             const isNearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - threshold;
-            if (isNearBottom) {
-                fetchPosts(feedPage + 1, feedFilter, true);
+            if (isNearBottom && feedCursor) {
+                fetchPosts(feedCursor, feedFilter, true);
             }
         };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [activeTab, feedPage, feedFilter, hasMorePosts, isFetchingMore, isLoadingFeed]);
+    }, [activeTab, feedCursor, feedFilter, hasMorePosts, isFetchingMore, isLoadingFeed]);
 
     // --- MENTIONS AUTOCOMPLETE HANDLERS ---
     const handleSearchMentions = async (query: string) => {
@@ -556,7 +589,8 @@ export default function CommunityHub() {
                 solveData = {
                     time: (attachedSolve.timeMs / 1000).toFixed(3) + 's',
                     method: attachedSolve.method,
-                    scramble: attachedSolve.scramble
+                    scramble: attachedSolve.scramble,
+                    phaseSplits: attachedSolve.phaseSplits
                 };
             } else if (attachedAlg) {
                 postType = 'algorithm';
@@ -1072,7 +1106,7 @@ export default function CommunityHub() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2 overflow-x-auto pb-1.5 w-full border-b border-slate-200 dark:border-white/5 scrollbar-none">
+                            <div className="flex flex-row flex-nowrap gap-2 overflow-x-auto pb-1.5 w-full border-b border-slate-200 dark:border-white/5 scrollbar-none">
                                 {[
                                     { id: 'all', label: 'All Feed' },
                                     { id: 'solve', label: 'Solves', icon: Clock },
@@ -1087,7 +1121,7 @@ export default function CommunityHub() {
                                             key={filterItem.id}
                                             onClick={() => setFeedFilter(filterItem.id as any)}
                                             className={clsx(
-                                                "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer border active:scale-95 flex items-center gap-1.5",
+                                                "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer border active:scale-95 flex items-center gap-1.5 shrink-0",
                                                 isSelected 
                                                     ? "bg-primary text-white border-primary shadow-[0_0_15px_rgba(59,130,246,0.2)]" 
                                                     : "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5 text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
@@ -1231,6 +1265,75 @@ export default function CommunityHub() {
                                                                 </span>
                                                             </div>
                                                         </div>
+
+                                                        {post.solveData.phaseSplits && Object.keys(post.solveData.phaseSplits).length > 0 && (
+                                                            <div className="mt-2.5 pt-3.5 border-t border-slate-200 dark:border-white/5 flex flex-col gap-2.5">
+                                                                <span className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest block leading-none">
+                                                                    Phase Splits Breakdown
+                                                                </span>
+                                                                
+                                                                {/* Multi-segmented stacked progress bar */}
+                                                                <div className="h-2 w-full bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden flex">
+                                                                    {Object.entries(post.solveData.phaseSplits).map(([phase, timeMs], index) => {
+                                                                        const totalSplitsTimeMs = Object.values(post.solveData.phaseSplits!).reduce((sum, val) => sum + val, 0);
+                                                                        const percent = totalSplitsTimeMs > 0 ? (timeMs / totalSplitsTimeMs) * 100 : 0;
+                                                                        
+                                                                        const colors = [
+                                                                            'bg-blue-500 dark:bg-blue-600',
+                                                                            'bg-emerald-500 dark:bg-emerald-600',
+                                                                            'bg-amber-500 dark:bg-amber-600',
+                                                                            'bg-purple-500 dark:bg-purple-600',
+                                                                            'bg-rose-500 dark:bg-rose-600'
+                                                                        ];
+                                                                        
+                                                                        return (
+                                                                            <div 
+                                                                                key={phase} 
+                                                                                style={{ width: `${percent}%` }} 
+                                                                                className={clsx(
+                                                                                    "h-full transition-all duration-300",
+                                                                                    colors[index % colors.length]
+                                                                                )} 
+                                                                                title={`${mapPhaseToStandardName(phase, post.solveData!.method || '')}: ${(timeMs / 1000).toFixed(3)}s (${Math.round(percent)}%)`}
+                                                                            />
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                                {/* Legend Grid */}
+                                                                <div className="grid grid-cols-2 gap-2 mt-1">
+                                                                    {Object.entries(post.solveData.phaseSplits).map(([phase, timeMs], index) => {
+                                                                        const totalSplitsTimeMs = Object.values(post.solveData.phaseSplits!).reduce((sum, val) => sum + val, 0);
+                                                                        const percent = totalSplitsTimeMs > 0 ? (timeMs / totalSplitsTimeMs) * 100 : 0;
+                                                                        
+                                                                        const dotColors = [
+                                                                            'bg-blue-500',
+                                                                            'bg-emerald-500',
+                                                                            'bg-amber-500',
+                                                                            'bg-purple-500',
+                                                                            'bg-rose-500'
+                                                                        ];
+                                                                        
+                                                                        return (
+                                                                            <div key={phase} className="bg-slate-100/50 dark:bg-white/[0.02] border border-slate-200/50 dark:border-white/5 rounded-xl p-2 flex flex-col gap-0.5">
+                                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                                    <span className={clsx("w-1.5 h-1.5 rounded-full shrink-0", dotColors[index % dotColors.length])} />
+                                                                                    <span className="text-[10px] text-slate-500 dark:text-gray-400 font-bold truncate leading-none">
+                                                                                        {mapPhaseToStandardName(phase, post.solveData!.method || '')}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <span className="text-[11px] font-mono font-bold text-slate-800 dark:text-gray-200 mt-0.5 pl-3">
+                                                                                    {(timeMs / 1000).toFixed(3)}s
+                                                                                    <span className="text-[9px] text-slate-400 dark:text-gray-500 ml-1 font-sans font-normal">
+                                                                                        ({Math.round(percent)}%)
+                                                                                    </span>
+                                                                                </span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
 
@@ -2012,9 +2115,14 @@ export default function CommunityHub() {
                                     className="w-full flex flex-col gap-1 p-3.5 bg-slate-50/50 hover:bg-slate-100/80 dark:bg-white/[0.01] dark:hover:bg-white/5 border border-slate-100 hover:border-slate-200 dark:border-white/5 dark:hover:border-white/10 rounded-xl transition-all text-left"
                                 >
                                     <div className="flex justify-between items-center w-full">
-                                        <span className="font-display font-bold text-sm text-primary">
-                                            {(s.timeMs / 1000).toFixed(3)}s
-                                        </span>
+                                        <span className="font-display font-bold text-sm text-primary flex items-center gap-1.5">
+                                             {(s.timeMs / 1000).toFixed(3)}s
+                                             {s.phaseSplits && Object.keys(s.phaseSplits).length > 0 && (
+                                                 <span className="text-[8px] font-sans font-bold bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 leading-none">
+                                                     Phase Tracking
+                                                 </span>
+                                             )}
+                                         </span>
                                         <span className="text-[9px] font-mono font-bold bg-slate-200/55 dark:bg-white/10 px-2 py-0.5 rounded text-slate-500 dark:text-gray-400 uppercase">
                                             {s.method}
                                         </span>

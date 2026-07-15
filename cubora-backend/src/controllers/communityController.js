@@ -59,10 +59,8 @@ function transformComment(comment, userId) {
 // @access  Private
 exports.getPosts = async (req, res) => {
   try {
-    const { page = 1, limit = 10, filter = 'all' } = req.query;
-    const pageNum = parseInt(page);
+    const { limit = 10, filter = 'all', cursor } = req.query;
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
 
     // Build filter query
     let query = {};
@@ -72,15 +70,24 @@ exports.getPosts = async (req, res) => {
       query.type = filter;
     }
 
-    const totalPosts = await CommunityPost.countDocuments(query);
+    if (cursor) {
+      const cursorPost = await CommunityPost.findById(cursor);
+      if (cursorPost) {
+        query.createdAt = { $lt: cursorPost.createdAt };
+      }
+    }
+
     const posts = await CommunityPost.find(query)
       .populate('author', 'name email username avatar')
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum);
+      .limit(limitNum + 1);
+
+    const hasMore = posts.length > limitNum;
+    const resultPosts = hasMore ? posts.slice(0, limitNum) : posts;
+    const nextCursor = resultPosts.length > 0 ? resultPosts[resultPosts.length - 1]._id : null;
 
     // Transform and inject comment count dynamically
-    const transformed = await Promise.all(posts.map(async (post) => {
+    const transformed = await Promise.all(resultPosts.map(async (post) => {
       const transformedPost = transformPost(post, req.user.id);
       const commentCount = await Comment.countDocuments({ post: post._id });
       return {
@@ -93,10 +100,8 @@ exports.getPosts = async (req, res) => {
       success: true, 
       data: transformed,
       pagination: {
-        total: totalPosts,
-        page: pageNum,
-        limit: limitNum,
-        hasMore: skip + posts.length < totalPosts
+        nextCursor,
+        hasMore
       }
     });
   } catch (error) {

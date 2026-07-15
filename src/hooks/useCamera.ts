@@ -19,6 +19,8 @@ export function useCamera({ videoRef }: UseCameraProps) {
 
   // Use a ref for the stream to avoid stale closure issues and re-render loops
   const streamRef = useRef<MediaStream | null>(null);
+  const isMountedRef = useRef(true);
+  const activeRequestIdRef = useRef(0);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -39,6 +41,10 @@ export function useCamera({ videoRef }: UseCameraProps) {
     stopCamera();
     setError(null);
 
+    // Track this request ID to prevent race conditions from multiple async starts
+    activeRequestIdRef.current += 1;
+    const currentRequestId = activeRequestIdRef.current;
+
     // Check for browser support
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setHasPermission(false);
@@ -54,6 +60,15 @@ export function useCamera({ videoRef }: UseCameraProps) {
           height: { ideal: 720 }
         }
       });
+
+      // If unmounted or a newer request has started, stop this stream immediately
+      if (!isMountedRef.current || currentRequestId !== activeRequestIdRef.current) {
+        mediaStream.getTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
+        });
+        return;
+      }
 
       streamRef.current = mediaStream;
       setHasPermission(true);
@@ -76,6 +91,11 @@ export function useCamera({ videoRef }: UseCameraProps) {
         }
       }
     } catch (err: any) {
+      // If unmounted or a newer request has started, ignore errors/updates for this stale invocation
+      if (!isMountedRef.current || currentRequestId !== activeRequestIdRef.current) {
+        return;
+      }
+
       setHasPermission(false);
       
       switch (err.name) {
@@ -93,6 +113,15 @@ export function useCamera({ videoRef }: UseCameraProps) {
           // Retry with no constraints
           try {
             const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            
+            if (!isMountedRef.current || currentRequestId !== activeRequestIdRef.current) {
+              fallbackStream.getTracks().forEach(track => {
+                track.stop();
+                track.enabled = false;
+              });
+              return;
+            }
+
             streamRef.current = fallbackStream;
             setHasPermission(true);
             setError(null);
@@ -124,7 +153,9 @@ export function useCamera({ videoRef }: UseCameraProps) {
 
   // Cleanup on unmount — prevent camera indicator staying on
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       stopCamera();
     };
   }, [stopCamera]);

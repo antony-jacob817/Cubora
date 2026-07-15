@@ -19,7 +19,9 @@ interface SolveRecord {
     method: string;
     penalty: 'None' | '+2' | 'DNF';
     date: string | Date;
-    comments?: string; 
+    comments?: string;
+    sessionId?: string;
+    phaseSplits?: Record<string, number>;
 }
 
 interface CubeState {
@@ -1429,17 +1431,22 @@ export default function PracticeSession() {
                                                 <div className="col-span-2 font-mono font-bold text-xs text-slate-400 dark:text-gray-500 pl-1 select-none">
                                                     {solves.length - idx}.
                                                 </div>
-                                                <div className="col-span-4 flex items-start gap-1 sm:gap-1.5 min-w-0">
-                                                    <div className="flex items-start gap-1 select-none shrink-0">
+                                                <div className="col-span-4 flex flex-col items-start gap-1 min-w-0">
+                                                    <div className="flex items-center gap-1 select-none shrink-0 flex-wrap">
                                                         <span className="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-none">
                                                             {solve.penalty === '+2' ? formatTime(solve.timeMs + 2000) + '+' : formatTime(solve.timeMs)}
                                                         </span>
                                                         {isBest && <span className="text-[7px] sm:text-[8px] font-mono font-extrabold uppercase text-green-600 dark:text-green-400 bg-green-500/10 px-1 py-0.5 rounded leading-none shrink-0 self-start -mt-1 select-none">best</span>}
                                                         {isWorst && <span className="text-[7px] sm:text-[8px] font-mono font-extrabold uppercase text-red-600 dark:text-red-400 bg-red-500/10 px-1 py-0.5 rounded leading-none shrink-0 self-start -mt-1 select-none">worst</span>}
+                                                        {solve.penalty === 'None' && solve.comments && <MessageSquare className="w-2.5 h-2.5 text-slate-400/70 shrink-0 self-center" />}
+                                                        {solve.penalty === '+2' && <span className="text-[8px] sm:text-[9px] font-mono text-yellow-600 dark:text-amber-400 font-extrabold px-1 py-0.5 rounded bg-yellow-500/10 shrink-0 select-none self-center">+2</span>}
+                                                        {solve.penalty === 'DNF' && <span className="text-[8px] sm:text-[9px] font-mono text-red-600 dark:text-red-400 font-extrabold px-1 py-0.5 rounded bg-red-500/10 shrink-0 select-none self-center">DNF</span>}
                                                     </div>
-                                                    {solve.penalty === 'None' && solve.comments && <MessageSquare className="w-2.5 h-2.5 text-slate-400/70 shrink-0 self-center" />}
-                                                    {solve.penalty === '+2' && <span className="text-[8px] sm:text-[9px] font-mono text-yellow-600 dark:text-amber-400 font-extrabold px-1 py-0.5 rounded bg-yellow-500/10 shrink-0 select-none self-center">+2</span>}
-                                                    {solve.penalty === 'DNF' && <span className="text-[8px] sm:text-[9px] font-mono text-red-600 dark:text-red-400 font-extrabold px-1 py-0.5 rounded bg-red-500/10 shrink-0 select-none self-center">DNF</span>}
+                                                    {solve.phaseSplits && Object.keys(solve.phaseSplits).length > 0 && (
+                                                        <span className="text-[7.5px] font-bold text-blue-500 dark:text-blue-400 tracking-wider uppercase select-none leading-none">
+                                                            Phase Tracking
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 {!isSelected ? (
