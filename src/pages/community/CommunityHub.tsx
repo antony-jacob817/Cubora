@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2,
     Medal, Flame, Star,
     Clock, Award, Loader2, Target, Timer, X,
-    TrendingUp, Plus, Trash2
+    TrendingUp, Plus, Trash2, Brain, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -206,7 +206,7 @@ export default function CommunityHub() {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Feed Pagination & Filtering states
-    const [feedFilter, setFeedFilter] = useState<'all' | 'pb' | 'algorithm' | 'discussion'>('all');
+    const [feedFilter, setFeedFilter] = useState<'all' | 'solve' | 'pb' | 'algorithm' | 'discussion'>('all');
     const [feedPage, setFeedPage] = useState(1);
     const [hasMorePosts, setHasMorePosts] = useState(true);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -218,6 +218,8 @@ export default function CommunityHub() {
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
     const [newCommentContent, setNewCommentContent] = useState<Record<string, string>>({});
     const [replyingToComment, setReplyingToComment] = useState<Record<string, CommentData | null>>({});
+    const [commentSortMode, setCommentSortMode] = useState<Record<string, 'top' | 'new'>>({});
+    const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
 
     // Inline Edit states
     const [editingPostId, setEditingPostId] = useState<string | null>(null);
@@ -447,6 +449,17 @@ export default function CommunityHub() {
             }
         }
     };
+
+    // --- SCROLL TO REPLY BOX ---
+    useEffect(() => {
+        const activeReplyBox = document.querySelector('[data-reply-input-active="true"]');
+        if (activeReplyBox) {
+            const timer = setTimeout(() => {
+                activeReplyBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [replyingToComment]);
 
     // --- FETCH PROFILE DATA ---
     useEffect(() => {
@@ -691,12 +704,31 @@ export default function CommunityHub() {
         }
     };
 
+    const getRootParentId = (c: CommentData, allComments: CommentData[]): string | null => {
+        if (c.parentId === null) return null;
+        let currentParentId = c.parentId;
+        const visited = new Set<string>();
+        while (currentParentId !== null) {
+            if (visited.has(currentParentId)) break;
+            visited.add(currentParentId);
+            const parent = allComments.find(p => p._id === currentParentId);
+            if (!parent) break;
+            if (parent.parentId === null) {
+                return parent._id;
+            }
+            currentParentId = parent.parentId;
+        }
+        return currentParentId;
+    };
+
     // --- CREATE COMMENT ---
     const handleCreateComment = async (postId: string) => {
         const content = newCommentContent[postId] || '';
         if (!content.trim()) return;
 
         const replyingTo = replyingToComment[postId];
+        const postComments = commentsByPost[postId] || [];
+        const absoluteParentId = replyingTo ? (getRootParentId(replyingTo, postComments) || replyingTo._id) : null;
 
         try {
             const res = await fetch(`http://localhost:5000/api/community/${postId}/comments`, {
@@ -704,7 +736,7 @@ export default function CommunityHub() {
                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     content: content.trim(),
-                    parentId: replyingTo ? replyingTo._id : null
+                    parentId: absoluteParentId
                 })
             });
             const data = await res.json();
@@ -815,34 +847,34 @@ export default function CommunityHub() {
             });
             const data = await res.json();
             if (data.success) {
-                setCommentsByPost(prev => {
-                    const commentsList = prev[postId] || [];
-                    
-                    const getAllDescendantIds = (id: string): string[] => {
-                        const ids: string[] = [];
-                        const findChildren = (parentId: string) => {
-                            commentsList.forEach(c => {
-                                if (c.parentId === parentId) {
-                                    ids.push(c._id);
-                                    findChildren(c._id);
-                                }
-                            });
-                        };
-                        findChildren(id);
-                        return ids;
+                const commentsList = commentsByPost[postId] || [];
+                
+                const getAllDescendantIds = (id: string): string[] => {
+                    const ids: string[] = [];
+                    const findChildren = (parentId: string) => {
+                        commentsList.forEach(c => {
+                            if (c.parentId === parentId) {
+                                ids.push(c._id);
+                                findChildren(c._id);
+                            }
+                        });
                     };
+                    findChildren(id);
+                    return ids;
+                };
 
-                    const descendantIds = getAllDescendantIds(commentId);
-                    const idsToRemove = new Set([commentId, ...descendantIds]);
-                    const totalDeleted = idsToRemove.size;
-                    
-                    setPosts(prevPosts => prevPosts.map(p => p._id === postId ? { ...p, commentCount: Math.max(0, p.commentCount - totalDeleted) } : p));
-                    
-                    return {
-                        ...prev,
-                        [postId]: commentsList.filter(c => !idsToRemove.has(c._id))
-                    };
-                });
+                const descendantIds = getAllDescendantIds(commentId);
+                const idsToRemove = new Set([commentId, ...descendantIds]);
+                const totalDeleted = idsToRemove.size;
+
+                // Update posts count outside the comments updater callback to prevent double execution in StrictMode
+                setPosts(prevPosts => prevPosts.map(p => p._id === postId ? { ...p, commentCount: Math.max(0, p.commentCount - totalDeleted) } : p));
+
+                setCommentsByPost(prev => ({
+                    ...prev,
+                    [postId]: (prev[postId] || []).filter(c => !idsToRemove.has(c._id))
+                }));
+                
                 setConfirmDeleteComment(null);
             }
         } catch (err) {
@@ -852,7 +884,7 @@ export default function CommunityHub() {
 
 
     return (
-        <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0 text-left">
+        <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-3.5 sm:px-0 text-left">
 
             {/* Header Context Controls */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-1">
@@ -952,29 +984,29 @@ export default function CommunityHub() {
 
                                     {/* Attachment Previews */}
                                     {attachedSolve && (
-                                        <div className="w-full bg-primary/5 border border-primary/20 rounded-xl p-3.5 mb-2.5 flex flex-col gap-2 text-left">
+                                        <div className="w-full bg-slate-50/50 dark:bg-black/35 border border-slate-200 dark:border-white/10 rounded-2xl p-4 mb-3 flex flex-col gap-3 text-left">
                                             <div className="flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                    <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/20 shrink-0">
-                                                        <Clock className="w-4 h-4 text-primary" />
+                                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                                    <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center shrink-0">
+                                                        <Clock className="w-5 h-5 text-slate-500 dark:text-gray-400" />
                                                     </div>
                                                     <div className="min-w-0 flex-1">
-                                                        <span className="text-xs font-bold text-slate-900 dark:text-white block leading-none mb-1.5">
+                                                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block leading-none mb-1.5">
                                                             {(attachedSolve.timeMs / 1000).toFixed(3)}s Solve ({attachedSolve.method})
                                                         </span>
-                                                        <span className="text-[10px] font-mono text-slate-400 dark:text-gray-550 block truncate max-w-full">
+                                                        <span className="text-[10px] font-mono text-slate-400 dark:text-gray-500 block truncate max-w-full leading-normal select-all">
                                                             {attachedSolve.scramble}
                                                         </span>
                                                     </div>
                                                 </div>
                                                 <button 
                                                     onClick={() => { setAttachedSolve(null); setIsPBChecked(false); }} 
-                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors shrink-0"
+                                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-gray-400 transition-colors shrink-0"
                                                 >
-                                                    <X className="w-4 h-4" />
+                                                    <X className="w-3.5 h-3.5" />
                                                 </button>
                                             </div>
-                                            <div className="flex items-center gap-2 border-t border-primary/10 pt-2 mt-1">
+                                            <div className="flex items-center gap-2 border-t border-slate-200 dark:border-white/5 pt-2.5 mt-0.5">
                                                 <input
                                                     type="checkbox"
                                                     id="pb-checkbox"
@@ -982,8 +1014,8 @@ export default function CommunityHub() {
                                                     onChange={(e) => setIsPBChecked(e.target.checked)}
                                                     className="rounded border-slate-350 dark:border-white/10 text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
                                                 />
-                                                <label htmlFor="pb-checkbox" className="text-[10px] font-bold text-slate-650 dark:text-gray-300 cursor-pointer flex items-center gap-1">
-                                                    🏆 Mark as Personal Best (PB)
+                                                <label htmlFor="pb-checkbox" className="text-[10px] font-bold text-slate-650 dark:text-gray-300 cursor-pointer flex items-center gap-1.5">
+                                                    <Trophy className="w-3.5 h-3.5 text-amber-500" /> Mark as Personal Best (PB)
                                                 </label>
                                             </div>
                                         </div>
@@ -1040,26 +1072,28 @@ export default function CommunityHub() {
                                     </div>
                                 </div>
                             </div>
-                            {/* Feed Filters Toggle Row */}
                             <div className="flex gap-2 overflow-x-auto pb-1.5 w-full border-b border-slate-200 dark:border-white/5 scrollbar-none">
                                 {[
                                     { id: 'all', label: 'All Feed' },
-                                    { id: 'pb', label: '🏆 PBs Only' },
-                                    { id: 'algorithm', label: '🧠 Algorithms' },
-                                    { id: 'discussion', label: '💬 Discussions' }
+                                    { id: 'solve', label: 'Solves', icon: Clock },
+                                    { id: 'pb', label: 'PBs Only', icon: Trophy },
+                                    { id: 'algorithm', label: 'Algorithms', icon: Brain },
+                                    { id: 'discussion', label: 'Discussions', icon: MessageSquare }
                                 ].map((filterItem) => {
                                     const isSelected = feedFilter === filterItem.id;
+                                    const IconComponent = 'icon' in filterItem ? filterItem.icon : null;
                                     return (
                                         <button
                                             key={filterItem.id}
                                             onClick={() => setFeedFilter(filterItem.id as any)}
                                             className={clsx(
-                                                "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer border active:scale-95",
+                                                "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer border active:scale-95 flex items-center gap-1.5",
                                                 isSelected 
                                                     ? "bg-primary text-white border-primary shadow-[0_0_15px_rgba(59,130,246,0.2)]" 
                                                     : "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5 text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
                                             )}
                                         >
+                                            {IconComponent && <IconComponent className={clsx("w-3.5 h-3.5", isSelected ? "text-white" : "text-slate-500 dark:text-gray-400")} />}
                                             {filterItem.label}
                                         </button>
                                     );
@@ -1090,7 +1124,9 @@ export default function CommunityHub() {
                                                             <div className="flex items-center flex-wrap gap-1">
                                                                 <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-snug">{post.author.name}</h4>
                                                                 {post.isPB && (
-                                                                    <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1 py-0.2 rounded ml-1">🏆 PB</span>
+                                                                    <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded ml-1">
+                                                                        <Trophy className="w-2.5 h-2.5 text-amber-500 mr-0.5" /> PB
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                             <span className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block truncate mt-0.5">{post.author.handle} • {post.timeAgo}</span>
@@ -1159,7 +1195,7 @@ export default function CommunityHub() {
                                                                     setEditingPostId(null);
                                                                     setEditingPostContent('');
                                                                 }}
-                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider"
+                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider w-auto shrink-0"
                                                             >
                                                                 Cancel
                                                             </Button>
@@ -1167,7 +1203,7 @@ export default function CommunityHub() {
                                                                 variant="glow"
                                                                 size="sm"
                                                                 onClick={() => handleEditPost(post._id, editingPostContent)}
-                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider"
+                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider w-auto shrink-0"
                                                             >
                                                                 Save
                                                             </Button>
@@ -1181,14 +1217,18 @@ export default function CommunityHub() {
 
                                                 {/* Rich Data Feed Attachments Layout Row */}
                                                 {post.type === 'solve' && post.solveData?.time && (
-                                                    <div className="bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 mb-4 w-full overflow-hidden">
+                                                    <div className="bg-slate-50/50 dark:bg-black/35 border border-slate-200 dark:border-white/10 rounded-2xl p-4 mb-4 flex flex-col gap-3 text-left w-full overflow-hidden">
                                                         <div className="flex items-center gap-3.5 min-w-0 w-full">
-                                                            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30 shadow-[0_0_15px_rgba(59,130,246,0.15)] shrink-0">
-                                                                <span className="font-display font-bold text-base sm:text-lg text-primary">{post.solveData.time}</span>
+                                                            <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center shrink-0">
+                                                                <Clock className="w-5 h-5 text-slate-500 dark:text-gray-400" />
                                                             </div>
                                                             <div className="min-w-0 flex-1">
-                                                                <span className="text-[11px] font-bold text-slate-500 dark:text-gray-400 block leading-none mb-1.5">{post.solveData.method || 'CFOP'} Method</span>
-                                                                <span className="text-xs font-mono text-slate-400 dark:text-gray-550 block truncate max-w-full select-all" title={post.solveData.scramble}>{post.solveData.scramble}</span>
+                                                                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block leading-none mb-1.5">
+                                                                    {post.solveData.time} Solve ({post.solveData.method || 'CFOP'})
+                                                                </span>
+                                                                <span className="text-[10px] font-mono text-slate-400 dark:text-gray-500 block truncate max-w-full leading-normal select-all" title={post.solveData.scramble}>
+                                                                    {post.solveData.scramble}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1225,10 +1265,35 @@ export default function CommunityHub() {
 
                                                 {/* Instagram threaded comments section */}
                                                 {expandedComments[post._id] && (
-                                                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5 flex flex-col gap-4 text-left w-full">
-                                                        <h5 className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                                                            Comments ({post.commentCount || 0})
-                                                        </h5>
+                                                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5 flex flex-col gap-4 text-left w-full">                                                        <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-slate-100 dark:border-white/5">
+                                                            <h5 className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                Comments ({post.commentCount || 0})
+                                                            </h5>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                <button
+                                                                    onClick={() => setCommentSortMode(prev => ({ ...prev, [post._id]: 'top' }))}
+                                                                    className={clsx(
+                                                                        "text-[9px] font-bold px-2 py-0.5 rounded transition-colors cursor-pointer",
+                                                                        (commentSortMode[post._id] || 'top') === 'top'
+                                                                            ? "bg-slate-100 dark:bg-white/10 text-primary"
+                                                                            : "text-slate-500 dark:text-gray-400 hover:text-primary"
+                                                                    )}
+                                                                >
+                                                                    Top
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setCommentSortMode(prev => ({ ...prev, [post._id]: 'new' }))}
+                                                                    className={clsx(
+                                                                        "text-[9px] font-bold px-2 py-0.5 rounded transition-colors cursor-pointer",
+                                                                        commentSortMode[post._id] === 'new'
+                                                                            ? "bg-slate-100 dark:bg-white/10 text-primary"
+                                                                            : "text-slate-500 dark:text-gray-400 hover:text-primary"
+                                                                    )}
+                                                                >
+                                                                    Newest
+                                                                </button>
+                                                            </div>
+                                                        </div>
 
                                                         {isLoadingComments[post._id] ? (
                                                             <div className="flex items-center justify-center py-4 text-slate-500">
@@ -1236,7 +1301,7 @@ export default function CommunityHub() {
                                                                 <span className="text-xs">Loading comments...</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-1">
+                                                            <div className="flex flex-col gap-3 max-h-80 overflow-y-auto overflow-x-hidden no-scrollbar pr-1">
                                                                 {(() => {
                                                                     const postComments = commentsByPost[post._id] || [];
                                                                     if (postComments.length === 0) {
@@ -1246,24 +1311,25 @@ export default function CommunityHub() {
                                                                             </div>
                                                                         );
                                                                     }
-
                                                                     // Define the recursive comment tree rendering
                                                                     const renderCommentTree = (comment: CommentData, depth: number = 0) => {
-                                                                        const commentReplies = postComments.filter(c => c.parentId === comment._id);
+                                                                        const commentReplies = depth === 0
+                                                                            ? [...postComments.filter(c => getRootParentId(c, postComments) === comment._id)].sort((a, b) => a._id.localeCompare(b._id))
+                                                                            : [];
                                                                         const hasReplies = commentReplies.length > 0;
+                                                                        const activeReplyComment = replyingToComment[post._id];
+                                                                        const activeReplyRootId = activeReplyComment
+                                                                            ? (getRootParentId(activeReplyComment, postComments) || activeReplyComment._id)
+                                                                            : null;
+                                                                        const isReplyingThis = depth === 0 && activeReplyRootId === comment._id;
 
                                                                         return (
-                                                                            <div key={comment._id} className="flex flex-col gap-1.5 w-full">
-                                                                                {/* Comment card */}
-                                                                                <div 
-                                                                                    className={clsx(
-                                                                                        "flex items-start gap-2.5 w-full",
-                                                                                        depth > 0 && "pl-3 sm:pl-4 border-l border-slate-200 dark:border-white/5 ml-2.5 sm:ml-3"
-                                                                                    )}
-                                                                                >
+                                                                            <div key={comment._id} className="flex flex-col gap-2 relative w-full">
+                                                                                {/* Comment Row */}
+                                                                                <div className="flex items-start gap-2.5 w-full relative">
                                                                                     <img src={comment.author.avatar} alt={comment.author.name} className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
-                                                                                    <div className="flex-1 min-w-0 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-2xl px-3 py-2">
-                                                                                        <div className="flex justify-between items-start gap-2 mb-1">
+                                                                                    <div className="flex-1 min-w-0 px-1 py-0.5">
+                                                                                        <div className="flex justify-between items-start gap-2 mb-0.5">
                                                                                             <div>
                                                                                                 <span className="font-bold text-slate-900 dark:text-white text-xs block leading-none">{comment.author.name}</span>
                                                                                                 <span className="text-[9px] text-slate-400 dark:text-gray-550 font-mono">@{comment.author.handle.replace('@', '')} • {comment.timeAgo}</span>
@@ -1277,15 +1343,13 @@ export default function CommunityHub() {
                                                                                                                 setEditingCommentId(comment._id);
                                                                                                                 setEditingCommentContent(comment.content);
                                                                                                             }}
-                                                                                                            className="p-0.5 text-slate-400 hover:text-primary dark:text-gray-550 dark:hover:text-white transition-colors cursor-pointer"
-                                                                                                            title="Edit Comment"
+                                                                                                            className="text-slate-400 hover:text-primary transition-colors cursor-pointer"
                                                                                                         >
                                                                                                             <Edit2 className="w-3 h-3" />
                                                                                                         </button>
                                                                                                         <button
                                                                                                             onClick={() => setConfirmDeleteComment(comment)}
-                                                                                                            className="p-0.5 text-slate-400 hover:text-red-500 dark:text-gray-550 dark:hover:text-red-450 transition-colors cursor-pointer"
-                                                                                                            title="Delete Comment"
+                                                                                                            className="text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
                                                                                                         >
                                                                                                             <Trash2 className="w-3 h-3" />
                                                                                                         </button>
@@ -1295,7 +1359,7 @@ export default function CommunityHub() {
                                                                                         </div>
 
                                                                                         {editingCommentId === comment._id ? (
-                                                                                            <div className="flex flex-col gap-1.5 mt-1 w-full relative">
+                                                                                            <div className="flex flex-col gap-1.5 mt-1">
                                                                                                 <input
                                                                                                     type="text"
                                                                                                     value={editingCommentContent}
@@ -1303,40 +1367,19 @@ export default function CommunityHub() {
                                                                                                     onKeyDown={(e) => handleKeyDown(e, setEditingCommentContent)}
                                                                                                     className="w-full bg-slate-100 dark:bg-black/35 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:border-primary outline-none"
                                                                                                 />
-                                                                                                
-                                                                                                {/* Autocomplete mention suggest box inside comment edit */}
-                                                                                                {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === comment._id && (
-                                                                                                    <div className="absolute z-[100] left-0 top-full mt-1 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
-                                                                                                        {mentionSuggestions.map((u) => (
-                                                                                                            <button
-                                                                                                                key={u._id}
-                                                                                                                type="button"
-                                                                                                                onClick={() => handleSelectMention(u.handle, editingCommentContent, setEditingCommentContent)}
-                                                                                                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
-                                                                                                            >
-                                                                                                                <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
-                                                                                                                <div className="flex-1 min-w-0">
-                                                                                                                    <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
-                                                                                                                    <span className="text-[10px] text-slate-500 dark:text-gray-400 block truncate">@{u.handle}</span>
-                                                                                                                </div>
-                                                                                                            </button>
-                                                                                                        ))}
-                                                                                                    </div>
-                                                                                                )}
-
                                                                                                 <div className="flex justify-end gap-1.5">
                                                                                                     <button
                                                                                                         onClick={() => {
                                                                                                             setEditingCommentId(null);
                                                                                                             setEditingCommentContent('');
                                                                                                         }}
-                                                                                                        className="text-[9px] font-bold text-slate-500 dark:text-gray-400 hover:underline cursor-pointer"
+                                                                                                        className="px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer"
                                                                                                     >
                                                                                                         Cancel
                                                                                                     </button>
                                                                                                     <button
                                                                                                         onClick={() => handleEditComment(post._id, comment._id, editingCommentContent)}
-                                                                                                        className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
+                                                                                                        className="px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-primary text-white hover:bg-primary-hover cursor-pointer"
                                                                                                     >
                                                                                                         Save
                                                                                                     </button>
@@ -1348,7 +1391,7 @@ export default function CommunityHub() {
                                                                                             </p>
                                                                                         )}
 
-                                                                                        <div className="flex items-center gap-3.5 mt-1.5 pt-1 border-t border-slate-100 dark:border-white/[0.02]">
+                                                                                        <div className="flex items-center gap-3.5 mt-1 pt-0.5">
                                                                                             <button
                                                                                                 onClick={() => handleToggleCommentLike(post._id, comment._id)}
                                                                                                 className={clsx(
@@ -1359,9 +1402,11 @@ export default function CommunityHub() {
                                                                                                 <Heart className={clsx("w-3 h-3 shrink-0", comment.isLikedByMe && "fill-current")} />
                                                                                                 <span>{comment.likes || 0}</span>
                                                                                             </button>
-                                                                                            <button
+                                                                                                            <button
                                                                                                 onClick={() => {
                                                                                                     setReplyingToComment(prev => ({ ...prev, [post._id]: comment }));
+                                                                                                    const rootId = getRootParentId(comment, postComments) || comment._id;
+                                                                                                    setExpandedReplies(prev => ({ ...prev, [rootId]: true }));
                                                                                                     setNewCommentContent(prev => ({
                                                                                                         ...prev,
                                                                                                         [post._id]: `@${comment.author.handle.replace('@', '')} `
@@ -1372,13 +1417,71 @@ export default function CommunityHub() {
                                                                                                 Reply
                                                                                             </button>
                                                                                         </div>
+
+                                                                                        {hasReplies && (
+                                                                                            <button
+                                                                                                onClick={() => setExpandedReplies(prev => ({ ...prev, [comment._id]: !prev[comment._id] }))}
+                                                                                                className="flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-primary transition-colors cursor-pointer mt-1.5"
+                                                                                            >
+                                                                                                {expandedReplies[comment._id] ? (
+                                                                                                    <>
+                                                                                                        <ChevronUp className="w-3 h-3 shrink-0" />
+                                                                                                        <span>Hide replies</span>
+                                                                                                    </>
+                                                                                                ) : (
+                                                                                                    <>
+                                                                                                        <ChevronDown className="w-3 h-3 shrink-0" />
+                                                                                                        <span>View {commentReplies.length} {commentReplies.length === 1 ? 'reply' : 'replies'}</span>
+                                                                                                    </>
+                                                                                                )}
+                                                                                            </button>
+                                                                                        )}
                                                                                     </div>
                                                                                 </div>
 
-                                                                                {/* Recursively Render Replies */}
-                                                                                {hasReplies && (
-                                                                                    <div className="flex flex-col gap-1.5 mt-1">
-                                                                                        {commentReplies.map((reply) => renderCommentTree(reply, depth + 1))}
+                                                                                {/* Recursively Render Replies & Inline Reply Input */}
+                                                                                {(expandedReplies[comment._id] || isReplyingThis) && (
+                                                                                    <div className="flex flex-col gap-1 pl-3.5 sm:pl-5 ml-[14px] sm:ml-[20px] relative">
+                                                                                        {isReplyingThis && (
+                                                                                            <div data-reply-input-active="true" className="flex flex-col gap-2 w-full mb-1 relative">
+                                                                                                <div className="flex gap-3 items-center w-full max-w-full relative pr-2.5 py-1.5">
+                                                                                                    <img src={user?.avatar} alt="Me" className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
+                                                                                                    <div className="flex-grow max-w-[45%] sm:max-w-[65%] relative min-w-0">
+                                                                                                        <textarea
+                                                                                                            rows={1}
+                                                                                                            value={newCommentContent[post._id] || ''}
+                                                                                                            onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
+                                                                                                            onKeyDown={(e) => handleKeyDown(e, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
+                                                                                                            placeholder="Reply to this comment..."
+                                                                                                            className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal max-h-24"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                    <div className="flex items-center gap-1 shrink-0 pr-1.5">
+                                                                                                        <Button
+                                                                                                            variant="secondary"
+                                                                                                            size="sm"
+                                                                                                            onClick={() => {
+                                                                                                                setReplyingToComment(prev => ({ ...prev, [post._id]: null }));
+                                                                                                                setNewCommentContent(prev => ({ ...prev, [post._id]: '' }));
+                                                                                                            }}
+                                                                                                            className="h-7 rounded-xl px-2 text-[9px] font-bold w-auto shrink-0"
+                                                                                                        >
+                                                                                                            Cancel
+                                                                                                        </Button>
+                                                                                                        <Button
+                                                                                                            variant="glow"
+                                                                                                            size="sm"
+                                                                                                            disabled={!(newCommentContent[post._id] || '').trim()}
+                                                                                                            onClick={() => handleCreateComment(post._id)}
+                                                                                                            className="h-7 rounded-xl px-2 text-[9px] font-bold w-auto shrink-0"
+                                                                                                        >
+                                                                                                            Reply
+                                                                                                        </Button>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {expandedReplies[comment._id] && commentReplies.map((reply) => renderCommentTree(reply, depth + 1))}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
@@ -1386,71 +1489,68 @@ export default function CommunityHub() {
                                                                     };
 
                                                                     const topLevel = postComments.filter(c => c.parentId === null);
-                                                                    return topLevel.map((comment) => renderCommentTree(comment, 0));
+                                                                    const sortMode = commentSortMode[post._id] || 'top';
+                                                                    const sortedTopLevel = [...topLevel].sort((a, b) => {
+                                                                        if (sortMode === 'top') {
+                                                                            const likesA = a.likes || 0;
+                                                                            const likesB = b.likes || 0;
+                                                                            if (likesA !== likesB) return likesB - likesA;
+                                                                            return b._id.localeCompare(a._id);
+                                                                        } else {
+                                                                            return b._id.localeCompare(a._id);
+                                                                        }
+                                                                    });
+                                                                    return sortedTopLevel.map((comment) => renderCommentTree(comment, 0));
                                                                 })()}
                                                             </div>
                                                         )}
 
-                                                        {/* Replying banner */}
-                                                        {replyingToComment[post._id] && (
-                                                            <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 text-[10px] text-primary w-full">
-                                                                <span>Replying to <strong>{replyingToComment[post._id]?.author.handle}</strong></span>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setReplyingToComment(prev => ({ ...prev, [post._id]: null }));
-                                                                        setNewCommentContent(prev => ({ ...prev, [post._id]: '' }));
-                                                                    }}
-                                                                    className="font-bold hover:underline cursor-pointer"
+                                                        {/* Comment entry textarea and send action */}
+                                                        {!replyingToComment[post._id] && (
+                                                            <div className="flex gap-3 items-center w-full max-w-full relative">
+                                                                <img src={user?.avatar} alt="Me" className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
+                                                                <div className="flex-1 relative min-w-0">
+                                                                    <textarea
+                                                                        rows={1}
+                                                                        value={newCommentContent[post._id] || ''}
+                                                                        onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
+                                                                        onKeyDown={(e) => handleKeyDown(e, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
+                                                                        placeholder="Write a comment..."
+                                                                        className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-3 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal max-h-24"
+                                                                    />
+
+                                                                    {/* Autocomplete mention suggest box inside active comment */}
+                                                                    {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === 'commentInput' && (
+                                                                        <div className="absolute z-[100] left-0 bottom-full mb-1.5 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
+                                                                            {mentionSuggestions.map((u) => (
+                                                                                <button
+                                                                                    key={u._id}
+                                                                                    type="button"
+                                                                                    onClick={() => handleSelectMention(u.handle, newCommentContent[post._id] || '', (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })))}
+                                                                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
+                                                                                >
+                                                                                    <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
+                                                                                        <span className="text-[10px] text-slate-550 dark:text-gray-400 block truncate">@{u.handle}</span>
+                                                                                    </div>
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                
+                                                                <Button
+                                                                    variant="glow"
+                                                                    size="sm"
+                                                                    disabled={!(newCommentContent[post._id] || '').trim()}
+                                                                    onClick={() => handleCreateComment(post._id)}
+                                                                    className="h-8 rounded-xl px-3 text-[10px] font-bold w-auto shrink-0"
                                                                 >
-                                                                    Cancel
-                                                                </button>
+                                                                    Send
+                                                                </Button>
                                                             </div>
                                                         )}
-
-                                                        {/* Comment entry textarea and send action */}
-                                                        <div className="flex gap-2 items-end w-full relative">
-                                                            <img src={user?.avatar} alt="Me" className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5 mb-1" />
-                                                            <div className="flex-1 relative min-w-0">
-                                                                <textarea
-                                                                    rows={1}
-                                                                    value={newCommentContent[post._id] || ''}
-                                                                    onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
-                                                                    onKeyDown={(e) => handleKeyDown(e, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
-                                                                    placeholder="Write a comment..."
-                                                                    className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal max-h-24"
-                                                                />
-
-                                                                {/* Autocomplete mention suggest box inside active comment */}
-                                                                {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === 'commentInput' && (
-                                                                    <div className="absolute z-[100] left-0 bottom-full mb-1.5 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
-                                                                        {mentionSuggestions.map((u) => (
-                                                                            <button
-                                                                                key={u._id}
-                                                                                type="button"
-                                                                                onClick={() => handleSelectMention(u.handle, newCommentContent[post._id] || '', (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })))}
-                                                                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
-                                                                            >
-                                                                                <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
-                                                                                <div className="flex-1 min-w-0">
-                                                                                    <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
-                                                                                    <span className="text-[10px] text-slate-500 dark:text-gray-400 block truncate">@{u.handle}</span>
-                                                                                </div>
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            
-                                                            <Button
-                                                                variant="glow"
-                                                                size="sm"
-                                                                disabled={!(newCommentContent[post._id] || '').trim()}
-                                                                onClick={() => handleCreateComment(post._id)}
-                                                                className="h-8 rounded-xl px-3 text-[10px] font-bold"
-                                                            >
-                                                                Send
-                                                            </Button>
-                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
