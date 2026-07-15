@@ -368,6 +368,13 @@ export default function CommunityHub() {
     const handleInputText = (text: string, setContent: (val: string) => void, postId: string | null = null, commentId: string | null = null) => {
         setContent(text);
         
+        // Deactivate reply target state when the comment is fully cleared
+        if (postId && commentId === 'commentInput') {
+            if (text.trim() === '') {
+                setReplyingToComment(prev => ({ ...prev, [postId]: null }));
+            }
+        }
+        
         const match = text.match(/@(\w*)$/);
         if (match) {
             const query = match[1];
@@ -387,6 +394,58 @@ export default function CommunityHub() {
         setMentionSuggestions([]);
         setActiveMentionPostId(null);
         setActiveMentionCommentId(null);
+    };
+
+    const handleKeyDown = (
+        e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>,
+        setContent: (val: string) => void,
+        postId: string | null = null,
+        commentId: string | null = null
+    ) => {
+        if (e.key === 'Backspace') {
+            const text = e.currentTarget.value;
+            const start = e.currentTarget.selectionStart;
+            const end = e.currentTarget.selectionEnd;
+            
+            if (start !== null && end !== null && start === end) {
+                const regex = /@[a-zA-Z0-9_.-]+\s?/g;
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    const matchStart = match.index;
+                    const matchEnd = match.index + match[0].length;
+                    
+                    if (start > matchStart && start <= matchEnd) {
+                        e.preventDefault();
+                        const newText = text.substring(0, matchStart) + text.substring(matchEnd);
+                        setContent(newText);
+                        
+                        // Check if we are deleting the mention that corresponds to the reply target,
+                        // if so, clear the replyingToComment state.
+                        if (postId && commentId === 'commentInput') {
+                            const replyTarget = replyingToComment[postId];
+                            if (replyTarget) {
+                                const handle = replyTarget.author.handle.replace('@', '');
+                                const mentionTag = `@${handle}`;
+                                const deletedText = match[0].trim();
+                                if (deletedText.toLowerCase() === mentionTag.toLowerCase()) {
+                                    setReplyingToComment(prev => ({ ...prev, [postId]: null }));
+                                }
+                            }
+                        }
+                        
+                        const newCursorPos = matchStart;
+                        const target = e.currentTarget;
+                        setTimeout(() => {
+                            if (target) {
+                                target.selectionStart = newCursorPos;
+                                target.selectionEnd = newCursorPos;
+                            }
+                        }, 0);
+                        break;
+                    }
+                }
+            }
+        }
     };
 
     // --- FETCH PROFILE DATA ---
@@ -758,14 +817,30 @@ export default function CommunityHub() {
             if (data.success) {
                 setCommentsByPost(prev => {
                     const commentsList = prev[postId] || [];
-                    const deletedRepliesCount = commentsList.filter(c => c.parentId === commentId).length;
-                    const totalDeleted = 1 + deletedRepliesCount;
+                    
+                    const getAllDescendantIds = (id: string): string[] => {
+                        const ids: string[] = [];
+                        const findChildren = (parentId: string) => {
+                            commentsList.forEach(c => {
+                                if (c.parentId === parentId) {
+                                    ids.push(c._id);
+                                    findChildren(c._id);
+                                }
+                            });
+                        };
+                        findChildren(id);
+                        return ids;
+                    };
+
+                    const descendantIds = getAllDescendantIds(commentId);
+                    const idsToRemove = new Set([commentId, ...descendantIds]);
+                    const totalDeleted = idsToRemove.size;
                     
                     setPosts(prevPosts => prevPosts.map(p => p._id === postId ? { ...p, commentCount: Math.max(0, p.commentCount - totalDeleted) } : p));
                     
                     return {
                         ...prev,
-                        [postId]: commentsList.filter(c => c._id !== commentId && c.parentId !== commentId)
+                        [postId]: commentsList.filter(c => !idsToRemove.has(c._id))
                     };
                 });
                 setConfirmDeleteComment(null);
@@ -845,8 +920,9 @@ export default function CommunityHub() {
                                             ref={textareaRef}
                                             value={newPostContent}
                                             onChange={(e) => handleInputText(e.target.value, setNewPostContent, null, null)}
+                                            onKeyDown={(e) => handleKeyDown(e, setNewPostContent)}
                                             placeholder="Share a solve, algorithm, or thought..."
-                                            className="w-full bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 outline-none resize-none min-h-[64px] text-sm leading-relaxed"
+                                            className="w-full bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-550 outline-none resize-none min-h-[64px] text-sm leading-relaxed"
                                             onInput={(e) => {
                                                 const target = e.target as HTMLTextAreaElement;
                                                 target.style.height = 'auto';
@@ -963,7 +1039,8 @@ export default function CommunityHub() {
                                         </Button>
                                     </div>
                                 </div>
-                            </div>                            {/* Feed Filters Toggle Row */}
+                            </div>
+                            {/* Feed Filters Toggle Row */}
                             <div className="flex gap-2 overflow-x-auto pb-1.5 w-full border-b border-slate-200 dark:border-white/5 scrollbar-none">
                                 {[
                                     { id: 'all', label: 'All Feed' },
@@ -1051,6 +1128,7 @@ export default function CommunityHub() {
                                                         <textarea
                                                             value={editingPostContent}
                                                             onChange={(e) => handleInputText(e.target.value, setEditingPostContent, post._id, null)}
+                                                            onKeyDown={(e) => handleKeyDown(e, setEditingPostContent)}
                                                             className="w-full bg-slate-50 dark:bg-black/45 border border-slate-200 dark:border-white/10 rounded-xl p-3 text-xs sm:text-sm text-slate-900 dark:text-white focus:border-primary outline-none resize-y min-h-[72px]"
                                                         />
                                                         
@@ -1122,8 +1200,6 @@ export default function CommunityHub() {
                                                         <code className="text-slate-900 dark:text-white font-mono font-bold tracking-wider text-xs sm:text-sm block break-all select-all">{post.solveData.alg}</code>
                                                     </div>
                                                 )}
-
-                                                {/* Social Action Engagement Bar */}
                                                 <div className="flex items-center gap-5 sm:gap-6 mt-1 pt-3.5 border-t border-slate-200 dark:border-white/5 w-full">
                                                     <button
                                                         onClick={() => handleToggleLike(post._id)}
@@ -1144,9 +1220,6 @@ export default function CommunityHub() {
                                                     >
                                                         <MessageSquare className="w-4 h-4 shrink-0" />
                                                         <span className="text-xs font-bold font-mono">{post.commentCount || 0}</span>
-                                                    </button>
-                                                    <button className="flex items-center gap-1.5 text-slate-500 dark:text-gray-400 sm:hover:text-slate-900 dark:sm:hover:text-white ml-auto min-h-[32px] px-1 cursor-pointer" aria-label="Share post link">
-                                                        <Share2 className="w-4 h-4 shrink-0" />
                                                     </button>
                                                 </div>
 
@@ -1174,24 +1247,26 @@ export default function CommunityHub() {
                                                                         );
                                                                     }
 
-                                                                    // Filter into top-level and replies
-                                                                    const topLevel = postComments.filter(c => c.parentId === null);
-                                                                    const replies = postComments.filter(c => c.parentId !== null);
-
-                                                                    return topLevel.map((comment) => {
-                                                                        const commentReplies = replies.filter(r => r.parentId === comment._id);
+                                                                    // Define the recursive comment tree rendering
+                                                                    const renderCommentTree = (comment: CommentData, depth: number = 0) => {
+                                                                        const commentReplies = postComments.filter(c => c.parentId === comment._id);
                                                                         const hasReplies = commentReplies.length > 0;
-                                                                        
+
                                                                         return (
-                                                                            <div key={comment._id} className="flex flex-col gap-1.5">
-                                                                                {/* Top level comment card */}
-                                                                                <div className="flex items-start gap-2.5">
+                                                                            <div key={comment._id} className="flex flex-col gap-1.5 w-full">
+                                                                                {/* Comment card */}
+                                                                                <div 
+                                                                                    className={clsx(
+                                                                                        "flex items-start gap-2.5 w-full",
+                                                                                        depth > 0 && "pl-3 sm:pl-4 border-l border-slate-200 dark:border-white/5 ml-2.5 sm:ml-3"
+                                                                                    )}
+                                                                                >
                                                                                     <img src={comment.author.avatar} alt={comment.author.name} className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
                                                                                     <div className="flex-1 min-w-0 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-2xl px-3 py-2">
                                                                                         <div className="flex justify-between items-start gap-2 mb-1">
                                                                                             <div>
                                                                                                 <span className="font-bold text-slate-900 dark:text-white text-xs block leading-none">{comment.author.name}</span>
-                                                                                                <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono">@{comment.author.handle.replace('@', '')} • {comment.timeAgo}</span>
+                                                                                                <span className="text-[9px] text-slate-400 dark:text-gray-550 font-mono">@{comment.author.handle.replace('@', '')} • {comment.timeAgo}</span>
                                                                                             </div>
                                                                                             
                                                                                             <div className="flex items-center gap-1.5">
@@ -1202,14 +1277,14 @@ export default function CommunityHub() {
                                                                                                                 setEditingCommentId(comment._id);
                                                                                                                 setEditingCommentContent(comment.content);
                                                                                                             }}
-                                                                                                            className="p-0.5 text-slate-400 hover:text-primary dark:text-gray-500 dark:hover:text-white transition-colors cursor-pointer"
+                                                                                                            className="p-0.5 text-slate-400 hover:text-primary dark:text-gray-550 dark:hover:text-white transition-colors cursor-pointer"
                                                                                                             title="Edit Comment"
                                                                                                         >
                                                                                                             <Edit2 className="w-3 h-3" />
                                                                                                         </button>
                                                                                                         <button
                                                                                                             onClick={() => setConfirmDeleteComment(comment)}
-                                                                                                            className="p-0.5 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-450 transition-colors cursor-pointer"
+                                                                                                            className="p-0.5 text-slate-400 hover:text-red-500 dark:text-gray-550 dark:hover:text-red-450 transition-colors cursor-pointer"
                                                                                                             title="Delete Comment"
                                                                                                         >
                                                                                                             <Trash2 className="w-3 h-3" />
@@ -1220,13 +1295,35 @@ export default function CommunityHub() {
                                                                                         </div>
 
                                                                                         {editingCommentId === comment._id ? (
-                                                                                            <div className="flex flex-col gap-1.5 mt-1 w-full">
+                                                                                            <div className="flex flex-col gap-1.5 mt-1 w-full relative">
                                                                                                 <input
                                                                                                     type="text"
                                                                                                     value={editingCommentContent}
                                                                                                     onChange={(e) => handleInputText(e.target.value, setEditingCommentContent, post._id, comment._id)}
+                                                                                                    onKeyDown={(e) => handleKeyDown(e, setEditingCommentContent)}
                                                                                                     className="w-full bg-slate-100 dark:bg-black/35 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:border-primary outline-none"
                                                                                                 />
+                                                                                                
+                                                                                                {/* Autocomplete mention suggest box inside comment edit */}
+                                                                                                {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === comment._id && (
+                                                                                                    <div className="absolute z-[100] left-0 top-full mt-1 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
+                                                                                                        {mentionSuggestions.map((u) => (
+                                                                                                            <button
+                                                                                                                key={u._id}
+                                                                                                                type="button"
+                                                                                                                onClick={() => handleSelectMention(u.handle, editingCommentContent, setEditingCommentContent)}
+                                                                                                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
+                                                                                                            >
+                                                                                                                <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                                                                                                <div className="flex-1 min-w-0">
+                                                                                                                    <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
+                                                                                                                    <span className="text-[10px] text-slate-500 dark:text-gray-400 block truncate">@{u.handle}</span>
+                                                                                                                </div>
+                                                                                                            </button>
+                                                                                                        ))}
+                                                                                                    </div>
+                                                                                                )}
+
                                                                                                 <div className="flex justify-end gap-1.5">
                                                                                                     <button
                                                                                                         onClick={() => {
@@ -1278,93 +1375,18 @@ export default function CommunityHub() {
                                                                                     </div>
                                                                                 </div>
 
-                                                                                {/* Nested replies list */}
+                                                                                {/* Recursively Render Replies */}
                                                                                 {hasReplies && (
-                                                                                    <div className="pl-9 flex flex-col gap-2 mt-1">
-                                                                                        {commentReplies.map((reply) => (
-                                                                                            <div key={reply._id} className="flex items-start gap-2">
-                                                                                                <img src={reply.author.avatar} alt={reply.author.name} className="w-5 h-5 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
-                                                                                                <div className="flex-1 min-w-0 bg-slate-50/50 dark:bg-white/[0.01] border border-slate-100 dark:border-white/5 rounded-xl px-3 py-1.5">
-                                                                                                    <div className="flex justify-between items-start gap-2 mb-0.5">
-                                                                                                        <div>
-                                                                                                            <span className="font-bold text-slate-900 dark:text-white text-[11px] block leading-none">{reply.author.name}</span>
-                                                                                                            <span className="text-[8px] text-slate-400 dark:text-gray-550 font-mono">@{reply.author.handle.replace('@', '')} • {reply.timeAgo}</span>
-                                                                                                        </div>
-                                                                                                        {reply.author._id === user?._id && (
-                                                                                                            <div className="flex items-center gap-1 shrink-0">
-                                                                                                                <button
-                                                                                                                    onClick={() => {
-                                                                                                                        setEditingCommentId(reply._id);
-                                                                                                                        setEditingCommentContent(reply.content);
-                                                                                                                    }}
-                                                                                                                    className="p-0.5 text-slate-400 hover:text-primary dark:text-gray-550 dark:hover:text-white transition-colors cursor-pointer"
-                                                                                                                    title="Edit Reply"
-                                                                                                                >
-                                                                                                                    <Edit2 className="w-2.5 h-2.5" />
-                                                                                                                </button>
-                                                                                                                <button
-                                                                                                                    onClick={() => setConfirmDeleteComment(reply)}
-                                                                                                                    className="p-0.5 text-slate-400 hover:text-red-500 dark:text-gray-550 dark:hover:text-red-400 transition-colors cursor-pointer"
-                                                                                                                    title="Delete Reply"
-                                                                                                                >
-                                                                                                                    <Trash2 className="w-2.5 h-2.5" />
-                                                                                                                </button>
-                                                                                                            </div>
-                                                                                                        )}
-                                                                                                    </div>
-
-                                                                                                    {editingCommentId === reply._id ? (
-                                                                                                        <div className="flex flex-col gap-1.5 mt-1 w-full">
-                                                                                                            <input
-                                                                                                                type="text"
-                                                                                                                value={editingCommentContent}
-                                                                                                                onChange={(e) => handleInputText(e.target.value, setEditingCommentContent, post._id, reply._id)}
-                                                                                                                className="w-full bg-slate-100 dark:bg-black/35 border border-slate-200 dark:border-white/10 rounded-xl px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:border-primary outline-none"
-                                                                                                            />
-                                                                                                            <div className="flex justify-end gap-1.5">
-                                                                                                                <button
-                                                                                                                    onClick={() => {
-                                                                                                                        setEditingCommentId(null);
-                                                                                                                        setEditingCommentContent('');
-                                                                                                                    }}
-                                                                                                                    className="text-[9px] font-bold text-slate-500 dark:text-gray-400 hover:underline cursor-pointer"
-                                                                                                                >
-                                                                                                                    Cancel
-                                                                                                                </button>
-                                                                                                                <button
-                                                                                                                    onClick={() => handleEditComment(post._id, reply._id, editingCommentContent)}
-                                                                                                                    className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
-                                                                                                                >
-                                                                                                                    Save
-                                                                                                                </button>
-                                                                                                            </div>
-                                                                                                        </div>
-                                                                                                    ) : (
-                                                                                                        <p className="text-slate-700 dark:text-gray-300 text-[11px] leading-relaxed whitespace-pre-wrap break-words">
-                                                                                                            {renderContentWithMentions(reply.content)}
-                                                                                                        </p>
-                                                                                                    )}
-
-                                                                                                    <div className="flex items-center gap-2 mt-1">
-                                                                                                        <button
-                                                                                                            onClick={() => handleToggleCommentLike(post._id, reply._id)}
-                                                                                                            className={clsx(
-                                                                                                                "flex items-center gap-0.5 text-[9px] font-mono transition-colors cursor-pointer",
-                                                                                                                reply.isLikedByMe ? "text-red-400" : "text-slate-500 dark:text-gray-400 hover:text-red-400"
-                                                                                                            )}
-                                                                                                        >
-                                                                                                            <Heart className={clsx("w-2.5 h-2.5 shrink-0", reply.isLikedByMe && "fill-current")} />
-                                                                                                            <span>{reply.likes || 0}</span>
-                                                                                                        </button>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        ))}
+                                                                                    <div className="flex flex-col gap-1.5 mt-1">
+                                                                                        {commentReplies.map((reply) => renderCommentTree(reply, depth + 1))}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
                                                                         );
-                                                                    });
+                                                                    };
+
+                                                                    const topLevel = postComments.filter(c => c.parentId === null);
+                                                                    return topLevel.map((comment) => renderCommentTree(comment, 0));
                                                                 })()}
                                                             </div>
                                                         )}
@@ -1372,7 +1394,7 @@ export default function CommunityHub() {
                                                         {/* Replying banner */}
                                                         {replyingToComment[post._id] && (
                                                             <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 text-[10px] text-primary w-full">
-                                                                <span>Replying to <strong>@{replyingToComment[post._id]?.author.name}</strong></span>
+                                                                <span>Replying to <strong>{replyingToComment[post._id]?.author.handle}</strong></span>
                                                                 <button
                                                                     onClick={() => {
                                                                         setReplyingToComment(prev => ({ ...prev, [post._id]: null }));
@@ -1393,6 +1415,7 @@ export default function CommunityHub() {
                                                                     rows={1}
                                                                     value={newCommentContent[post._id] || ''}
                                                                     onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
+                                                                    onKeyDown={(e) => handleKeyDown(e, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
                                                                     placeholder="Write a comment..."
                                                                     className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal max-h-24"
                                                                 />

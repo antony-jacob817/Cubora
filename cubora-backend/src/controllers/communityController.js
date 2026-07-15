@@ -341,7 +341,16 @@ exports.editComment = async (req, res) => {
   }
 };
 
-// @desc    Delete a comment and its children
+// Recursively delete a comment and all of its descendants
+async function deleteCommentAndDescendants(commentId) {
+  const children = await Comment.find({ parentId: commentId });
+  for (const child of children) {
+    await deleteCommentAndDescendants(child._id);
+  }
+  await Comment.findByIdAndDelete(commentId);
+}
+
+// @desc    Delete a comment and its children (recursively)
 // @route   DELETE /api/community/comments/:id
 // @access  Private
 exports.deleteComment = async (req, res) => {
@@ -355,9 +364,8 @@ exports.deleteComment = async (req, res) => {
       return res.status(401).json({ success: false, error: 'Not authorized to delete this comment.' });
     }
 
-    // Delete comment and all its child comments (replies)
-    await Comment.deleteMany({ parentId: comment._id });
-    await comment.deleteOne();
+    // Recursively delete the comment and all its descendants
+    await deleteCommentAndDescendants(comment._id);
 
     res.status(200).json({ success: true, message: 'Comment and associated replies deleted.' });
   } catch (error) {
