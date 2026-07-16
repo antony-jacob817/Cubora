@@ -1,10 +1,10 @@
-﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-    MessageSquare, Heart, Share2, Trophy, Edit2,
+    MessageSquare, Heart, Share2, Trophy, Edit2, Crown,
     Medal, Flame, Star,
-    Clock, Award, Loader2, Target, Timer, X,
+    Clock, Award, Loader2, Target, Timer, X, Check,
     TrendingUp, Plus, Trash2, Brain, ChevronDown, ChevronUp,
     ChevronLeft, ChevronRight, Play, Pause, RotateCcw
 } from 'lucide-react';
@@ -224,6 +224,8 @@ const renderContentWithMentions = (content: string) => {
     });
 };
 
+
+
 function AmbientParticles() {
   const count = 50;
   const pointsRef = useRef<THREE.Points>(null);
@@ -321,7 +323,7 @@ function PostCubeRenderer({ action, speed, initialScramble, currentTimelineIndex
   );
 }
 
-function PostCubePlayback({ alg, onReset }: { alg: string; onReset: () => void }) {
+function PostCubePlayback({ alg, onReset, onUnload }: { alg: string; onReset: () => void; onUnload: () => void }) {
   const steps = useMemo(() => [{ phase: 'Alg', explanation: '', moves: alg }], [alg]);
   
   const { 
@@ -352,80 +354,118 @@ function PostCubePlayback({ alg, onReset }: { alg: string; onReset: () => void }
           currentTimelineIndex={currentTimelineIndex} 
         />
         
-        {/* Step indicator in top-right */}
-        <div className="absolute top-2.5 right-2.5 bg-black/40 dark:bg-black/60 border border-slate-200/20 dark:border-white/10 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 pointer-events-none select-none">
+        {/* Unload X button in top-right */}
+        <button 
+          onClick={onUnload} 
+          className="absolute top-2.5 right-2.5 bg-black/40 dark:bg-black/60 hover:bg-red-500/20 hover:text-red-500 border border-slate-200/20 dark:border-white/10 p-1.5 rounded-lg text-slate-400 dark:text-slate-350 transition-colors cursor-pointer active:scale-95 z-20 flex items-center justify-center"
+          title="Unload 3D View"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Step indicator in bottom-right */}
+        <div className="absolute bottom-2.5 right-2.5 bg-black/40 dark:bg-black/60 border border-slate-200/20 dark:border-white/10 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 pointer-events-none select-none z-10">
           {Math.max(0, currentTimelineIndex + 1)} / {totalMoves}
         </div>
       </div>
 
       {/* Control panel */}
-      <div className="shrink-0 w-full px-3 py-1.5 bg-slate-100/50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/5 flex items-center justify-center gap-3.5 z-10">
-        <button 
-          onClick={prevMove} 
-          disabled={currentTimelineIndex < 0}
-          className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
-          title="Step Back"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        
-        <button 
-          onClick={togglePlay} 
-          className="p-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white transition-all active:scale-95 flex items-center justify-center cursor-pointer"
-          title={isPlaying ? "Pause" : "Play"}
-        >
-          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-        </button>
+      <div className="shrink-0 w-full px-3 py-1.5 bg-slate-100/50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/5 flex items-center justify-between z-10">
+        {/* Left spacer for centering balance */}
+        <div className="flex-1" />
 
-        <button 
-          onClick={nextMove} 
-          disabled={currentTimelineIndex >= totalMoves - 1}
-          className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
-          title="Step Forward"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
+        {/* Centered Playback controls */}
+        <div className="flex items-center gap-3.5 justify-center">
+          <button 
+            onClick={prevMove} 
+            disabled={currentTimelineIndex < 0}
+            className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+            title="Step Back"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          
+          <button 
+            onClick={togglePlay} 
+            className="p-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white transition-all active:scale-95 flex items-center justify-center cursor-pointer"
+            title={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+          </button>
 
-        <div className="w-[1px] h-4 bg-slate-300 dark:bg-white/10 self-center" />
+          <button 
+            onClick={nextMove} 
+            disabled={currentTimelineIndex >= totalMoves - 1}
+            className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+            title="Step Forward"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
 
-        <button 
-          onClick={onReset} 
-          className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
-          title="Reset Cube"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-        </button>
+        {/* Far-right Reset button */}
+        <div className="flex-1 flex justify-end pr-2">
+          <button 
+            onClick={onReset} 
+            className="p-1 rounded-lg hover:bg-slate-200 hover:dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+            title="Reset Cube"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 function PostCubeViewer({ alg }: { alg: string }) {
+  const [isLoaded, setIsLoaded] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [isBooted, setIsBooted] = useState(false);
 
   useEffect(() => {
+    if (!isLoaded) return;
     const timer = setTimeout(() => {
       setIsBooted(true);
     }, 100);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isLoaded]);
 
   const handleReset = () => {
     setResetKey(prev => prev + 1);
   };
 
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-48 bg-slate-50/50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl flex flex-col items-center justify-center p-4 text-center select-none relative overflow-hidden group">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.03)_1px,transparent_1px)] bg-[size:14px_14px] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col items-center gap-3">
+          <button
+              onClick={() => setIsLoaded(true)}
+              className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 border border-slate-350 dark:border-white/10 rounded-xl hover:bg-slate-200 dark:hover:bg-white/10 hover:border-slate-400 dark:hover:border-white/20 transition-all duration-200 active:scale-95 cursor-pointer select-none"
+          >
+              Load 3D View
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!isBooted) {
     return (
-      <div className="w-full h-48 flex flex-col items-center justify-center gap-2 bg-slate-50/50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-xl mb-4">
+      <div className="w-full h-48 flex flex-col items-center justify-center gap-2 bg-slate-50/50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 rounded-xl">
         <Loader2 className="w-6 h-6 text-primary animate-spin" />
-        <span className="text-[10px] font-mono font-bold tracking-widest text-slate-400 dark:text-gray-500 uppercase animate-pulse">Booting 3D View...</span>
+        <span className="text-[10px] font-mono font-bold tracking-widest text-slate-400 dark:text-gray-550 uppercase animate-pulse">Booting 3D View...</span>
       </div>
     );
   }
 
   return (
-    <PostCubePlayback key={resetKey} alg={alg} onReset={handleReset} />
+    <PostCubePlayback key={resetKey} alg={alg} onReset={handleReset} onUnload={() => {
+      setIsLoaded(false);
+      setIsBooted(false);
+    }} />
   );
 }
 
@@ -450,7 +490,7 @@ export default function CommunityHub() {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Feed Pagination & Filtering states
-    const [feedFilter, setFeedFilter] = useState<'all' | 'solve' | 'pb' | 'algorithm' | 'discussion'>('all');
+    const [feedFilter, setFeedFilter] = useState<string>('all');
     const [feedCursor, setFeedCursor] = useState<string | null>(null);
     const [hasMorePosts, setHasMorePosts] = useState(true);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -1190,14 +1230,16 @@ export default function CommunityHub() {
                 </div>
             </div>
 
-            <AnimatePresence mode="wait">
-                {activeTab === 'feed' ? (
-                    /* ================= GLOBAL FEED STREAM TAB ================= */
-                    <motion.div
-                        key="feed"
-                        initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }}
-                        className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6 w-full"
-                    >
+            <div className="w-full relative">
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: activeTab === 'feed' ? 1 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={clsx(
+                        "grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6 w-full",
+                        activeTab === 'feed' ? "block" : "hidden"
+                    )}
+                >
                         {/* Left Column Feed Node Feed Panel */}
                         <div className="lg:col-span-2 flex flex-col gap-5 sm:gap-6 w-full">
 
@@ -1342,12 +1384,23 @@ export default function CommunityHub() {
                                     { id: 'algorithm', label: 'Algorithms', icon: Brain },
                                     { id: 'discussion', label: 'Discussions', icon: MessageSquare }
                                 ].map((filterItem) => {
-                                    const isSelected = feedFilter === filterItem.id;
+                                    const isMethodFilter = !['all', 'solve', 'pb', 'algorithm', 'discussion'].includes(feedFilter);
+                                    const isSelected = feedFilter === filterItem.id || (filterItem.id === 'solve' && isMethodFilter);
                                     const IconComponent = 'icon' in filterItem ? filterItem.icon : null;
+                                    const displayLabel = filterItem.id === 'solve' && isMethodFilter 
+                                        ? `Solves: ${feedFilter}` 
+                                        : filterItem.label;
+                                    
                                     return (
                                         <button
                                             key={filterItem.id}
-                                            onClick={() => setFeedFilter(filterItem.id as any)}
+                                            onClick={() => {
+                                                if (filterItem.id === 'solve' && isMethodFilter) {
+                                                    setFeedFilter('solve');
+                                                } else {
+                                                    setFeedFilter(filterItem.id);
+                                                }
+                                            }}
                                             className={clsx(
                                                 "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer border active:scale-95 flex items-center gap-1.5 shrink-0",
                                                 isSelected 
@@ -1356,7 +1409,7 @@ export default function CommunityHub() {
                                             )}
                                         >
                                             {IconComponent && <IconComponent className={clsx("w-3.5 h-3.5", isSelected ? "text-white" : "text-slate-500 dark:text-gray-400")} />}
-                                            {filterItem.label}
+                                            {displayLabel}
                                         </button>
                                     );
                                 })}
@@ -1396,6 +1449,22 @@ export default function CommunityHub() {
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
                                                         {post.type === 'solve' && <span className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/5 dark:bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">Verified</span>}
+                                                        {post.type === 'solve' && post.solveData?.method && (
+                                                             <button
+                                                                 onClick={() => setFeedFilter(post.solveData.method)}
+                                                                 className={clsx(
+                                                                     "relative overflow-hidden inline-flex items-center justify-center font-display font-medium rounded-lg",
+                                                                     "transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+                                                                     "hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.95] active:translate-y-0",
+                                                                     "bg-gradient-to-r from-primary to-secondary text-white btn-glow border border-slate-200/20 dark:border-white/20",
+                                                                     "before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-1000 before:ease-out",
+                                                                     "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 cursor-pointer select-none"
+                                                                 )}
+                                                                 title={`Filter by ${post.solveData.method}`}
+                                                             >
+                                                                 <span className="relative z-10">{post.solveData.method}</span>
+                                                             </button>
+                                                         )}
                                                         {post.type === 'algorithm' && <span className="text-[9px] font-bold uppercase tracking-widest text-secondary bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 px-2 py-0.5 rounded">Alg</span>}
                                                         {post.author._id === user?._id && (
                                                             <div className="flex items-center gap-1 border-l border-slate-200 dark:border-white/5 pl-2 ml-1">
@@ -1781,39 +1850,46 @@ export default function CommunityHub() {
                                                                                     <div className="flex flex-col gap-1 pl-3.5 sm:pl-5 ml-[14px] sm:ml-[20px] relative">
                                                                                         {isReplyingThis && (
                                                                                             <div data-reply-input-active="true" className="flex flex-col gap-2 w-full mb-1 relative">
-                                                                                                <div className="flex gap-3 items-center w-full max-w-full relative pr-2.5 py-1.5">
+                                                                                                <div className="flex gap-3 items-center w-full relative pr-2.5 py-3">
                                                                                                     <img src={user?.avatar} alt="Me" className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
-                                                                                                    <div className="flex-grow max-w-[45%] sm:max-w-[65%] relative min-w-0">
+                                                                                                    <div className="flex-1 relative min-w-0">
                                                                                                         <textarea
+                                                                                                            ref={(el) => {
+                                                                                                                if (el) {
+                                                                                                                    el.style.height = 'auto';
+                                                                                                                    if (newCommentContent[post._id]) {
+                                                                                                                        el.style.height = `${el.scrollHeight}px`;
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            }}
                                                                                                             rows={1}
                                                                                                             value={newCommentContent[post._id] || ''}
                                                                                                             onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
                                                                                                             onKeyDown={(e) => handleKeyDown(e, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
                                                                                                             placeholder="Reply to this comment..."
-                                                                                                            className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal max-h-24"
+                                                                                                            className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-3 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal overflow-y-auto max-h-24 hide-scrollbar"
                                                                                                         />
                                                                                                     </div>
-                                                                                                    <div className="flex items-center gap-1 shrink-0 pr-1.5">
-                                                                                                        <Button
-                                                                                                            variant="secondary"
-                                                                                                            size="sm"
+                                                                                                    <div className="flex items-center gap-1.5 shrink-0 pr-3 pb-2 pt-1">
+                                                                                                        <button
+                                                                                                            type="button"
                                                                                                             onClick={() => {
                                                                                                                 setReplyingToComment(prev => ({ ...prev, [post._id]: null }));
                                                                                                                 setNewCommentContent(prev => ({ ...prev, [post._id]: '' }));
                                                                                                             }}
-                                                                                                            className="h-7 rounded-xl px-2 text-[9px] font-bold w-auto shrink-0"
+                                                                                                            className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0 bg-slate-100/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white hover:bg-slate-200/80 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/20 transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.95] active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none cursor-pointer focus:outline-none"
+                                                                                                            title="Cancel reply"
                                                                                                         >
-                                                                                                            Cancel
-                                                                                                        </Button>
-                                                                                                        <Button
-                                                                                                            variant="glow"
-                                                                                                            size="sm"
+                                                                                                            <X className="w-3.5 h-3.5" />
+                                                                                                        </button>
+                                                                                                        <button
                                                                                                             disabled={!(newCommentContent[post._id] || '').trim()}
                                                                                                             onClick={() => handleCreateComment(post._id)}
-                                                                                                            className="h-7 rounded-xl px-2 text-[9px] font-bold w-auto shrink-0"
+                                                                                                            className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-r from-primary to-secondary text-white border border-slate-200/20 dark:border-white/20 shadow-[0_2.5px_8px_var(--btn-glow-shadow)] hover:shadow-[0_4px_12px_var(--btn-glow-shadow)] transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.95] active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none cursor-pointer focus:outline-none"
+                                                                                                            title="Submit reply"
                                                                                                         >
-                                                                                                            Reply
-                                                                                                        </Button>
+                                                                                                            <Check className="w-3.5 h-3.5" />
+                                                                                                        </button>
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </div>
@@ -1848,12 +1924,20 @@ export default function CommunityHub() {
                                                                 <img src={user?.avatar} alt="Me" className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
                                                                 <div className="flex-1 relative min-w-0">
                                                                     <textarea
+                                                                        ref={(el) => {
+                                                                            if (el) {
+                                                                                el.style.height = 'auto';
+                                                                                if (newCommentContent[post._id]) {
+                                                                                    el.style.height = `${el.scrollHeight}px`;
+                                                                                }
+                                                                            }
+                                                                        }}
                                                                         rows={1}
                                                                         value={newCommentContent[post._id] || ''}
                                                                         onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
                                                                         onKeyDown={(e) => handleKeyDown(e, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
                                                                         placeholder="Write a comment..."
-                                                                        className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-3 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal max-h-24"
+                                                                        className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-3 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal overflow-y-auto max-h-24 hide-scrollbar"
                                                                     />
 
                                                                     {/* Autocomplete mention suggest box inside active comment */}
@@ -1953,15 +2037,17 @@ export default function CommunityHub() {
                                 </div>
                             </div>
                         </div>
-                    </motion.div>
+                </motion.div>
 
-                ) : (
-                    /* ================= PUBLIC PERSONAL PROFILE TAB ================= */
-                    <motion.div
-                        key="profile"
-                        initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -15 }}
-                        className="flex flex-col gap-5 sm:gap-6 w-full"
-                    >
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: activeTab === 'profile' ? 1 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={clsx(
+                        "flex flex-col gap-5 sm:gap-6 w-full",
+                        activeTab === 'profile' ? "block" : "hidden"
+                    )}
+                >
                         {isLoadingProfile ? (
                             <div className="flex flex-col items-center justify-center py-24 text-slate-500 w-full text-center">
                                 <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
@@ -2011,15 +2097,7 @@ export default function CommunityHub() {
                                                         const IconComponent = activeAch ? (ICON_MAP[activeAch.icon] || Trophy) : null;
                                                         
                                                         const tier = badgeId ? badgeId.substring(badgeId.lastIndexOf('-') + 1).toLowerCase() : null;
-                                                        const colors: Record<string, string> = {
-                                                            bronze: 'bg-amber-500/15 text-amber-800 dark:text-amber-500 border-amber-500/30',
-                                                            silver: 'bg-slate-400/15 text-slate-500 dark:text-slate-400 border-slate-400/30',
-                                                            gold: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-500 border-yellow-500/30',
-                                                            emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-500 border-emerald-500/30',
-                                                            diamond: 'bg-cyan-400/15 text-cyan-600 dark:text-cyan-400 border-cyan-400/30',
-                                                            ruby: 'bg-rose-500/15 text-rose-600 dark:text-rose-500 border-rose-500/30'
-                                                        };
-                                                        const badgeColorClass = tier ? (colors[tier] || '') : '';
+                                                        const badgeColorClass = tier ? (TierColors[tier] || '') : '';
 
                                                         return (
                                                             <button
@@ -2206,8 +2284,10 @@ export default function CommunityHub() {
                                                                             </div>
                                                                         </>
                                                                     ) : (
-                                                                        <div className="flex items-center justify-center gap-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-lg py-1 text-[9px] font-bold uppercase tracking-wider">
-                                                                            👑 Max Level Reached! 👑
+                                                                        <div className="flex items-center justify-center gap-1.5 bg-yellow-500/10 border border-yellow-500/25 text-yellow-600 dark:text-yellow-400 rounded-xl py-2 px-3 text-[10px] font-bold uppercase tracking-wider select-none shadow-[0_0_12px_rgba(234,179,8,0.1)]">
+                                                                            <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce shrink-0" />
+                                                                            <span className="animate-pulse">Max Level Reached!</span>
+                                                                            <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce shrink-0" />
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -2283,8 +2363,10 @@ export default function CommunityHub() {
                                                                             </div>
                                                                         </>
                                                                     ) : (
-                                                                        <div className="flex items-center justify-center gap-1 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-lg py-1 text-[9px] font-bold uppercase tracking-wider">
-                                                                            👑 Max Level Reached! 👑
+                                                                        <div className="flex items-center justify-center gap-1.5 bg-yellow-500/10 border border-yellow-500/25 text-yellow-600 dark:text-yellow-400 rounded-xl py-2 px-3 text-[10px] font-bold uppercase tracking-wider select-none shadow-[0_0_12px_rgba(234,179,8,0.1)]">
+                                                                            <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce shrink-0" />
+                                                                            <span className="animate-pulse">Max Level Reached!</span>
+                                                                            <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce shrink-0" />
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -2298,9 +2380,8 @@ export default function CommunityHub() {
                                  </div>
                              </>
                          )}
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                </motion.div>
+            </div>
 
             {/* Solve Picker Modal */}
             {createPortal(
@@ -2483,18 +2564,17 @@ export default function CommunityHub() {
                         </div>
 
                         <div className="flex gap-3 mt-5 w-full">
-                            <Button
+                            <button
                                 type="button"
-                                variant="secondary"
                                 onClick={() => setIsAlgInputOpen(false)}
-                                className="flex-1 rounded-xl h-11 min-h-[44px] text-xs font-bold"
+                                className="flex-1 rounded-xl h-11 min-h-[44px] text-xs font-bold bg-slate-100/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white hover:bg-slate-200/80 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/20 transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.95] active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none cursor-pointer focus:outline-none"
                             >
                                 Cancel
-                            </Button>
+                            </button>
                             <button
                                 type="submit"
                                 disabled={!algText.trim()}
-                                className="flex-1 bg-secondary hover:bg-secondary/90 disabled:opacity-40 text-white rounded-xl h-11 min-h-[44px] text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.2)]"
+                                className="flex-1 rounded-xl h-11 min-h-[44px] text-xs font-bold bg-gradient-to-r from-primary to-secondary text-white border border-slate-200/20 dark:border-white/20 shadow-[0_2.5px_8px_var(--btn-glow-shadow)] hover:shadow-[0_4px_12px_var(--btn-glow-shadow)] transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.95] active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none cursor-pointer focus:outline-none flex items-center justify-center gap-2"
                             >
                                 Attach
                             </button>

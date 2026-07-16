@@ -340,6 +340,23 @@ exports.evaluateAchievements = async (userId) => {
           title: title
         });
         newUnlocks.push({ id: badgeId, title });
+
+        // Trigger real-time achievement notification
+        try {
+          const { createNotification } = require('./notificationController');
+          const badge = ALL_BADGES.find(b => b.id === badgeId);
+          if (badge) {
+            const trackName = badge.title.split(' (')[0];
+            await createNotification({
+              recipient: userId,
+              type: 'achievement',
+              title: 'Trophy Upgraded!',
+              content: `You just hit the ${badge.tier} Tier in the ${trackName} track.`
+            });
+          }
+        } catch (nErr) {
+          console.error('Failed to trigger achievement notification:', nErr);
+        }
       }
     };
 

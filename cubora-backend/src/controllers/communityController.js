@@ -1,5 +1,6 @@
 const CommunityPost = require('../models/CommunityPost');
 const Comment = require('../models/Comment');
+const { createNotification } = require('./notificationController');
 
 // Helper to get relative time
 function getTimeAgo(date) {
@@ -66,6 +67,8 @@ exports.getPosts = async (req, res) => {
     let query = {};
     if (filter === 'pb') {
       query.isPB = true;
+    } else if (['cfop', 'roux', 'zz', 'beginner', 'simplified cfop', 'other'].includes(filter.toLowerCase())) {
+      query['solveData.method'] = new RegExp(`^${filter}$`, 'i');
     } else if (filter !== 'all') {
       query.type = filter;
     }
@@ -220,6 +223,16 @@ exports.toggleLike = async (req, res) => {
     } else {
       post.likedBy.push(userId);
       post.likes += 1;
+      
+      // Trigger notification
+      await createNotification({
+        recipient: post.author,
+        sender: userId,
+        type: 'like',
+        title: 'New Likes',
+        content: `${req.user.name} liked your post!`,
+        post: post._id
+      });
     }
 
     await post.save();
@@ -273,6 +286,65 @@ exports.createComment = async (req, res) => {
       content: content.trim(),
       parentId: parentId || null,
     });
+
+    // Parse mentions: look for @username patterns in content
+    const mentionRegex = /@([a-zA-Z0-9_.-]+)/g;
+    let match;
+    const mentionedUsernames = [];
+    while ((match = mentionRegex.exec(content)) !== null) {
+      mentionedUsernames.push(match[1].toLowerCase());
+    }
+
+    let hasNotifiedPostAuthor = false;
+
+    // Notify mentioned users
+    if (mentionedUsernames.length > 0) {
+      const User = require('../models/User');
+      const mentionedUsers = await User.find({ username: { $in: mentionedUsernames } });
+      
+      for (const u of mentionedUsers) {
+        if (u._id.toString() !== req.user.id.toString()) {
+          await createNotification({
+            recipient: u._id,
+            sender: req.user.id,
+            type: 'mention',
+            title: 'Mentioned in Comment',
+            content: `@${req.user.username || req.user.name} mentioned you in a comment: '${content}'`,
+            post: post._id
+          });
+          if (u._id.toString() === post.author.toString()) {
+            hasNotifiedPostAuthor = true;
+          }
+        }
+      }
+    }
+
+    // Trigger reply notifications if they weren't already notified via mention
+    if (!hasNotifiedPostAuthor) {
+      if (!parentId && post.author.toString() !== req.user.id.toString()) {
+        await createNotification({
+          recipient: post.author,
+          sender: req.user.id,
+          type: 'reply',
+          title: 'Reply on Post',
+          content: `Someone replied to your algorithm post.`,
+          post: post._id
+        });
+      } else if (parentId) {
+        // Direct reply to comment
+        const parentComment = await Comment.findById(parentId);
+        if (parentComment && parentComment.author.toString() !== req.user.id.toString()) {
+          await createNotification({
+            recipient: parentComment.author,
+            sender: req.user.id,
+            type: 'reply',
+            title: 'Reply to Comment',
+            content: `${req.user.name} replied to your comment.`,
+            post: post._id
+          });
+        }
+      }
+    }
 
     await comment.populate('author', 'name email username avatar');
 
