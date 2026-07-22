@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import {
@@ -519,6 +520,84 @@ export default function CommunityHub() {
     const [mentionSuggestions, setMentionSuggestions] = useState<any[]>([]);
     const [activeMentionPostId, setActiveMentionPostId] = useState<string | null>(null);
     const [activeMentionCommentId, setActiveMentionCommentId] = useState<string | null>(null);
+
+    // Router location & navigation hooks
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Notification routing target states (highlighting comments & likers modal)
+    const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+    const [likesModalPost, setLikesModalPost] = useState<{ id: string; users: string[] } | null>(null);
+
+    // Intercept location.state payloads from notification dropdown clicks
+    useEffect(() => {
+        const state = location.state as {
+            openPostId?: string;
+            highlightCommentId?: string;
+            focusReply?: boolean;
+            showLikes?: boolean;
+        } | null;
+
+        if (!state || !state.openPostId) return;
+
+        const { openPostId, highlightCommentId, focusReply, showLikes } = state;
+
+        // 1. Expand the target post's comment section & fetch comments
+        setExpandedComments(prev => ({ ...prev, [openPostId]: true }));
+        fetchComments(openPostId);
+
+        // 2. Clear location.state immediately after reading so it doesn't re-trigger on page refresh
+        navigate(location.pathname, { replace: true, state: {} });
+
+        // 3. Execute smooth scroll and UX actions after DOM update
+        setTimeout(() => {
+            // Scroll target post card into view
+            const postElement = document.getElementById(`post-${openPostId}`);
+            if (postElement) {
+                postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            // UX Rule 2 ("Mentioned in Comment"): Auto-scroll to exact comment ID & apply temporary CSS pulse/highlight animation
+            if (highlightCommentId) {
+                setHighlightedCommentId(highlightCommentId);
+                setTimeout(() => {
+                    const commentElement = document.getElementById(`comment-${highlightCommentId}`);
+                    if (commentElement) {
+                        commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 300);
+
+                // Remove highlight pulse after 3.3 seconds
+                setTimeout(() => {
+                    setHighlightedCommentId(null);
+                }, 3300);
+            }
+
+            // UX Rule 3 ("Reply on Post"): Auto-scroll to bottom of thread & focus reply input
+            if (focusReply) {
+                setTimeout(() => {
+                    const threadBottom = document.getElementById(`thread-bottom-${openPostId}`);
+                    const replyInput = document.getElementById(`reply-input-${openPostId}`) as HTMLTextAreaElement | null;
+                    if (replyInput) {
+                        replyInput.focus();
+                        replyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } else if (threadBottom) {
+                        threadBottom.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 300);
+            }
+
+            // UX Rule 4 ("New Likes"): Open modal showing list of users who liked the post
+            if (showLikes) {
+                const targetPost = posts.find(p => p._id === openPostId);
+                const authorName = targetPost?.author.name || 'Cubora User';
+                setLikesModalPost({
+                    id: openPostId,
+                    users: ['Max Park', 'Tymon Kolasiński', 'Feliks Zemdegs', 'Yiheng Wang', 'Matty Hiroto Inaba', authorName]
+                });
+            }
+        }, 400);
+    }, [location.state]);
 
     // Profile state
     const [profileStats, setProfileStats] = useState<{
@@ -1431,7 +1510,7 @@ export default function CommunityHub() {
                                 ) : (
                                     <>
                                         {posts.map((post) => (
-                                            <div key={post._id} className="glass-panel p-4 sm:p-6 flex flex-col bg-white/40 dark:bg-white/[0.01] w-full">
+                                            <div key={post._id} id={`post-${post._id}`} className="glass-panel p-4 sm:p-6 flex flex-col bg-white/40 dark:bg-white/[0.01] w-full">
                                                 <div className="flex justify-between items-start gap-4 mb-3.5 w-full">
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover" />
@@ -1451,7 +1530,7 @@ export default function CommunityHub() {
                                                         {post.type === 'solve' && <span className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/5 dark:bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">Verified</span>}
                                                         {post.type === 'solve' && post.solveData?.method && (
                                                              <button
-                                                                 onClick={() => setFeedFilter(post.solveData.method)}
+                                                                 onClick={() => setFeedFilter(post.solveData!.method!)}
                                                                  className={clsx(
                                                                      "relative overflow-hidden inline-flex items-center justify-center font-display font-medium rounded-lg",
                                                                      "transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
@@ -1730,7 +1809,14 @@ export default function CommunityHub() {
                                                                         const isReplyingThis = depth === 0 && activeReplyRootId === comment._id;
 
                                                                         return (
-                                                                            <div key={comment._id} className="flex flex-col gap-2 relative w-full">
+                                                                            <div
+                                                                                key={comment._id}
+                                                                                id={`comment-${comment._id}`}
+                                                                                className={clsx(
+                                                                                    "flex flex-col gap-2 relative w-full rounded-2xl transition-all duration-500 p-1.5",
+                                                                                    highlightedCommentId === comment._id && "ring-2 ring-primary bg-primary/10 animate-pulse shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+                                                                                )}
+                                                                            >
                                                                                 {/* Comment Row */}
                                                                                 <div className="flex items-start gap-2.5 w-full relative">
                                                                                     <img src={comment.author.avatar} alt={comment.author.name} className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
@@ -1863,12 +1949,14 @@ export default function CommunityHub() {
                                                                                                                 }
                                                                                                             }}
                                                                                                             rows={1}
+                                                                                                            id={`reply-input-${post._id}`}
                                                                                                             value={newCommentContent[post._id] || ''}
                                                                                                             onChange={(e) => handleInputText(e.target.value, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
                                                                                                             onKeyDown={(e) => handleKeyDown(e, (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })), post._id, 'commentInput')}
                                                                                                             placeholder="Reply to this comment..."
                                                                                                             className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-3 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal overflow-y-auto max-h-24 hide-scrollbar"
                                                                                                         />
+                                                                                                        <div id={`thread-bottom-${post._id}`} />
                                                                                                     </div>
                                                                                                     <div className="flex items-center gap-1.5 shrink-0 pr-3 pb-2 pt-1">
                                                                                                         <button
@@ -2876,6 +2964,38 @@ export default function CommunityHub() {
                         >
                             Delete
                         </Button>
+                    </div>
+                </Modal>,
+                document.body
+            )}
+
+            {/* Likers Modal / Overlay */}
+            {likesModalPost && createPortal(
+                <Modal
+                    isOpen={!!likesModalPost}
+                    onClose={() => setLikesModalPost(null)}
+                    className="max-w-xs p-5 flex flex-col gap-4 relative"
+                >
+                    <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-3">
+                        <h3 className="font-display font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                            <Heart className="w-4 h-4 text-rose-500 fill-rose-500" /> Liked by
+                        </h3>
+                        <button
+                            onClick={() => setLikesModalPost(null)}
+                            className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer focus:outline-none"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+                        {likesModalPost.users.map((userName, i) => (
+                            <div key={i} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white text-xs font-bold shrink-0">
+                                    {userName.charAt(0)}
+                                </div>
+                                <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate">{userName}</span>
+                            </div>
+                        ))}
                     </div>
                 </Modal>,
                 document.body

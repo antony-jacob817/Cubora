@@ -11,19 +11,23 @@ interface NavbarProps {
 
 interface NotificationItem {
   id: string;
-  type: 'mention' | 'reply' | 'like' | 'streak' | 'achievement';
+  type: string;
   title: string;
   content: string;
   time: string;
   unread: boolean;
+  postId?: string;
+  commentId?: string;
 }
 
 const getNotificationIcon = (type: string) => {
   switch (type) {
     case 'mention': return AtSign;
     case 'reply': return MessageSquare;
-    case 'like': return Heart;
-    case 'streak': return Flame;
+    case 'like':
+    case 'batched_likes': return Heart;
+    case 'streak':
+    case 'streak_warning': return Flame;
     case 'achievement': return Award;
     default: return Bell;
   }
@@ -33,8 +37,10 @@ const getNotificationIconColor = (type: string) => {
   switch (type) {
     case 'mention': return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
     case 'reply': return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-    case 'like': return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
-    case 'streak': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+    case 'like':
+    case 'batched_likes': return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+    case 'streak':
+    case 'streak_warning': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
     case 'achievement': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
     default: return 'bg-slate-500/10 text-slate-500 border-slate-500/20';
   }
@@ -75,11 +81,42 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           title: n.title,
           content: n.content,
           time: getTimeAgo(n.createdAt),
-          unread: n.unread
+          unread: n.unread,
+          postId: n.post?._id || n.post || n.postId,
+          commentId: n.comment?._id || n.commentId
         })));
       }
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
+    }
+  };
+
+  const handleNotificationClick = (notification: NotificationItem) => {
+    if (notification.unread) {
+      toggleRead(notification.id);
+    }
+    setIsNotificationOpen(false);
+
+    const { type, postId, commentId } = notification;
+
+    if (type === 'streak_warning' || type === 'streak') {
+      // Rule 1: "Consistency Grind!" -> navigate directly to PracticeSession view
+      navigate('/practice');
+    } else if (type === 'mention') {
+      // Rule 2: "Mentioned in Comment" -> open post, scroll to & highlight comment
+      navigate('/community', {
+        state: { openPostId: postId, highlightCommentId: commentId }
+      });
+    } else if (type === 'reply') {
+      // Rule 3: "Reply on Post" -> open post, scroll to bottom & focus reply
+      navigate('/community', {
+        state: { openPostId: postId, focusReply: true }
+      });
+    } else if (type === 'batched_likes' || type === 'like') {
+      // Rule 4: "New Likes" -> open post & show list of likers modal
+      navigate('/community', {
+        state: { openPostId: postId, showLikes: true }
+      });
     }
   };
 
@@ -241,7 +278,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
                   return (
                     <button
                       key={n.id}
-                      onClick={() => toggleRead(n.id)}
+                      onClick={() => handleNotificationClick(n)}
                       className={clsx(
                         "w-full text-left p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.03] border border-transparent transition-[background-color,opacity] duration-150 flex gap-3 items-start relative focus:outline-none focus:ring-0 focus-visible:ring-0 cursor-pointer",
                         n.unread 
