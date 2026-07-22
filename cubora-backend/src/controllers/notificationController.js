@@ -35,14 +35,15 @@ exports.getNotifications = async (req, res, next) => {
         });
 
         if (!existingStreakNotification) {
+          const title = currentStreak > 0 ? 'CONSISTENCY GRIND!' : 'START YOUR GRIND!';
           const streakText = currentStreak > 0 
-            ? `Don't lose your Consistency Grind! Complete one verified solve today to keep your ${currentStreak}-day streak alive.`
-            : `Don't lose your Consistency Grind! Complete one verified solve today to start your streak.`;
+            ? `Don't lose your Consistency Grind! Complete one verified solve in the next 3 hours to keep your ${currentStreak}-day streak alive.`
+            : `Start your Consistency Grind! Complete your first verified solve today to begin your streak.`;
 
           await Notification.create({
             recipient: req.user.id,
             type: 'streak',
-            title: 'Consistency Grind!',
+            title,
             content: streakText,
             unread: true
           });

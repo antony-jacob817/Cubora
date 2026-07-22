@@ -47,6 +47,7 @@ const getNotificationIconColor = (type: string) => {
 };
 
 function getTimeAgo(dateString: string) {
+  if (dateString === 'Just now') return 'Just now';
   const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
   if (seconds < 60) return 'Just now';
   const minutes = Math.floor(seconds / 60);
@@ -72,10 +73,21 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
   const fetchNotifications = async () => {
     try {
       const headers = getAuthHeaders();
-      const res = await fetch('http://localhost:5000/api/notifications', { headers });
-      const resData = await res.json();
-      if (resData.success && resData.data) {
-        setNotifications(resData.data.map((n: any) => ({
+      
+      const [notifRes, statsRes] = await Promise.all([
+        fetch('http://localhost:5000/api/notifications', { headers }),
+        fetch('http://localhost:5000/api/solves/stats', { headers })
+      ]);
+
+      const resData = await notifRes.json();
+      const statsData = await statsRes.json();
+
+      if (resData.success) {
+        const filteredDbNotifications = (resData.data || []).filter(
+          (n: any) => n.type !== 'streak' && n.type !== 'streak_warning'
+        );
+
+        const mappedNotifications = filteredDbNotifications.map((n: any) => ({
           id: n._id,
           type: n.type,
           title: n.title,
@@ -84,10 +96,39 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           unread: n.unread,
           postId: n.post?._id || n.post || n.postId,
           commentId: n.comment?._id || n.commentId
-        })));
+        }));
+
+        const todayStr = new Date().toDateString();
+        const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
+        let streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
+
+        const currentStreak = statsData.success && statsData.stats ? statsData.stats.streak : 0;
+
+        if (!streakState || streakState.date !== todayStr) {
+          streakState = {
+            date: todayStr,
+            timestamp: new Date().toISOString(),
+            unread: true,
+            streak: currentStreak
+          };
+          localStorage.setItem(storageKey, JSON.stringify(streakState));
+        }
+
+        const ephemeralStreakNotification: NotificationItem = {
+          id: 'ephemeral_streak',
+          type: 'streak_warning',
+          title: streakState.streak === 0 ? 'START YOUR GRIND!' : 'CONSISTENCY GRIND!',
+          content: streakState.streak === 0 
+            ? "Start your Consistency Grind! Complete your first verified solve today to begin your streak."
+            : `Don't lose your Consistency Grind! Complete one verified solve today to keep your ${streakState.streak}-day streak alive.`,
+          time: getTimeAgo(streakState.timestamp),
+          unread: streakState.unread 
+        };
+
+        setNotifications([ephemeralStreakNotification, ...mappedNotifications]);
       }
     } catch (err) {
-      console.error('Failed to fetch notifications:', err);
+      console.error('Failed to fetch data:', err);
     }
   };
 
@@ -100,20 +141,16 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
     const { type, postId, commentId } = notification;
 
     if (type === 'streak_warning' || type === 'streak') {
-      // Rule 1: "Consistency Grind!" -> navigate directly to PracticeSession view
-      navigate('/practice');
+      navigate('/practice', { replace: true });
     } else if (type === 'mention') {
-      // Rule 2: "Mentioned in Comment" -> open post, scroll to & highlight comment
       navigate('/community', {
         state: { openPostId: postId, highlightCommentId: commentId }
       });
     } else if (type === 'reply') {
-      // Rule 3: "Reply on Post" -> open post, scroll to bottom & focus reply
       navigate('/community', {
         state: { openPostId: postId, focusReply: true }
       });
     } else if (type === 'batched_likes' || type === 'like') {
-      // Rule 4: "New Likes" -> open post & show list of likers modal
       navigate('/community', {
         state: { openPostId: postId, showLikes: true }
       });
@@ -123,15 +160,25 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
   useEffect(() => {
     if (!user) return;
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 20000); // poll every 20s
+    const interval = setInterval(fetchNotifications, 20000); 
     return () => clearInterval(interval);
   }, [user]);
 
   const unreadCount = useMemo(() => notifications.filter(n => n.unread).length, [notifications]);
 
   const toggleRead = async (id: string) => {
-    // Optimistic UI update
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: !n.unread } : n));
+    
+    if (id === 'ephemeral_streak') {
+      const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
+      const streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      if (streakState) {
+        streakState.unread = !streakState.unread;
+        localStorage.setItem(storageKey, JSON.stringify(streakState));
+      }
+      return; 
+    }
+
     try {
       const headers = getAuthHeaders();
       await fetch(`http://localhost:5000/api/notifications/${id}`, {
@@ -144,8 +191,15 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
   };
 
   const markAllAsRead = async () => {
-    // Optimistic UI update
     setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+    
+    const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
+    const streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
+    if (streakState) {
+      streakState.unread = false;
+      localStorage.setItem(storageKey, JSON.stringify(streakState));
+    }
+
     try {
       const headers = getAuthHeaders();
       await fetch('http://localhost:5000/api/notifications', {
@@ -211,9 +265,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
       ref={headerRef}
       className={clsx(
         "z-30 transition-all duration-300 w-full",
-        // Force desktop back to default
         "lg:relative lg:p-0",
-        // Mobile sticky behavior
         isScrolled ? "sticky top-0 pt-2 px-4 sm:px-6" : "relative pt-0 px-0"
       )}
     >
@@ -223,7 +275,6 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           ? "bg-white/70 dark:bg-[#181A1D]/75 backdrop-blur-xl border border-slate-200/50 dark:border-white/10 shadow-sm shadow-black/5 rounded-2xl lg:bg-transparent lg:dark:bg-transparent lg:backdrop-blur-none lg:border-0 lg:shadow-none lg:rounded-none" 
           : "bg-transparent border-transparent border lg:bg-transparent lg:border-0 lg:shadow-none lg:rounded-none"
       )}>
-        {/* Mobile Drawer Trigger */}
         <div className="flex items-center lg:hidden">
           <button 
             onClick={onMenuToggle}
@@ -236,9 +287,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
 
         <div className="hidden lg:block flex-1" />
 
-        {/* Control Actions */}
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* Notifications Dropdown Frame */}
           <div className="relative flex items-center" ref={notificationRef}>
             <button 
               onClick={() => setIsNotificationOpen(!isNotificationOpen)}
@@ -252,7 +301,6 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
               <span className="absolute inset-0 bg-primary/10 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
 
-            {/* Notifications Dropdown menu */}
             <div className={clsx(
               "absolute right-[-70px] sm:right-0 top-full mt-3 w-80 max-w-[calc(100vw-2rem)] p-4 z-50 bg-white dark:bg-[#181A1D] origin-top-right transition-all duration-300 border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl flex flex-col gap-3",
               isNotificationOpen 
@@ -298,7 +346,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
                             {n.time}
                           </span>
                         </div>
-                        <p className="text-[10.5px] leading-relaxed text-slate-600 dark:text-gray-400 font-sans whitespace-normal">
+                        <p className="text-[10.5px] leading-relaxed text-slate-600 dark:text-gray-400 font-sans line-clamp-2 break-all">
                           {n.content}
                         </p>
                       </div>
@@ -320,7 +368,6 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
 
           <div className="w-px h-5 bg-slate-200 dark:bg-white/10" />
 
-          {/* Profile Dropdown Frame */}
           <div className="relative" ref={dropdownRef}>
             <button 
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -338,7 +385,6 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
               )}
             </button>
 
-            {/* Dropdown Menu - CHANGED: Solid background colors, removed glass/blur */}
             <div className={clsx(
               "absolute right-0 mt-3 w-60 max-w-[calc(100vw-2rem)] p-4 z-50 bg-white dark:bg-[#181A1D] origin-top-right transition-all duration-300 border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl",
               isDropdownOpen 

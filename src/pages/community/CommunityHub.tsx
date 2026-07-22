@@ -1347,7 +1347,7 @@ export default function CommunityHub() {
 
                                         {mentionSuggestions.length > 0 && activeMentionPostId === null && activeMentionCommentId === null && (
                                             <div className="absolute z-[100] left-0 top-full mt-1 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
-                                                {mentionSuggestions.map((u) => (
+                                                {mentionSuggestions.map((u: any) => (
                                                     <button
                                                         key={u._id}
                                                         type="button"
@@ -1580,7 +1580,7 @@ export default function CommunityHub() {
                                                         
                                                         {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === null && (
                                                             <div className="absolute z-[100] left-0 top-full mt-1 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
-                                                                {mentionSuggestions.map((u) => (
+                                                                {mentionSuggestions.map((u: any) => (
                                                                     <button
                                                                         key={u._id}
                                                                         type="button"
@@ -1642,7 +1642,7 @@ export default function CommunityHub() {
                                                             </div>
                                                         </div>
 
-                                                        {post.solveData.phaseSplits && Object.keys(post.solveData.phaseSplits).length > 0 && (
+                                                        {post.solveData?.phaseSplits && Object.keys(post.solveData.phaseSplits).length > 0 && (
                                                             <div className="mt-2.5 pt-3.5 border-t border-slate-200 dark:border-white/5 flex flex-col gap-2.5">
                                                                 <span className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest block leading-none">
                                                                     Phase Splits Breakdown
@@ -1650,8 +1650,8 @@ export default function CommunityHub() {
                                                                 
                                                                 {/* Multi-segmented stacked progress bar */}
                                                                 <div className="h-2 w-full bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden flex">
-                                                                    {Object.entries(post.solveData.phaseSplits).map(([phase, timeMs], index) => {
-                                                                        const totalSplitsTimeMs = Object.values(post.solveData.phaseSplits!).reduce((sum, val) => sum + val, 0);
+                                                                    {Object.entries(post.solveData!.phaseSplits!).map(([phase, timeMs], index) => {
+                                                                        const totalSplitsTimeMs = Object.values(post.solveData!.phaseSplits!).reduce((sum, val) => sum + val, 0);
                                                                         const percent = totalSplitsTimeMs > 0 ? (timeMs / totalSplitsTimeMs) * 100 : 0;
                                                                         
                                                                         const colors = [
@@ -1678,8 +1678,8 @@ export default function CommunityHub() {
 
                                                                 {/* Legend Grid */}
                                                                 <div className="grid grid-cols-2 gap-2 mt-1">
-                                                                    {Object.entries(post.solveData.phaseSplits).map(([phase, timeMs], index) => {
-                                                                        const totalSplitsTimeMs = Object.values(post.solveData.phaseSplits!).reduce((sum, val) => sum + val, 0);
+                                                                    {Object.entries(post.solveData!.phaseSplits!).map(([phase, timeMs], index) => {
+                                                                        const totalSplitsTimeMs = Object.values(post.solveData!.phaseSplits!).reduce((sum, val) => sum + val, 0);
                                                                         const percent = totalSplitsTimeMs > 0 ? (timeMs / totalSplitsTimeMs) * 100 : 0;
                                                                         
                                                                         const dotColors = [
@@ -2031,7 +2031,7 @@ export default function CommunityHub() {
                                                                     {/* Autocomplete mention suggest box inside active comment */}
                                                                     {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === 'commentInput' && (
                                                                         <div className="absolute z-[100] left-0 bottom-full mb-1.5 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
-                                                                            {mentionSuggestions.map((u) => (
+                                                                            {mentionSuggestions.map((u: any) => (
                                                                                 <button
                                                                                     key={u._id}
                                                                                     type="button"
