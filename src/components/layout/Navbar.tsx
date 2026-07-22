@@ -59,6 +59,59 @@ function getTimeAgo(dateString: string) {
   return new Date(dateString).toLocaleDateString();
 }
 
+// Custom Renderer: ONLY truncates comments & mentions with '...', full message for all others
+const renderNotificationContent = (n: NotificationItem) => {
+  // 1. Mentions with comments
+  if (n.type === 'mention' && n.content.includes(':')) {
+    const splitIndex = n.content.indexOf(':');
+    const intro = n.content.substring(0, splitIndex + 1);
+    let comment = n.content.substring(splitIndex + 1).trim();
+    
+    if (comment.startsWith("'") || comment.startsWith('"')) {
+      comment = comment.substring(1);
+    }
+    if (comment.endsWith("'") || comment.endsWith('"')) {
+      comment = comment.substring(0, comment.length - 1);
+    }
+    
+    const MAX_LEN = 55;
+    const isLong = comment.length > MAX_LEN;
+    const displayComment = isLong ? comment.substring(0, MAX_LEN) + "..." : comment;
+
+    return (
+      <span className="flex flex-col gap-0.5 mt-0.5 w-full min-w-0">
+        <span>{intro}</span>
+        <span className="break-all italic opacity-85 text-slate-500 dark:text-gray-400">
+          '{displayComment}'
+        </span>
+      </span>
+    );
+  }
+
+  // 2. Direct Replies with potential long comment content
+  if (n.type === 'reply' && n.content.includes(':')) {
+    const splitIndex = n.content.indexOf(':');
+    const intro = n.content.substring(0, splitIndex + 1);
+    let comment = n.content.substring(splitIndex + 1).trim();
+
+    const MAX_LEN = 55;
+    const isLong = comment.length > MAX_LEN;
+    const displayComment = isLong ? comment.substring(0, MAX_LEN) + "..." : comment;
+
+    return (
+      <span className="flex flex-col gap-0.5 mt-0.5 w-full min-w-0">
+        <span>{intro}</span>
+        <span className="break-all italic opacity-85 text-slate-500 dark:text-gray-400">
+          '{displayComment}'
+        </span>
+      </span>
+    );
+  }
+
+  // 3. All other notifications (Likes, Achievements, Streak warnings) -> Show FULL message
+  return <span className="break-words whitespace-normal">{n.content}</span>;
+};
+
 export function Navbar({ onMenuToggle }: NavbarProps) {
   const { user, logout, getAuthHeaders } = useAuth();
   const { setTheme, isDarkMode } = useTheme();
@@ -108,7 +161,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           streakState = {
             date: todayStr,
             timestamp: new Date().toISOString(),
-            unread: true,
+            unread: true, 
             streak: currentStreak
           };
           localStorage.setItem(storageKey, JSON.stringify(streakState));
@@ -136,7 +189,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
     if (notification.unread) {
       toggleRead(notification.id);
     }
-    setIsNotificationOpen(false);
+    setIsNotificationOpen(false); 
 
     const { type, postId, commentId } = notification;
 
@@ -300,59 +353,67 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
               )}
               <span className="absolute inset-0 bg-primary/10 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
-
+            {/* Notifications Dropdown menu */}
             <div className={clsx(
-              "absolute right-[-70px] sm:right-0 top-full mt-3 w-80 max-w-[calc(100vw-2rem)] p-4 z-50 bg-white dark:bg-[#181A1D] origin-top-right transition-all duration-300 border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl flex flex-col gap-3",
+              "fixed top-16 right-4 left-4 sm:left-auto sm:right-0 sm:top-full sm:absolute mt-2 sm:mt-3 w-auto sm:w-85 max-w-sm sm:max-w-none p-4 z-50",
+              "bg-white/95 dark:bg-[#181A1D]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/10 shadow-2xl shadow-black/20 rounded-2xl",
+              "flex flex-col gap-3 max-h-[80vh] sm:max-h-[520px] origin-top-right transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
               isNotificationOpen 
                 ? "opacity-100 scale-100 translate-y-0 visible" 
                 : "opacity-0 scale-95 -translate-y-2 invisible pointer-events-none"
             )}>
-              <div className="flex justify-between items-center pb-2.5 border-b border-slate-200/60 dark:border-white/5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-900 dark:text-white">Notifications</span>
+              <div className="flex justify-between items-center pb-2.5 border-b border-slate-200/60 dark:border-white/5 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-900 dark:text-white truncate">Notifications</span>
                 {unreadCount > 0 && (
                   <button 
                     onClick={markAllAsRead}
-                    className="text-[9px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors flex items-center gap-1 cursor-pointer focus:outline-none"
+                    className="text-[9px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 active:scale-95 transition-all flex items-center gap-1 cursor-pointer focus:outline-none shrink-0 min-h-[32px] px-2 py-1 rounded-lg touch-manipulation select-none"
                   >
                     <Check className="w-3 h-3" /> Mark all read
                   </button>
                 )}
               </div>
 
-              <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1 select-none text-left">
-                {notifications.map((n) => {
-                  const Icon = getNotificationIcon(n.type);
-                  const iconColor = getNotificationIconColor(n.type);
-                  return (
-                    <button
-                      key={n.id}
-                      onClick={() => handleNotificationClick(n)}
-                      className={clsx(
-                        "w-full text-left p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.03] border border-transparent transition-[background-color,opacity] duration-150 flex gap-3 items-start relative focus:outline-none focus:ring-0 focus-visible:ring-0 cursor-pointer",
-                        n.unread 
-                          ? "bg-slate-50/50 dark:bg-white/[0.01]" 
-                          : "bg-transparent opacity-65"
-                      )}
-                    >
-                      <div className={clsx("w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border", iconColor)}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start gap-2 mb-0.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-800 dark:text-gray-200 truncate">
-                            {n.title}
-                          </span>
-                          <span className="text-[8px] text-slate-400 dark:text-gray-550 shrink-0 font-mono">
-                            {n.time}
-                          </span>
+              <div className="flex flex-col gap-2 max-h-[60vh] sm:max-h-[380px] overflow-y-auto pr-1 select-none text-left touch-manipulation min-w-0 hide-scrollbar">
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-gray-500 text-xs">
+                    No notifications yet
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    const Icon = getNotificationIcon(n.type);
+                    const iconColor = getNotificationIconColor(n.type);
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => handleNotificationClick(n)}
+                        className={clsx(
+                          "w-full text-left p-3 rounded-xl min-h-[48px] border border-transparent transition-[background-color,opacity,transform] duration-150 flex gap-3 items-start relative focus:outline-none focus:ring-0 focus-visible:ring-0 cursor-pointer touch-manipulation select-none active:scale-[0.98]",
+                          n.unread 
+                            ? "bg-slate-100/70 dark:bg-white/[0.04] hover:bg-slate-200/60 dark:hover:bg-white/[0.07]" 
+                            : "bg-transparent opacity-70 hover:opacity-100 hover:bg-slate-50 dark:hover:bg-white/[0.02]"
+                        )}
+                      >
+                        <div className={clsx("w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 shadow-sm", iconColor)}>
+                          <Icon className="w-4 h-4" />
                         </div>
-                        <p className="text-[10.5px] leading-relaxed text-slate-600 dark:text-gray-400 font-sans line-clamp-2 break-all">
-                          {n.content}
-                        </p>
-                      </div>
-                     </button>
-                  );
-                })}
+                        <div className="flex-1 w-full min-w-0">
+                          <div className="flex justify-between items-start gap-2 mb-0.5 min-w-0">
+                            <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-800 dark:text-gray-200 truncate min-w-0">
+                              {n.title}
+                            </span>
+                            <span className="text-[8.5px] text-slate-400 dark:text-gray-550 shrink-0 font-mono">
+                              {n.time}
+                            </span>
+                          </div>
+                          <div className="text-[11px] leading-relaxed text-slate-600 dark:text-gray-400 font-sans w-full min-w-0 break-words">
+                            {renderNotificationContent(n)}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>

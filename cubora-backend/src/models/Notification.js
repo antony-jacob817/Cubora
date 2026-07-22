@@ -27,6 +27,10 @@ const notificationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'CommunityPost'
   },
+  comment: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Comment'
+  },
   unread: {
     type: Boolean,
     default: true

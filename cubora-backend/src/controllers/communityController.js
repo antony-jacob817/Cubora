@@ -1,6 +1,16 @@
 const CommunityPost = require('../models/CommunityPost');
 const Comment = require('../models/Comment');
+const Notification = require('../models/Notification');
 const { createNotification } = require('./notificationController');
+
+// Helper to determine post category for dynamic notification formatting
+function getPostCategory(post) {
+  if (post.isPB) return 'PB';
+  if (post.type === 'solve') return 'solve';
+  if (post.type === 'algorithm') return 'algorithm';
+  if (post.type === 'discussion') return 'discussion';
+  return 'post';
+}
 
 // Helper to get relative time
 function getTimeAgo(date) {
@@ -193,11 +203,12 @@ exports.deletePost = async (req, res) => {
       return res.status(401).json({ success: false, error: 'Not authorized to delete this post.' });
     }
 
-    // Delete associated comments
+    // Delete associated comments and notifications
     await Comment.deleteMany({ post: post._id });
+    await Notification.deleteMany({ post: post._id });
     await post.deleteOne();
 
-    res.status(200).json({ success: true, message: 'Post and associated comments deleted.' });
+    res.status(200).json({ success: true, message: 'Post, comments, and associated notifications deleted.' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -216,26 +227,85 @@ exports.toggleLike = async (req, res) => {
 
     const userId = req.user.id;
     const alreadyLiked = post.likedBy.some(id => id.toString() === userId);
+    const category = getPostCategory(post);
 
     if (alreadyLiked) {
+      // ON UNLIKE
       post.likedBy = post.likedBy.filter(id => id.toString() !== userId);
       post.likes = Math.max(0, post.likes - 1);
-    } else {
-      post.likedBy.push(userId);
-      post.likes += 1;
-      
-      // Trigger notification
-      await createNotification({
+      await post.save();
+
+      // Find existing like notification
+      const existingNotif = await Notification.findOne({
         recipient: post.author,
-        sender: userId,
         type: 'like',
-        title: 'New Likes',
-        content: `${req.user.name} liked your post!`,
         post: post._id
       });
-    }
 
-    await post.save();
+      if (existingNotif) {
+        if (post.likedBy.length === 0) {
+          // If likes drop to 0, completely delete notification from DB so no ghost alert remains
+          await Notification.findByIdAndDelete(existingNotif._id);
+        } else {
+          // Adjust count and update string with previous liker's name
+          const User = require('../models/User');
+          const remainingLikers = await User.find({ _id: { $in: post.likedBy } });
+          if (remainingLikers.length > 0) {
+            const lastLiker = remainingLikers[remainingLikers.length - 1];
+            const othersCount = remainingLikers.length - 1;
+            const newContent = othersCount > 0
+              ? `${lastLiker.name} and ${othersCount} other${othersCount > 1 ? 's' : ''} liked your ${category} post!`
+              : `${lastLiker.name} liked your ${category} post!`;
+
+            existingNotif.content = newContent;
+            existingNotif.sender = lastLiker._id;
+            await existingNotif.save();
+          } else {
+            await Notification.findByIdAndDelete(existingNotif._id);
+          }
+        }
+      }
+    } else {
+      // ON LIKE
+      post.likedBy.push(userId);
+      post.likes += 1;
+      await post.save();
+
+      // Trigger Instagram-style like aggregation (if liker is not post author)
+      if (post.author.toString() !== userId) {
+        const User = require('../models/User');
+        const likers = await User.find({ _id: { $in: post.likedBy } });
+        const latestLiker = likers.find(u => u._id.toString() === userId) || { name: req.user.name };
+        const othersCount = post.likedBy.length - 1;
+
+        const content = othersCount > 0
+          ? `${latestLiker.name} and ${othersCount} other${othersCount > 1 ? 's' : ''} liked your ${category} post!`
+          : `${latestLiker.name} liked your ${category} post!`;
+
+        const existingNotif = await Notification.findOne({
+          recipient: post.author,
+          type: 'like',
+          post: post._id
+        });
+
+        if (existingNotif) {
+          existingNotif.content = content;
+          existingNotif.sender = userId;
+          existingNotif.unread = true;
+          existingNotif.createdAt = Date.now();
+          await existingNotif.save();
+        } else {
+          await Notification.create({
+            recipient: post.author,
+            sender: userId,
+            type: 'like',
+            title: 'New Likes',
+            content,
+            post: post._id
+          });
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -287,6 +357,8 @@ exports.createComment = async (req, res) => {
       parentId: parentId || null,
     });
 
+    const category = getPostCategory(post);
+
     // Parse mentions: look for @username patterns in content
     const mentionRegex = /@([a-zA-Z0-9_.-]+)/g;
     let match;
@@ -310,7 +382,8 @@ exports.createComment = async (req, res) => {
             type: 'mention',
             title: 'Mentioned in Comment',
             content: `@${req.user.username || req.user.name} mentioned you in a comment: '${content}'`,
-            post: post._id
+            post: post._id,
+            comment: comment._id
           });
           if (u._id.toString() === post.author.toString()) {
             hasNotifiedPostAuthor = true;
@@ -327,8 +400,9 @@ exports.createComment = async (req, res) => {
           sender: req.user.id,
           type: 'reply',
           title: 'Reply on Post',
-          content: `Someone replied to your algorithm post.`,
-          post: post._id
+          content: `${req.user.name} replied to your ${category} post.`,
+          post: post._id,
+          comment: comment._id
         });
       } else if (parentId) {
         // Direct reply to comment
@@ -340,7 +414,8 @@ exports.createComment = async (req, res) => {
             type: 'reply',
             title: 'Reply to Comment',
             content: `${req.user.name} replied to your comment.`,
-            post: post._id
+            post: post._id,
+            comment: comment._id
           });
         }
       }
@@ -419,12 +494,14 @@ exports.editComment = async (req, res) => {
 };
 
 // Recursively delete a comment and all of its descendants
-async function deleteCommentAndDescendants(commentId) {
+async function deleteCommentAndDescendants(commentId, deletedIds = []) {
+  deletedIds.push(commentId);
   const children = await Comment.find({ parentId: commentId });
   for (const child of children) {
-    await deleteCommentAndDescendants(child._id);
+    await deleteCommentAndDescendants(child._id, deletedIds);
   }
   await Comment.findByIdAndDelete(commentId);
+  return deletedIds;
 }
 
 // @desc    Delete a comment and its children (recursively)
@@ -442,9 +519,13 @@ exports.deleteComment = async (req, res) => {
     }
 
     // Recursively delete the comment and all its descendants
-    await deleteCommentAndDescendants(comment._id);
+    const deletedIds = [];
+    await deleteCommentAndDescendants(comment._id, deletedIds);
 
-    res.status(200).json({ success: true, message: 'Comment and associated replies deleted.' });
+    // Self-cleaning: Immediately delete corresponding 'reply' and 'mention' notifications linked to deleted comments
+    await Notification.deleteMany({ comment: { $in: deletedIds } });
+
+    res.status(200).json({ success: true, message: 'Comment, associated replies, and notifications deleted.' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

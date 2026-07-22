@@ -109,36 +109,11 @@ exports.markAllRead = async (req, res, next) => {
 };
 
 // Helper function to create/update notifications (for internal use by other controllers)
-exports.createNotification = async ({ recipient, sender, type, title, content, post }) => {
+exports.createNotification = async ({ recipient, sender, type, title, content, post, comment }) => {
   try {
     // Check if recipient is the same as sender (don't notify oneself)
     if (recipient && sender && recipient.toString() === sender.toString()) {
       return null;
-    }
-
-    // For batched likes:
-    if (type === 'like' && post) {
-      const existing = await Notification.findOne({ recipient, type: 'like', post, unread: true });
-      if (existing) {
-        const dbPost = await CommunityPost.findById(post).populate('likedBy', 'name');
-        if (dbPost && dbPost.likedBy.length > 0) {
-          const firstLikerName = dbPost.likedBy[dbPost.likedBy.length - 1].name;
-          const othersCount = dbPost.likedBy.length - 1;
-          
-          let newContent = '';
-          if (othersCount > 0) {
-            newContent = `${firstLikerName} and ${othersCount} other${othersCount > 1 ? 's' : ''} liked your post!`;
-          } else {
-            newContent = `${firstLikerName} liked your post!`;
-          }
-          
-          existing.content = newContent;
-          existing.sender = sender;
-          existing.createdAt = Date.now();
-          await existing.save();
-          return existing;
-        }
-      }
     }
 
     // Default: create a new notification
@@ -148,7 +123,8 @@ exports.createNotification = async ({ recipient, sender, type, title, content, p
       type,
       title,
       content,
-      post
+      post,
+      comment
     });
     return notification;
   } catch (err) {
