@@ -151,22 +151,37 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           commentId: n.comment?._id || n.commentId
         }));
 
+        const stats = statsData.success && statsData.stats ? statsData.stats : null;
+        const currentStreak = stats ? stats.streak : 0;
+        
+        // Requirement 1: Check if a solve was completed today
         const todayStr = new Date().toDateString();
+        const solvedToday = stats?.solvedToday || 
+          (stats?.lastSolveDate ? new Date(stats.lastSolveDate).toDateString() === todayStr : false);
+
+        // If user ALREADY logged a solve today, do NOT render or inject "Consistency Grind" at all!
+        if (solvedToday) {
+          setNotifications(mappedNotifications);
+          return;
+        }
+
+        // Requirements 2 & 3: User has not solved yet today -> initialize/read local session state
         const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
         let streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
-
-        const currentStreak = statsData.success && statsData.stats ? statsData.stats.streak : 0;
 
         if (!streakState || streakState.date !== todayStr) {
           streakState = {
             date: todayStr,
-            timestamp: new Date().toISOString(),
             unread: true, 
             streak: currentStreak
           };
           localStorage.setItem(storageKey, JSON.stringify(streakState));
+        } else {
+          streakState.streak = currentStreak;
+          localStorage.setItem(storageKey, JSON.stringify(streakState));
         }
 
+        // Requirement 2: Display "Just now" timestamp for new login/session
         const ephemeralStreakNotification: NotificationItem = {
           id: 'ephemeral_streak',
           type: 'streak_warning',
@@ -174,7 +189,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           content: streakState.streak === 0 
             ? "Start your Consistency Grind! Complete your first verified solve today to begin your streak."
             : `Don't lose your Consistency Grind! Complete one verified solve today to keep your ${streakState.streak}-day streak alive.`,
-          time: getTimeAgo(streakState.timestamp),
+          time: 'Just now',
           unread: streakState.unread 
         };
 

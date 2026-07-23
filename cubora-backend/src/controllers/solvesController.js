@@ -211,6 +211,10 @@ exports.getSolveStats = async (req, res) => {
       }
     }
 
+    const todayStr = new Date().toDateString();
+    const solvedToday = uniqueDays.has(todayStr);
+    const lastSolve = allHistoricalSolves.length > 0 ? allHistoricalSolves[allHistoricalSolves.length - 1] : null;
+
     res.status(200).json({
       success: true,
       stats: {
@@ -220,6 +224,8 @@ exports.getSolveStats = async (req, res) => {
         ao100: ao100 ? parseFloat((ao100 / 1000).toFixed(3)) : null,
         globalAverage: globalAverage ? parseFloat((globalAverage / 1000).toFixed(3)) : null,
         streak,
+        solvedToday,
+        lastSolveDate: lastSolve ? lastSolve.date : null,
         trends
       }
     });
