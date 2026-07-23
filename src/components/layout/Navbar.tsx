@@ -151,52 +151,39 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           commentId: n.comment?._id || n.commentId
         }));
 
-        const stats = statsData.success && statsData.stats ? statsData.stats : null;
-        const currentStreak = stats ? stats.streak : 0;
-        
-        // Requirement 1: Check if a solve was completed today
         const todayStr = new Date().toDateString();
-        const solvedToday = stats?.solvedToday || 
-          (stats?.lastSolveDate ? new Date(stats.lastSolveDate).toDateString() === todayStr : false);
+        const userId = (user as any)?._id || 'default';
+        const hasSolvedToday = statsData.success && statsData.stats ? !!statsData.stats.hasSolvedToday : false;
+        const currentStreak = statsData.success && statsData.stats ? statsData.stats.streak : 0;
 
-        // If user ALREADY logged a solve today, do NOT render or inject "Consistency Grind" at all!
-        if (solvedToday) {
+        if (hasSolvedToday) {
+          // User already completed a solve today -> DO NOT show streak warning notification
           setNotifications(mappedNotifications);
-          return;
-        }
-
-        // Requirements 2 & 3: User has not solved yet today -> initialize/read local session state
-        const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
-        let streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
-
-        // Unread by default on login/new day session
-        if (!streakState || streakState.date !== todayStr) {
-          streakState = {
-            date: todayStr,
-            unread: true, 
-            streak: currentStreak
-          };
-          localStorage.setItem(storageKey, JSON.stringify(streakState));
         } else {
-          if (typeof streakState.unread !== 'boolean') {
-            streakState.unread = true;
+          // User has not solved today -> Show fresh login streak notification
+          const sessionKey = `cubora_session_${userId}_${todayStr}`;
+          let sessionTimestamp = sessionStorage.getItem(sessionKey);
+          if (!sessionTimestamp) {
+            sessionTimestamp = new Date().toISOString();
+            sessionStorage.setItem(sessionKey, sessionTimestamp);
           }
-          streakState.streak = currentStreak;
-          localStorage.setItem(storageKey, JSON.stringify(streakState));
+
+          const readKey = `cubora_streak_read_${userId}`;
+          const isReadToday = localStorage.getItem(readKey) === todayStr;
+
+          const ephemeralStreakNotification: NotificationItem = {
+            id: 'ephemeral_streak',
+            type: 'streak_warning',
+            title: currentStreak === 0 ? 'START YOUR GRIND!' : 'CONSISTENCY GRIND!',
+            content: currentStreak === 0 
+              ? "Start your Consistency Grind! Complete your first verified solve today to begin your streak."
+              : `Don't lose your Consistency Grind! Complete one verified solve today to keep your ${currentStreak}-day streak alive.`,
+            time: getTimeAgo(sessionTimestamp),
+            unread: !isReadToday 
+          };
+
+          setNotifications([ephemeralStreakNotification, ...mappedNotifications]);
         }
-
-        const ephemeralStreakNotification: NotificationItem = {
-          id: 'ephemeral_streak',
-          type: 'streak_warning',
-          title: streakState.streak === 0 ? 'START YOUR GRIND!' : 'CONSISTENCY GRIND!',
-          content: streakState.streak === 0 
-            ? "Start your Consistency Grind! Complete your first verified solve today to begin your streak."
-            : `Don't lose your Consistency Grind! Complete one verified solve today to keep your ${streakState.streak}-day streak alive.`,
-          time: 'Just now',
-          unread: Boolean(streakState.unread)
-        };
-
-        setNotifications([ephemeralStreakNotification, ...mappedNotifications]);
       }
     } catch (err) {
       console.error('Failed to fetch data:', err);
@@ -241,11 +228,14 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: !n.unread } : n));
     
     if (id === 'ephemeral_streak') {
-      const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
-      let streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
-      if (streakState) {
-        streakState.unread = false;
-        localStorage.setItem(storageKey, JSON.stringify(streakState));
+      const todayStr = new Date().toDateString();
+      const userId = (user as any)?._id || 'default';
+      const readKey = `cubora_streak_read_${userId}`;
+      const isReadToday = localStorage.getItem(readKey) === todayStr;
+      if (isReadToday) {
+        localStorage.removeItem(readKey);
+      } else {
+        localStorage.setItem(readKey, todayStr);
       }
       return; 
     }
@@ -264,12 +254,9 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
   const markAllAsRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
     
-    const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
-    const streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
-    if (streakState) {
-      streakState.unread = false;
-      localStorage.setItem(storageKey, JSON.stringify(streakState));
-    }
+    const todayStr = new Date().toDateString();
+    const userId = (user as any)?._id || 'default';
+    localStorage.setItem(`cubora_streak_read_${userId}`, todayStr);
 
     try {
       const headers = getAuthHeaders();

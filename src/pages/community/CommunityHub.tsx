@@ -526,8 +526,33 @@ export default function CommunityHub() {
     const navigate = useNavigate();
 
     // Notification routing target states (highlighting comments & likers modal)
+    interface LikedUser {
+        _id: string;
+        name: string;
+        handle: string;
+        avatar: string;
+    }
     const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
-    const [likesModalPost, setLikesModalPost] = useState<{ id: string; users: string[] } | null>(null);
+    const [likesModalPost, setLikesModalPost] = useState<{ id: string; users: LikedUser[] } | null>(null);
+    const [isLoadingLikers, setIsLoadingLikers] = useState(false);
+
+    const fetchAndOpenLikers = async (postId: string) => {
+        setIsLoadingLikers(true);
+        setLikesModalPost({ id: postId, users: [] });
+        try {
+            const res = await fetch(`http://localhost:5000/api/community/${postId}/likers`, {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (data.success) {
+                setLikesModalPost({ id: postId, users: data.data || [] });
+            }
+        } catch (err) {
+            console.error('Failed to fetch likers:', err);
+        } finally {
+            setIsLoadingLikers(false);
+        }
+    };
 
     // Intercept location.state payloads from notification dropdown clicks
     useEffect(() => {
@@ -587,14 +612,9 @@ export default function CommunityHub() {
                 }, 300);
             }
 
-            // UX Rule 4 ("New Likes"): Open modal showing list of users who liked the post
+            // UX Rule 4 ("New Likes"): Open modal showing real list of users who liked the post
             if (showLikes) {
-                const targetPost = posts.find(p => p._id === openPostId);
-                const authorName = targetPost?.author.name || 'Cubora User';
-                setLikesModalPost({
-                    id: openPostId,
-                    users: ['Max Park', 'Tymon Kolasiński', 'Feliks Zemdegs', 'Yiheng Wang', 'Matty Hiroto Inaba', authorName]
-                });
+                fetchAndOpenLikers(openPostId);
             }
         }, 400);
     }, [location.state]);
@@ -730,17 +750,23 @@ export default function CommunityHub() {
 
     // --- MENTIONS AUTOCOMPLETE HANDLERS ---
     const handleSearchMentions = async (query: string) => {
-        if (!query || query.length < 1) {
-            setMentionSuggestions([]);
-            return;
-        }
         try {
             const res = await fetch(`http://localhost:5000/api/community/users/search?query=${encodeURIComponent(query)}`, {
                 headers: getAuthHeaders()
             });
             const data = await res.json();
             if (data.success) {
-                setMentionSuggestions(data.data);
+                let list = data.data || [];
+                if (query && query.trim()) {
+                    const q = query.toLowerCase().trim();
+                    list = list.filter((u: any) => 
+                        u.handle.toLowerCase().startsWith(q) || 
+                        u.handle.toLowerCase().startsWith(`@${q}`) ||
+                        u.name.toLowerCase().startsWith(q) ||
+                        u.name.toLowerCase().split(' ').some((word: string) => word.startsWith(q))
+                    );
+                }
+                setMentionSuggestions(list);
             }
         } catch (err) {
             console.error('Failed to search user mentions:', err);
@@ -784,50 +810,7 @@ export default function CommunityHub() {
         postId: string | null = null,
         commentId: string | null = null
     ) => {
-        if (e.key === 'Backspace') {
-            const text = e.currentTarget.value;
-            const start = e.currentTarget.selectionStart;
-            const end = e.currentTarget.selectionEnd;
-            
-            if (start !== null && end !== null && start === end) {
-                const regex = /@[a-zA-Z0-9_.-]+\s?/g;
-                let match;
-                while ((match = regex.exec(text)) !== null) {
-                    const matchStart = match.index;
-                    const matchEnd = match.index + match[0].length;
-                    
-                    if (start > matchStart && start <= matchEnd) {
-                        e.preventDefault();
-                        const newText = text.substring(0, matchStart) + text.substring(matchEnd);
-                        setContent(newText);
-                        
-                        // Check if we are deleting the mention that corresponds to the reply target,
-                        // if so, clear the replyingToComment state.
-                        if (postId && commentId === 'commentInput') {
-                            const replyTarget = replyingToComment[postId];
-                            if (replyTarget) {
-                                const handle = replyTarget.author.handle.replace('@', '');
-                                const mentionTag = `@${handle}`;
-                                const deletedText = match[0].trim();
-                                if (deletedText.toLowerCase() === mentionTag.toLowerCase()) {
-                                    setReplyingToComment(prev => ({ ...prev, [postId]: null }));
-                                }
-                            }
-                        }
-                        
-                        const newCursorPos = matchStart;
-                        const target = e.currentTarget;
-                        setTimeout(() => {
-                            if (target) {
-                                target.selectionStart = newCursorPos;
-                                target.selectionEnd = newCursorPos;
-                            }
-                        }, 0);
-                        break;
-                    }
-                }
-            }
-        }
+        // Allow standard character-by-character backspace & typing behavior
     };
 
     // --- SCROLL TO REPLY BOX ---
@@ -1511,62 +1494,79 @@ export default function CommunityHub() {
                                     <>
                                         {posts.map((post) => (
                                             <div key={post._id} id={`post-${post._id}`} className="glass-panel p-4 sm:p-6 flex flex-col bg-white/40 dark:bg-white/[0.01] w-full">
-                                                <div className="flex justify-between items-start gap-4 mb-3.5 w-full">
-                                                    <div className="flex items-center gap-3 min-w-0">
-                                                        <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover" />
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center flex-wrap gap-1">
-                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate leading-snug">{post.author.name}</h4>
+                                                <div className="flex justify-between items-start gap-3 mb-3.5 w-full">
+                                                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                                                        <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover mt-0.5" />
+                                                        <div className="min-w-0 flex-1">
+                                                            {/* Name + Badges inline on the right of name */}
+                                                            <div className="flex items-center flex-wrap gap-1.5">
+                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-snug">{post.author.name}</h4>
+                                                                
                                                                 {post.isPB && (
-                                                                    <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded ml-1">
+                                                                    <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
                                                                         <Trophy className="w-2.5 h-2.5 text-amber-500 mr-0.5" /> PB
                                                                     </span>
                                                                 )}
+
+                                                                {post.type === 'solve' && (
+                                                                    <span className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/5 dark:bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded shrink-0">
+                                                                        Verified
+                                                                    </span>
+                                                                )}
+
+                                                                {post.type === 'solve' && post.solveData?.method && (
+                                                                    <button
+                                                                        onClick={() => setFeedFilter(post.solveData!.method!)}
+                                                                        className={clsx(
+                                                                            "relative overflow-hidden inline-flex items-center justify-center font-display font-medium rounded-lg shrink-0",
+                                                                            "transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+                                                                            "hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.95] active:translate-y-0",
+                                                                            "bg-gradient-to-r from-primary to-secondary text-white btn-glow border border-slate-200/20 dark:border-white/20",
+                                                                            "before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-1000 before:ease-out",
+                                                                            "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 cursor-pointer select-none"
+                                                                        )}
+                                                                        title={`Filter by ${post.solveData.method}`}
+                                                                    >
+                                                                        <span className="relative z-10">{post.solveData.method}</span>
+                                                                    </button>
+                                                                )}
+
+                                                                {post.type === 'algorithm' && (
+                                                                    <span className="text-[9px] font-bold uppercase tracking-widest text-secondary bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
+                                                                        Alg
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <span className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block truncate mt-0.5">{post.author.handle} • {post.timeAgo}</span>
+
+                                                            {/* Handle & Time block below name + badges */}
+                                                            <span className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block mt-0.5">
+                                                                {post.author.handle} <span className="text-slate-300 dark:text-gray-600 opacity-60">•</span> {post.timeAgo}
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2 shrink-0">
-                                                        {post.type === 'solve' && <span className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/5 dark:bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">Verified</span>}
-                                                        {post.type === 'solve' && post.solveData?.method && (
-                                                             <button
-                                                                 onClick={() => setFeedFilter(post.solveData!.method!)}
-                                                                 className={clsx(
-                                                                     "relative overflow-hidden inline-flex items-center justify-center font-display font-medium rounded-lg",
-                                                                     "transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-                                                                     "hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.95] active:translate-y-0",
-                                                                     "bg-gradient-to-r from-primary to-secondary text-white btn-glow border border-slate-200/20 dark:border-white/20",
-                                                                     "before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-1000 before:ease-out",
-                                                                     "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 cursor-pointer select-none"
-                                                                 )}
-                                                                 title={`Filter by ${post.solveData.method}`}
-                                                             >
-                                                                 <span className="relative z-10">{post.solveData.method}</span>
-                                                             </button>
-                                                         )}
-                                                        {post.type === 'algorithm' && <span className="text-[9px] font-bold uppercase tracking-widest text-secondary bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 px-2 py-0.5 rounded">Alg</span>}
-                                                        {post.author._id === user?._id && (
-                                                            <div className="flex items-center gap-1 border-l border-slate-200 dark:border-white/5 pl-2 ml-1">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setEditingPostId(post._id);
-                                                                        setEditingPostContent(post.content);
-                                                                    }}
-                                                                    className="p-1 text-slate-400 hover:text-primary dark:text-gray-500 dark:hover:text-white transition-colors cursor-pointer"
-                                                                    title="Edit Post"
+
+                                                    {/* Post Action Icons */}
+                                                    {post.author._id === user?._id && (
+                                                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingPostId(post._id);
+                                                                    setEditingPostContent(post.content);
+                                                                }}
+                                                                className="p-1 text-slate-400 hover:text-primary dark:text-gray-500 dark:hover:text-white transition-colors cursor-pointer"
+                                                                title="Edit Post"
+                                                            >
+                                                                <Edit2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setConfirmDeletePost(post)}
+                                                                className="p-1 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                                                                title="Delete Post"
                                                                 >
-                                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setConfirmDeletePost(post)}
-                                                                    className="p-1 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors cursor-pointer"
-                                                                    title="Delete Post"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {editingPostId === post._id ? (
@@ -1726,16 +1726,25 @@ export default function CommunityHub() {
                                                   )}
 
                                                 <div className="flex items-center gap-5 sm:gap-6 mt-1 pt-3.5 border-t border-slate-200 dark:border-white/5 w-full">
-                                                    <button
-                                                        onClick={() => handleToggleLike(post._id)}
-                                                        className={clsx(
-                                                            "flex items-center gap-1.5 transition-colors group min-h-[32px] px-1 cursor-pointer",
-                                                            post.isLikedByMe ? "text-red-400" : "text-slate-500 dark:text-gray-400 sm:hover:text-red-400"
-                                                        )}
-                                                    >
-                                                        <Heart className={clsx("w-4 h-4 shrink-0", post.isLikedByMe && "fill-current")} />
-                                                        <span className="text-xs font-bold font-mono">{post.likes}</span>
-                                                    </button>
+                                                    <div className="flex items-center gap-1.5 min-h-[32px]">
+                                                        <button
+                                                            onClick={() => handleToggleLike(post._id)}
+                                                            className={clsx(
+                                                                "flex items-center gap-1 transition-colors group cursor-pointer focus:outline-none",
+                                                                post.isLikedByMe ? "text-red-400" : "text-slate-500 dark:text-gray-400 sm:hover:text-red-400"
+                                                            )}
+                                                            title={post.isLikedByMe ? "Unlike post" : "Like post"}
+                                                        >
+                                                            <Heart className={clsx("w-4 h-4 shrink-0", post.isLikedByMe && "fill-current")} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => fetchAndOpenLikers(post._id)}
+                                                            className="text-xs font-bold font-mono text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white cursor-pointer focus:outline-none hover:underline"
+                                                            title="View people who liked this post"
+                                                        >
+                                                            {post.likes}
+                                                        </button>
+                                                    </div>
                                                     <button 
                                                         onClick={() => toggleCommentsExpand(post._id)}
                                                         className={clsx(
@@ -2987,15 +2996,30 @@ export default function CommunityHub() {
                             <X className="w-4 h-4" />
                         </button>
                     </div>
-                    <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
-                        {likesModalPost.users.map((userName, i) => (
-                            <div key={i} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white text-xs font-bold shrink-0">
-                                    {userName.charAt(0)}
-                                </div>
-                                <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate">{userName}</span>
+                    <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1 hide-scrollbar">
+                        {isLoadingLikers ? (
+                            <div className="py-8 flex items-center justify-center text-slate-400 dark:text-gray-500">
+                                <Loader2 className="w-5 h-5 animate-spin" />
                             </div>
-                        ))}
+                        ) : likesModalPost.users.length === 0 ? (
+                            <div className="py-6 text-center text-xs text-slate-400 dark:text-gray-500">
+                                No likes yet
+                            </div>
+                        ) : (
+                            likesModalPost.users.map((u) => (
+                                <div key={u._id} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
+                                    <img 
+                                        src={u.avatar} 
+                                        alt={u.name} 
+                                        className="w-8 h-8 rounded-full border border-slate-200 dark:border-white/10 object-cover shrink-0" 
+                                    />
+                                    <div className="flex flex-col text-left min-w-0 flex-1">
+                                        <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate">{u.name}</span>
+                                        <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate">{u.handle}</span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </Modal>,
                 document.body

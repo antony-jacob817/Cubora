@@ -536,17 +536,24 @@ exports.deleteComment = async (req, res) => {
 // @access  Private
 exports.searchUsers = async (req, res) => {
   try {
-    const { query } = req.query;
-    if (!query) {
-      return res.status(200).json({ success: true, data: [] });
-    }
+    const { query = '' } = req.query;
     const User = require('../models/User');
-    const users = await User.find({
-      $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { username: { $regex: query, $options: 'i' } }
-      ]
-    }).limit(5).select('name username avatar email');
+
+    let filterQuery = {};
+    if (query && query.trim()) {
+      const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filterQuery = {
+        $or: [
+          { username: { $regex: `^${q}`, $options: 'i' } },
+          { name: { $regex: `^${q}`, $options: 'i' } },
+          { email: { $regex: `^${q}`, $options: 'i' } }
+        ]
+      };
+    }
+
+    const users = await User.find(filterQuery)
+      .limit(8)
+      .select('name username avatar email');
 
     const formatted = users.map(u => {
       const handle = u.username || u.email.split('@')[0];
@@ -559,6 +566,35 @@ exports.searchUsers = async (req, res) => {
     });
 
     res.status(200).json({ success: true, data: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Get users who liked a post
+// @route   GET /api/community/:postId/likers
+// @access  Private
+exports.getPostLikers = async (req, res) => {
+  try {
+    const post = await CommunityPost.findById(req.params.postId)
+      .populate('likedBy', 'name username avatar email');
+
+    if (!post) {
+      return res.status(404).json({ success: false, error: 'Post not found.' });
+    }
+
+    const likers = (post.likedBy || []).map(u => {
+      const authorName = u.name || 'Cubora User';
+      const handle = `@${(u.username || u.email?.split('@')[0] || authorName).toLowerCase().replace(/\s+/g, '_')}`;
+      return {
+        _id: u._id,
+        name: authorName,
+        handle,
+        avatar: u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`
+      };
+    });
+
+    res.status(200).json({ success: true, data: likers });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

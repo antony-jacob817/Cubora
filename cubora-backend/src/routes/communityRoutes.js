@@ -6,6 +6,7 @@ const {
   editPost,
   deletePost,
   toggleLike,
+  getPostLikers,
   getComments,
   createComment,
   editComment,
@@ -31,6 +32,9 @@ router.route('/:id')
 
 router.route('/:id/like')
   .put(toggleLike);
+
+router.route('/:postId/likers')
+  .get(getPostLikers);
 
 // Comment routes
 router.route('/:postId/comments')
