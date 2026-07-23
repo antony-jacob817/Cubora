@@ -169,6 +169,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
         const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
         let streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
 
+        // Unread by default on login/new day session
         if (!streakState || streakState.date !== todayStr) {
           streakState = {
             date: todayStr,
@@ -177,11 +178,13 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
           };
           localStorage.setItem(storageKey, JSON.stringify(streakState));
         } else {
+          if (typeof streakState.unread !== 'boolean') {
+            streakState.unread = true;
+          }
           streakState.streak = currentStreak;
           localStorage.setItem(storageKey, JSON.stringify(streakState));
         }
 
-        // Requirement 2: Display "Just now" timestamp for new login/session
         const ephemeralStreakNotification: NotificationItem = {
           id: 'ephemeral_streak',
           type: 'streak_warning',
@@ -190,7 +193,7 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
             ? "Start your Consistency Grind! Complete your first verified solve today to begin your streak."
             : `Don't lose your Consistency Grind! Complete one verified solve today to keep your ${streakState.streak}-day streak alive.`,
           time: 'Just now',
-          unread: streakState.unread 
+          unread: Boolean(streakState.unread)
         };
 
         setNotifications([ephemeralStreakNotification, ...mappedNotifications]);
@@ -239,9 +242,9 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
     
     if (id === 'ephemeral_streak') {
       const storageKey = `cubora_streak_${(user as any)?._id || 'default'}`;
-      const streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      let streakState = JSON.parse(localStorage.getItem(storageKey) || 'null');
       if (streakState) {
-        streakState.unread = !streakState.unread;
+        streakState.unread = false;
         localStorage.setItem(storageKey, JSON.stringify(streakState));
       }
       return; 
