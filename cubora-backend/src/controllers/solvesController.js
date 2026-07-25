@@ -39,7 +39,7 @@ exports.saveSolve = async (req, res) => {
 // @access  Private
 exports.updateSolve = async (req, res) => {
   try {
-    const { penalty, comments, sessionId, phaseSplits } = req.body;
+    const { penalty, comments, sessionId } = req.body;
     let solve = await SolveHistory.findOne({ _id: req.params.id, user: req.user.id });
 
     if (!solve) {
@@ -49,7 +49,6 @@ exports.updateSolve = async (req, res) => {
     if (penalty !== undefined) solve.penalty = penalty;
     if (comments !== undefined) solve.comments = comments;
     if (sessionId !== undefined) solve.sessionId = sessionId;
-    if (phaseSplits !== undefined) solve.phaseSplits = phaseSplits;
 
     await solve.save();
     res.status(200).json({ success: true, data: solve });
