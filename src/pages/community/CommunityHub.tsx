@@ -805,10 +805,10 @@ export default function CommunityHub() {
     };
 
     const handleKeyDown = (
-        e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>,
-        setContent: (val: string) => void,
-        postId: string | null = null,
-        commentId: string | null = null
+        _e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>,
+        _setContent: (val: string) => void,
+        _postId: string | null = null,
+        _commentId: string | null = null
     ) => {
         // Allow standard character-by-character backspace & typing behavior
     };
