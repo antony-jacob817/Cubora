@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Timer as TimerIcon, Trophy, Activity, Target, ChevronDown, ChevronLeft, Timeline, ChevronRight, TimerOff,  Trash2, Check, MessageSquare, Volume2, VolumeX, Plus, Maximize2, Minimize2, Zap, Award, Crown, Edit2, Pencil, PencilOff, X } from 'lucide-react';
+import { Timer as TimerIcon, Trophy, Activity, Target, ChevronDown, ChevronLeft, Timeline, ChevronRight, TimerOff,  Trash2, Check, MessageSquare, Volume2, VolumeX, Plus, Maximize2, Minimize2, Zap, Award, Crown, Edit2, Pencil, PencilOff, X, Loader2 } from 'lucide-react';
 import { PageTransition } from '@/components/animations/PageTransition';
 import { useTimer } from '@/hooks/useTimer';
 import { generateScramble, formatTime } from '@/utils/cubing';
@@ -206,6 +206,487 @@ const PRESET_THEME_COLORS = [
     '#1F2937', // Matte Black
 ];
 
+const METHOD_RATIOS: Record<string, { name: string; percent: number }[]> = {
+    'CFOP': [
+        { name: 'Cross', percent: 10 },
+        { name: 'F2L', percent: 55 },
+        { name: 'OLL', percent: 15 },
+        { name: 'PLL', percent: 20 }
+    ],
+    'Simplified CFOP': [
+        { name: 'Cross', percent: 10 },
+        { name: 'F2L', percent: 55 },
+        { name: 'OLL', percent: 15 },
+        { name: 'PLL', percent: 20 }
+    ],
+    'Roux': [
+        { name: 'First Block', percent: 20 },
+        { name: 'Second Block', percent: 35 },
+        { name: 'CMLL', percent: 20 },
+        { name: 'LSE', percent: 25 }
+    ],
+    'ZZ': [
+        { name: 'EOLine', percent: 15 },
+        { name: 'Z2L', percent: 50 },
+        { name: 'LL', percent: 35 }
+    ],
+    'Beginner': [
+        { name: 'First Layer', percent: 30 },
+        { name: 'Second Layer', percent: 35 },
+        { name: 'Third Layer', percent: 35 }
+    ]
+};
+
+const getMethodPhases = (methodName: string) => {
+    return METHOD_RATIOS[methodName] || [
+        { name: 'Phase 1', percent: 25 },
+        { name: 'Phase 2', percent: 25 },
+        { name: 'Phase 3', percent: 25 },
+        { name: 'Phase 4', percent: 25 }
+    ];
+};
+
+const calculateInitialSplits = (totalMs: number, methodName: string, existingSplits?: Record<string, number>): Record<string, number> => {
+    const phases = getMethodPhases(methodName);
+    
+    if (existingSplits && phases.every(p => typeof existingSplits[p.name] === 'number' && existingSplits[p.name] >= 0)) {
+        const existingSum = Object.values(existingSplits).reduce((a, b) => a + b, 0);
+        if (Math.abs(existingSum - totalMs) <= 10) {
+            return { ...existingSplits };
+        }
+    }
+
+    const splits: Record<string, number> = {};
+    let allocated = 0;
+    
+    phases.forEach((p, idx) => {
+        if (idx === phases.length - 1) {
+            splits[p.name] = Math.max(0, totalMs - allocated);
+        } else {
+            const phaseMs = Math.round((p.percent / 100) * totalMs);
+            splits[p.name] = phaseMs;
+            allocated += phaseMs;
+        }
+    });
+
+    return splits;
+};
+
+const splitsToBoundaries = (splits: Record<string, number>, phaseNames: string[]): number[] => {
+    const boundaries: number[] = [];
+    let cumulative = 0;
+    for (let i = 0; i < phaseNames.length - 1; i++) {
+        cumulative += (splits[phaseNames[i]] || 0);
+        boundaries.push(cumulative);
+    }
+    return boundaries;
+};
+
+const boundariesToSplits = (boundaries: number[], totalMs: number, phaseNames: string[]): Record<string, number> => {
+    const splits: Record<string, number> = {};
+    let prev = 0;
+    for (let i = 0; i < phaseNames.length - 1; i++) {
+        const b = boundaries[i];
+        splits[phaseNames[i]] = Math.max(0, b - prev);
+        prev = b;
+    }
+    splits[phaseNames[phaseNames.length - 1]] = Math.max(0, totalMs - prev);
+    return splits;
+};
+
+const applyPreset = (presetType: 'standard' | 'pll_skip' | 'oll_skip' | 'easy_cross', totalMs: number, methodName: string): Record<string, number> => {
+    const phases = getMethodPhases(methodName);
+    const phaseNames = phases.map(p => p.name);
+    
+    if (presetType === 'standard') {
+        return calculateInitialSplits(totalMs, methodName);
+    }
+    
+    const newSplits: Record<string, number> = {};
+
+    if (presetType === 'pll_skip') {
+        const lastPhaseName = phaseNames[phaseNames.length - 1];
+        const remainingPhases = phases.slice(0, phases.length - 1);
+        const sumPercent = remainingPhases.reduce((acc, p) => acc + p.percent, 0);
+
+        let allocated = 0;
+        remainingPhases.forEach((p, idx) => {
+            if (idx === remainingPhases.length - 1) {
+                newSplits[p.name] = Math.max(0, totalMs - allocated);
+            } else {
+                const ms = Math.round((p.percent / sumPercent) * totalMs);
+                newSplits[p.name] = ms;
+                allocated += ms;
+            }
+        });
+        newSplits[lastPhaseName] = 0;
+    } else if (presetType === 'oll_skip') {
+        let skipIndex = phaseNames.findIndex(n => n.toUpperCase() === 'OLL' || n.toUpperCase().includes('CMLL') || n.toUpperCase().includes('Z2L'));
+        if (skipIndex === -1 && phaseNames.length >= 3) {
+            skipIndex = phaseNames.length - 2;
+        }
+
+        if (skipIndex !== -1) {
+            const remainingPhases = phases.filter((_, i) => i !== skipIndex);
+            const sumPercent = remainingPhases.reduce((acc, p) => acc + p.percent, 0);
+
+            let allocated = 0;
+            phaseNames.forEach((pName, i) => {
+                if (i === skipIndex) {
+                    newSplits[pName] = 0;
+                } else {
+                    const originalP = phases.find(p => p.name === pName)!;
+                    const remainingIdx = remainingPhases.findIndex(rp => rp.name === pName);
+                    if (remainingIdx === remainingPhases.length - 1) {
+                        newSplits[pName] = Math.max(0, totalMs - allocated);
+                    } else {
+                        const ms = Math.round((originalP.percent / sumPercent) * totalMs);
+                        newSplits[pName] = ms;
+                        allocated += ms;
+                    }
+                }
+            });
+        } else {
+            return calculateInitialSplits(totalMs, methodName);
+        }
+    } else if (presetType === 'easy_cross') {
+        const firstPhaseName = phaseNames[0];
+        const crossMs = Math.round(0.05 * totalMs);
+        newSplits[firstPhaseName] = crossMs;
+
+        const remainingPhases = phases.slice(1);
+        const sumPercent = remainingPhases.reduce((acc, p) => acc + p.percent, 0);
+        const remainingTotalMs = totalMs - crossMs;
+
+        let allocated = 0;
+        remainingPhases.forEach((p, idx) => {
+            if (idx === remainingPhases.length - 1) {
+                newSplits[p.name] = Math.max(0, remainingTotalMs - allocated);
+            } else {
+                const ms = Math.round((p.percent / sumPercent) * remainingTotalMs);
+                newSplits[p.name] = ms;
+                allocated += ms;
+            }
+        });
+    }
+
+    return newSplits;
+};
+
+function PostSolveReconstructionModal({
+    solveData,
+    onClose,
+    onSave,
+    isSaving,
+    isDarkMode
+}: {
+    solveData: {
+        id: string;
+        timeMs: number;
+        method: string;
+        phaseSplits: Record<string, number>;
+    };
+    onClose: () => void;
+    onSave: (solveId: string, updatedSplits: Record<string, number>) => void;
+    isSaving: boolean;
+    isDarkMode: boolean;
+}) {
+    const { timeMs, method: methodName, phaseSplits: initialSplits, id: solveId } = solveData;
+    const methodPhases = useMemo(() => getMethodPhases(methodName), [methodName]);
+    const phaseNames = useMemo(() => methodPhases.map(p => p.name), [methodPhases]);
+
+    const [currentSplits, setCurrentSplits] = useState<Record<string, number>>(() => {
+        return calculateInitialSplits(timeMs, methodName, initialSplits);
+    });
+
+    useEffect(() => {
+        setCurrentSplits(calculateInitialSplits(timeMs, methodName, initialSplits));
+    }, [timeMs, methodName, initialSplits]);
+
+    const boundaries = useMemo(() => {
+        return splitsToBoundaries(currentSplits, phaseNames);
+    }, [currentSplits, phaseNames]);
+
+    const handleBoundaryChange = (index: number, newBoundaryVal: number) => {
+        const minVal = index > 0 ? boundaries[index - 1] : 0;
+        const maxVal = index < boundaries.length - 1 ? boundaries[index + 1] : timeMs;
+        const clamped = Math.max(minVal, Math.min(maxVal, newBoundaryVal));
+
+        const updatedBoundaries = [...boundaries];
+        updatedBoundaries[index] = clamped;
+
+        const newSplits = boundariesToSplits(updatedBoundaries, timeMs, phaseNames);
+        setCurrentSplits(newSplits);
+    };
+
+    const handleApplyPreset = (presetType: 'standard' | 'pll_skip' | 'oll_skip' | 'easy_cross') => {
+        const newSplits = applyPreset(presetType, timeMs, methodName);
+        setCurrentSplits(newSplits);
+    };
+
+    const handleMicroAdjust = (phaseName: string, deltaMs: number) => {
+        setCurrentSplits(prev => {
+            const currentMs = prev[phaseName] || 0;
+            const targetMs = Math.max(0, currentMs + deltaMs);
+            const diff = targetMs - currentMs;
+            if (diff === 0) return prev;
+
+            const otherPhaseNames = phaseNames.filter(n => n !== phaseName);
+            const otherTotalMs = otherPhaseNames.reduce((acc, n) => acc + (prev[n] || 0), 0);
+
+            const nextSplits = { ...prev, [phaseName]: targetMs };
+
+            if (otherTotalMs > 0) {
+                let remainingDiff = -diff;
+                otherPhaseNames.forEach((n, idx) => {
+                    if (idx === otherPhaseNames.length - 1) {
+                        nextSplits[n] = Math.max(0, (prev[n] || 0) + remainingDiff);
+                    } else {
+                        const ratio = (prev[n] || 0) / otherTotalMs;
+                        const adjustment = Math.round(ratio * (-diff));
+                        nextSplits[n] = Math.max(0, (prev[n] || 0) + adjustment);
+                        remainingDiff -= adjustment;
+                    }
+                });
+            }
+            return nextSplits;
+        });
+    };
+
+    const phaseColors = [
+        { bg: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500/30', lightBg: 'bg-blue-500/10' },
+        { bg: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500/30', lightBg: 'bg-emerald-500/10' },
+        { bg: 'bg-amber-500', text: 'text-amber-500', border: 'border-amber-500/30', lightBg: 'bg-amber-500/10' },
+        { bg: 'bg-purple-500', text: 'text-purple-500', border: 'border-purple-500/30', lightBg: 'bg-purple-500/10' },
+        { bg: 'bg-rose-500', text: 'text-rose-500', border: 'border-rose-500/30', lightBg: 'bg-rose-500/10' }
+    ];
+
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={onClose}
+                className="absolute inset-0 backdrop-blur-2xl bg-black/50"
+            />
+            <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                transition={{ type: "spring", stiffness: 350, damping: 28 }}
+                className="relative w-full max-w-xl glass-panel p-6 dark:bg-[#1C1E22]/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 rounded-3xl shadow-2xl z-10 flex flex-col gap-5 text-left max-h-[90vh] overflow-y-auto"
+                style={{ background: isDarkMode ? '#1C1E22' : '#FFFFFF' }}
+            >
+                {/* Header */}
+                <div className="flex items-start justify-between border-b border-slate-200 dark:border-white/10 pb-4">
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                            <Timeline className="w-5 h-5 text-primary" />
+                            <h3 className="font-display font-bold text-lg text-slate-900 dark:text-white">
+                                Post-Solve Phase Reconstruction
+                            </h3>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
+                                {methodName}
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-gray-400">
+                            Solve Time: <span className="font-mono font-bold text-slate-900 dark:text-white">{formatTime(timeMs)}</span> — Drag step boundary handles or apply one-tap presets.
+                        </p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 transition-colors rounded-lg"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Interactive Multi-segment Timeline Bar */}
+                <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider">
+                        <span>Phase Timeline Ratio</span>
+                        <span>100% ({formatTime(timeMs)})</span>
+                    </div>
+
+                    <div className="h-7 w-full bg-slate-200 dark:bg-black/40 rounded-xl overflow-hidden flex relative shadow-inner p-0.5">
+                        {phaseNames.map((pName, idx) => {
+                            const duration = currentSplits[pName] || 0;
+                            const percent = timeMs > 0 ? (duration / timeMs) * 100 : 0;
+                            const colorObj = phaseColors[idx % phaseColors.length];
+
+                            return (
+                                <div
+                                    key={pName}
+                                    style={{ width: `${percent}%` }}
+                                    className={clsx("h-full transition-all duration-150 flex items-center justify-center relative rounded-md", colorObj.bg)}
+                                    title={`${pName}: ${formatTime(duration)} (${Math.round(percent)}%)`}
+                                >
+                                    {percent > 8 && (
+                                        <span className="text-[9px] font-bold text-white font-mono drop-shadow-sm truncate px-1">
+                                            {Math.round(percent)}%
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Draggable Step Boundaries */}
+                {boundaries.length > 0 && (
+                    <div className="flex flex-col gap-3 bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5 p-4 rounded-2xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                            Interactive Step Boundary Handles
+                        </span>
+                        <div className="flex flex-col gap-3">
+                            {boundaries.map((boundaryVal, idx) => {
+                                const prevPhase = phaseNames[idx];
+                                const nextPhase = phaseNames[idx + 1];
+                                const minVal = idx > 0 ? boundaries[idx - 1] : 0;
+                                const maxVal = idx < boundaries.length - 1 ? boundaries[idx + 1] : timeMs;
+                                const colorObj = phaseColors[idx % phaseColors.length];
+
+                                return (
+                                    <div key={idx} className="flex flex-col gap-1">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="font-semibold text-slate-700 dark:text-gray-300 flex items-center gap-1.5">
+                                                <span className={clsx("w-2 h-2 rounded-full", colorObj.bg)} />
+                                                {prevPhase} ➔ {nextPhase} Boundary
+                                            </span>
+                                            <span className="font-mono font-bold text-slate-900 dark:text-white text-xs">
+                                                {formatTime(boundaryVal)}
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={minVal}
+                                            max={maxVal}
+                                            step={10}
+                                            value={boundaryVal}
+                                            onChange={(e) => handleBoundaryChange(idx, Number(e.target.value))}
+                                            className="w-full accent-primary h-2 bg-slate-200 dark:bg-white/10 rounded-lg cursor-pointer transition-all"
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Phase Breakdown Cards & Micro-Adjustments */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {phaseNames.map((pName, idx) => {
+                        const duration = currentSplits[pName] || 0;
+                        const percent = timeMs > 0 ? (duration / timeMs) * 100 : 0;
+                        const colorObj = phaseColors[idx % phaseColors.length];
+
+                        return (
+                            <div key={pName} className="flex flex-col gap-1 p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/60 dark:border-white/5">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className={clsx("w-2 h-2 rounded-full shrink-0", colorObj.bg)} />
+                                        <span className="text-[10px] font-bold text-slate-700 dark:text-gray-300 truncate">
+                                            {pName}
+                                        </span>
+                                    </div>
+                                    <span className="text-[9px] font-mono text-slate-400 dark:text-gray-500">
+                                        {Math.round(percent)}%
+                                    </span>
+                                </div>
+
+                                <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 dark:text-white mt-0.5">
+                                    {formatTime(duration)}
+                                </span>
+
+                                <div className="flex items-center gap-1 mt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleMicroAdjust(pName, -100)}
+                                        className="flex-1 py-0.5 rounded bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-[9px] font-bold text-slate-600 dark:text-gray-300 transition-colors"
+                                        title="Decrease 0.1s"
+                                    >
+                                        -0.1s
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleMicroAdjust(pName, 100)}
+                                        className="flex-1 py-0.5 rounded bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-[9px] font-bold text-slate-600 dark:text-gray-300 transition-colors"
+                                        title="Increase 0.1s"
+                                    >
+                                        +0.1s
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* One-Tap Quick Presets */}
+                <div className="flex flex-col gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                        One-Tap Quick Presets
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => handleApplyPreset('pll_skip')}
+                            className="px-2.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[10px] font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                            <Zap className="w-3 h-3" /> PLL Skip
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleApplyPreset('oll_skip')}
+                            className="px-2.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                            <Zap className="w-3 h-3" /> OLL Skip
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleApplyPreset('easy_cross')}
+                            className="px-2.5 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10px] font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                            <Target className="w-3 h-3" /> Easy Cross
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleApplyPreset('standard')}
+                            className="px-2.5 py-2 rounded-xl bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-700 dark:text-gray-300 border border-slate-300 dark:border-white/10 text-[10px] font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                            <Activity className="w-3 h-3" /> Standard Ratio
+                        </button>
+                    </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10 mt-1">
+                    <Button variant="secondary" size="sm" onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-bold">
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => onSave(solveId, currentSplits)}
+                        disabled={isSaving}
+                        size="sm"
+                        className="rounded-xl px-5 py-2 text-xs font-bold bg-primary text-white hover:bg-primary/90 flex items-center gap-1.5"
+                    >
+                        {isSaving ? (
+                            <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Check className="w-3.5 h-3.5" /> Save Phase Reconstruction
+                            </>
+                        )}
+                    </Button>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
 const METHOD_PHASES: Record<string, string[]> = {
     'CFOP': ['Cross', 'F2L', 'OLL', 'PLL'],
     'Simplified CFOP': ['Cross', 'F2L', 'OLL', 'PLL'],
@@ -366,6 +847,34 @@ export default function PracticeSession() {
         }
     };
     const [solves, setSolves] = useState<SolveRecord[]>([]);
+
+    const [reconstructionSolve, setReconstructionSolve] = useState<{
+        id: string;
+        timeMs: number;
+        method: string;
+        phaseSplits: Record<string, number>;
+    } | null>(null);
+    const [isSavingReconstruction, setIsSavingReconstruction] = useState(false);
+
+    const handleSaveReconstruction = async (solveId: string, updatedSplits: Record<string, number>) => {
+        setIsSavingReconstruction(true);
+        try {
+            const response = await fetch(`http://localhost:5000/api/solves/${solveId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ phaseSplits: updatedSplits }),
+            });
+            const data = await response.json();
+            if (data.success) {
+                setSolves(prev => prev.map(s => ((s._id === solveId || s.id === solveId) ? { ...s, phaseSplits: updatedSplits } : s)));
+                setReconstructionSolve(null);
+            }
+        } catch (err) {
+            console.error('Failed to save phase reconstruction:', err);
+        } finally {
+            setIsSavingReconstruction(false);
+        }
+    };
 
     const [confirmModal, setConfirmModal] = useState<{
         isOpen: boolean;
@@ -632,6 +1141,19 @@ export default function PracticeSession() {
                     setTime(0);
                     resetTimer();
                     fetchGlobalPb();
+
+                    if (isPhaseMode && finalPenalty !== 'DNF' && finalTime > 0) {
+                        const initSplits = Object.keys(calculatedSplits).length > 0 
+                            ? calculatedSplits 
+                            : calculateInitialSplits(finalTime, usedMethod);
+
+                        setReconstructionSolve({
+                            id: data.data._id || data.data.id,
+                            timeMs: finalTime,
+                            method: usedMethod,
+                            phaseSplits: initSplits
+                        });
+                    }
                 }
             })
             .catch(err => console.error('Failed to auto-save solve:', err));
@@ -1442,11 +1964,24 @@ export default function PracticeSession() {
                                                         {solve.penalty === '+2' && <span className="text-[8px] sm:text-[9px] font-mono text-yellow-600 dark:text-amber-400 font-extrabold px-1 py-0.5 rounded bg-yellow-500/10 shrink-0 select-none self-center">+2</span>}
                                                         {solve.penalty === 'DNF' && <span className="text-[8px] sm:text-[9px] font-mono text-red-600 dark:text-red-400 font-extrabold px-1 py-0.5 rounded bg-red-500/10 shrink-0 select-none self-center">DNF</span>}
                                                     </div>
-                                                    {solve.phaseSplits && Object.keys(solve.phaseSplits).length > 0 && (
-                                                        <span className="text-[7.5px] font-bold text-blue-500 dark:text-blue-400 tracking-wider uppercase select-none leading-none">
-                                                            Phase Tracking
-                                                        </span>
-                                                    )}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const initSplits = solve.phaseSplits && Object.keys(solve.phaseSplits).length > 0
+                                                                ? solve.phaseSplits
+                                                                : calculateInitialSplits(solve.timeMs, solve.method || method);
+                                                            setReconstructionSolve({
+                                                                id: solveId,
+                                                                timeMs: solve.timeMs,
+                                                                method: solve.method || method,
+                                                                phaseSplits: initSplits
+                                                            });
+                                                        }}
+                                                        className="text-[8px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors cursor-pointer"
+                                                        title="Reconstruct Phase Splits"
+                                                    >
+                                                        <Timeline className="w-2.5 h-2.5" /> Reconstruct
+                                                    </button>
                                                 </div>
 
                                                 {!isSelected ? (
@@ -1463,6 +1998,23 @@ export default function PracticeSession() {
                                                     </>
                                                 ) : (
                                                     <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.15 }} className="col-span-6 flex justify-end items-center gap-1 sm:gap-1.5 select-none" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => {
+                                                                const initSplits = solve.phaseSplits && Object.keys(solve.phaseSplits).length > 0
+                                                                    ? solve.phaseSplits
+                                                                    : calculateInitialSplits(solve.timeMs, solve.method || method);
+                                                                setReconstructionSolve({
+                                                                    id: solveId,
+                                                                    timeMs: solve.timeMs,
+                                                                    method: solve.method || method,
+                                                                    phaseSplits: initSplits
+                                                                });
+                                                            }}
+                                                            className="w-6 h-6 sm:w-[28px] sm:h-[28px] rounded-[6px] transition-all duration-200 border border-blue-500/20 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 flex justify-center items-center focus:outline-none backdrop-blur-md"
+                                                            title="Reconstruct Phase Splits"
+                                                        >
+                                                            <Timeline className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                                                        </button>
                                                         <button onClick={() => handleUpdatePenalty(solveId, 'None')} className={clsx("w-6 h-6 sm:w-[28px] sm:h-[28px] rounded-[6px] transition-all duration-200 border flex justify-center items-center focus:outline-none backdrop-blur-md", solve.penalty === 'None' || !solve.penalty ? "bg-slate-600/20 dark:bg-white/10 border-slate-400/30 dark:border-white/20 text-slate-900 dark:text-white" : "bg-slate-200/40 dark:bg-white/[0.04] border-transparent text-slate-500 dark:text-gray-400 hover:bg-slate-300/40 hover:dark:bg-white/[0.08]")} title="No Penalty"><Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /></button>
                                                         <button onClick={() => handleUpdatePenalty(solveId, '+2')} className={clsx("w-6 h-6 sm:w-[28px] sm:h-[28px] rounded-[6px] text-[8px] sm:text-[10px] font-bold tracking-wider transition-all duration-200 border flex justify-center items-center focus:outline-none backdrop-blur-md", solve.penalty === '+2' ? "bg-yellow-500/20 dark:bg-yellow-500/20 border-yellow-500/30 dark:border-yellow-500/30 text-yellow-600 dark:text-yellow-400" : "bg-slate-200/40 dark:bg-white/[0.04] border-transparent text-yellow-600 dark:text-yellow-500 hover:bg-slate-300/40 hover:dark:bg-white/[0.08]")} title="+2 Penalty">+2</button>
                                                         <button onClick={() => handleUpdatePenalty(solveId, 'DNF')} className={clsx("w-6 h-6 sm:w-[28px] sm:h-[28px] rounded-[6px] text-[8px] sm:text-[10px] font-bold tracking-wider transition-all duration-200 border flex justify-center items-center focus:outline-none backdrop-blur-md", solve.penalty === 'DNF' ? "bg-red-500/20 dark:bg-red-500/20 border-red-500/30 dark:border-red-500/30 text-red-600 dark:text-red-400" : "bg-slate-200/40 dark:bg-white/[0.04] border-transparent text-red-600 dark:text-red-500 hover:bg-slate-300/40 hover:dark:bg-white/[0.08]")} title="Did Not Finish">DNF</button>
@@ -1481,6 +2033,19 @@ export default function PracticeSession() {
                                                                 <span className="uppercase tracking-widest text-[9px] text-slate-400 dark:text-gray-500 bg-slate-100 dark:bg-white/[0.04] px-1.5 py-0.5 rounded font-extrabold">{solve.method || 'CFOP'}</span>
                                                             </div>
                                                             <div className="text-[11px] sm:text-xs font-mono font-medium text-slate-700/60 dark:text-gray-300/60 leading-relaxed tracking-wider break-all border-l-2 border-slate-200 dark:border-[#2e323d] pl-3 select-text py-0.5">{solve.scramble}</div>
+                                                            
+                                                            {solve.phaseSplits && Object.keys(solve.phaseSplits).length > 0 && (
+                                                                <div className="flex flex-col gap-1 bg-slate-100/50 dark:bg-black/20 p-2.5 rounded-xl border border-slate-200/50 dark:border-white/5 mt-1 text-left">
+                                                                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-gray-500">Phase Splits Breakdown:</span>
+                                                                    <div className="flex flex-wrap gap-2.5 text-[11px] font-mono">
+                                                                        {Object.entries(solve.phaseSplits).map(([pName, pMs]) => (
+                                                                            <span key={pName} className="text-slate-700 dark:text-gray-300">
+                                                                                <strong className="text-primary">{pName}:</strong> {formatTime(pMs)}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </motion.div>
                                                 )}
@@ -1687,6 +2252,15 @@ export default function PracticeSession() {
                                 </div>
                             </motion.div>
                         </div>
+                    )}
+                    {reconstructionSolve && (
+                        <PostSolveReconstructionModal
+                            solveData={reconstructionSolve}
+                            onClose={() => setReconstructionSolve(null)}
+                            onSave={handleSaveReconstruction}
+                            isSaving={isSavingReconstruction}
+                            isDarkMode={isDarkMode}
+                        />
                     )}
                 </AnimatePresence>,
                 document.body
