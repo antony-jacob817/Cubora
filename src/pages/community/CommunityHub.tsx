@@ -2436,29 +2436,6 @@ export default function CommunityHub() {
                                     )}
                                 </AnimatePresence>
                             </div>
-                                                                <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors">
-                                                                    {item.name}
-                                                                </span>
-                                                                <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider shrink-0 flex items-center gap-0.5">
-                                                                    <Trophy className="w-2.5 h-2.5 text-amber-500" /> PB
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
-                                                                {item.handle} • {item.method}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex flex-col items-end shrink-0 pl-2">
-                                                        <span className="font-mono font-bold text-amber-500 text-xs sm:text-sm">{item.time}</span>
-                                                        <span className="text-[8.5px] text-slate-400 dark:text-gray-550 uppercase tracking-widest font-sans">Verified</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
 
                             {/* Active Sub-Challenges Framework */}
                             <div className="glass-panel p-5 sm:p-6 border-secondary/20 w-full text-left">
