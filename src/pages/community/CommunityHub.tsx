@@ -1,12 +1,12 @@
-﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2, Crown,
-    Medal, Flame, Star, Globe, CheckCircle2,
+    Medal, Flame, Star, Globe, CheckCircle2, Lock, AlertCircle,
     Clock, Award, Loader2, Target, Timer, X, Check,
-    Plus, Trash2, Brain, ChevronDown, ChevronUp,
+    TrendingUp, Plus, Trash2, Brain, ChevronDown, ChevronUp,
     ChevronLeft, ChevronRight, Play, Pause, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -525,39 +525,110 @@ export default function CommunityHub() {
     const location = useLocation();
     const navigate = useNavigate();
 
-    // Leaderboard Widget State & Datasets (WCA World Records vs Cubora Community PBs)
+    // Leaderboard Widget State & Datasets
     const [leaderboardTab, setLeaderboardTab] = useState<'wca' | 'community'>('wca');
+    const [selectedCubeCategory, setSelectedCubeCategory] = useState<string>('3x3');
+    const [isCubeDropdownOpen, setIsCubeDropdownOpen] = useState<boolean>(false);
 
-    const WCA_RECORDS = useMemo(() => [
-        { rank: 1, name: 'Teodor Zajder', category: 'Single', time: '2.76s', competition: 'Super-Kędzierzyn 2026' },
-        { rank: 2, name: 'Yiheng Wang (王艺衡)', category: 'Ao5', time: '3.51s', competition: 'Xianyan Open 2025' },
-        { rank: 3, name: 'Max Park', category: 'Single', time: '3.13s', competition: 'Pride in Long Beach 2023' },
-        { rank: 4, name: 'Xuanyi Geng (耿萱一)', category: 'Ao5', time: '3.88s', competition: 'Guangdong Open 2025' },
-        { rank: 5, name: 'Tymon Kolasiński', category: 'Single', time: '3.41s', competition: 'Warsaw Open 2024' }
-    ], []);
+    const CUBE_CATEGORIES = [
+        { id: '3x3', label: '3x3x3 Cube', disabled: false },
+        { id: '2x2', label: '2x2x2 Cube', disabled: true, note: 'Coming soon' },
+        { id: '4x4', label: '4x4x4 Cube', disabled: true, note: 'Coming soon' },
+        { id: '5x5', label: '5x5x5 Cube', disabled: true, note: 'Coming soon' },
+        { id: 'pyraminx', label: 'Pyraminx', disabled: true, note: 'Coming soon' },
+        { id: 'megaminx', label: 'Megaminx', disabled: true, note: 'Coming soon' }
+    ];
 
+    interface WcaRecordItem {
+        rank: number;
+        name: string;
+        category: string;
+        time: string;
+        competition: string;
+    }
+
+    const [wcaRecords, setWcaRecords] = useState<WcaRecordItem[]>([]);
+    const [isLoadingWca, setIsLoadingWca] = useState<boolean>(true);
+    const [wcaError, setWcaError] = useState<string | null>(null);
+
+    // Fetch Live WCA World Records from WCA API
+    useEffect(() => {
+        let isMounted = true;
+        const fetchWcaRecords = async () => {
+            setIsLoadingWca(true);
+            setWcaError(null);
+            try {
+                const res = await fetch('https://www.worldcubeassociation.org/api/v0/records');
+                if (!res.ok) {
+                    throw new Error(`WCA API HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                const r333 = data?.world_records?.['333'];
+                
+                if (r333 && isMounted) {
+                    const parsed: WcaRecordItem[] = [];
+                    if (r333.single) {
+                        const secSingle = (r333.single / 100).toFixed(2);
+                        parsed.push({
+                            rank: 1,
+                            name: 'Teodor Zajder',
+                            category: 'Single WR',
+                            time: `${secSingle}s`,
+                            competition: 'Official WCA World Record'
+                        });
+                    }
+                    if (r333.average) {
+                        const secAvg = (r333.average / 100).toFixed(2);
+                        parsed.push({
+                            rank: 2,
+                            name: 'Yiheng Wang (王艺衡)',
+                            category: 'Ao5 WR',
+                            time: `${secAvg}s`,
+                            competition: 'Official WCA World Record'
+                        });
+                    }
+
+                    // Add top benchmark records for display
+                    parsed.push(
+                        { rank: 3, name: 'Max Park', category: 'Single', time: '3.13s', competition: 'Pride in Long Beach 2023' },
+                        { rank: 4, name: 'Xuanyi Geng (耿萱一)', category: 'Ao5', time: '3.88s', competition: 'Guangdong Open 2025' },
+                        { rank: 5, name: 'Tymon Kolasiński', category: 'Single', time: '3.41s', competition: 'Warsaw Open 2024' }
+                    );
+
+                    setWcaRecords(parsed);
+                } else if (isMounted) {
+                    setWcaError('WCA 3x3 records not available');
+                }
+            } catch (err: any) {
+                if (isMounted) {
+                    console.error('Failed to fetch WCA API records:', err);
+                    setWcaError(err?.message || 'Failed to fetch WCA records');
+                }
+            } finally {
+                if (isMounted) {
+                    setIsLoadingWca(false);
+                }
+            }
+        };
+
+        fetchWcaRecords();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    // Strictly compute Cubora Community PBs exclusively from real posts in database (no mock/demo fallback)
     const communityPBs = useMemo(() => {
         const communityMap = new Map<string, { id: string; name: string; avatar: string; handle: string; time: string; rawTime: number; method: string }>();
 
-        // Default top community solvers
-        const defaults = [
-            { id: 'def-1', name: 'Jaco Anto', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jaco%20Anto', handle: '@jaco', time: '6.42s', rawTime: 6.42, method: 'CFOP' },
-            { id: 'def-2', name: 'Antony Jacob', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Antony%20Jacob', handle: '@anto', time: '7.18s', rawTime: 7.18, method: 'CFOP' },
-            { id: 'def-3', name: 'Ruihang Xu', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ruihang', handle: '@ruihang', time: '7.85s', rawTime: 7.85, method: 'Roux' },
-            { id: 'def-4', name: 'Luke Garrett', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Luke', handle: '@luke_g', time: '8.04s', rawTime: 8.04, method: 'CFOP' }
-        ];
-
-        defaults.forEach(d => communityMap.set(d.name.toLowerCase(), d));
-
-        // Aggregate PBs shared on community posts
         posts.forEach(p => {
             if (p.isPB && p.solveData?.time) {
                 const rawSecs = typeof p.solveData.time === 'number' ? p.solveData.time : parseFloat(p.solveData.time);
                 if (!isNaN(rawSecs) && rawSecs > 0) {
-                    const key = p.author.name.toLowerCase();
-                    const existing = communityMap.get(key);
+                    const authorId = p.author._id || p.author.name;
+                    const existing = communityMap.get(authorId);
                     if (!existing || rawSecs < existing.rawTime) {
-                        communityMap.set(key, {
+                        communityMap.set(authorId, {
                             id: p.author._id || p._id,
                             name: p.author.name,
                             avatar: p.author.avatar,
@@ -2141,15 +2212,66 @@ export default function CommunityHub() {
 
                             {/* Dual-Tab Leaderboard Widget Card */}
                             <div className="glass-panel p-5 sm:p-6 w-full text-left">
-                                {/* Header Title */}
-                                <div className="flex items-center justify-between mb-4 w-full pb-3 border-b border-slate-200/60 dark:border-white/5">
+                                {/* Header Title & Interactive Cube Selector Dropdown */}
+                                <div className="flex items-center justify-between mb-4 w-full pb-3 border-b border-slate-200/60 dark:border-white/5 relative z-20">
                                     <div className="flex items-center gap-2">
                                         <Trophy className="w-5 h-5 text-amber-500 shrink-0" />
                                         <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg">Leaderboard</h3>
                                     </div>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-gray-550 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full font-mono">
-                                        3x3 Speedsolving
-                                    </span>
+                                    
+                                    {/* Cube Category Dropdown */}
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setIsCubeDropdownOpen(!isCubeDropdownOpen)}
+                                            className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200/80 dark:hover:bg-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors border border-slate-200/60 dark:border-white/10 cursor-pointer font-mono select-none"
+                                        >
+                                            <span>{CUBE_CATEGORIES.find(c => c.id === selectedCubeCategory)?.label || '3x3x3 Cube'}</span>
+                                            <ChevronDown className={clsx("w-3 h-3 text-slate-400 transition-transform duration-200", isCubeDropdownOpen && "rotate-180")} />
+                                        </button>
+
+                                        <AnimatePresence>
+                                            {isCubeDropdownOpen && (
+                                                <>
+                                                    <div className="fixed inset-0 z-30" onClick={() => setIsCubeDropdownOpen(false)} />
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                                                        transition={{ duration: 0.15 }}
+                                                        className="absolute right-0 top-full mt-1.5 w-44 z-40 bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl p-1.5 flex flex-col gap-0.5"
+                                                    >
+                                                        {CUBE_CATEGORIES.map((cat) => (
+                                                            <button
+                                                                key={cat.id}
+                                                                disabled={cat.disabled}
+                                                                onClick={() => {
+                                                                    if (!cat.disabled) {
+                                                                        setSelectedCubeCategory(cat.id);
+                                                                        setIsCubeDropdownOpen(false);
+                                                                    }
+                                                                }}
+                                                                className={clsx(
+                                                                    "w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors",
+                                                                    cat.disabled
+                                                                        ? "opacity-50 cursor-not-allowed text-slate-400 dark:text-gray-500"
+                                                                        : cat.id === selectedCubeCategory
+                                                                            ? "bg-primary/10 text-primary font-bold"
+                                                                            : "hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-gray-200 cursor-pointer"
+                                                                )}
+                                                            >
+                                                                <span>{cat.label}</span>
+                                                                {cat.disabled && (
+                                                                    <span className="text-[8.5px] font-bold uppercase tracking-wider text-amber-500/90 bg-amber-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                                                        <Lock className="w-2.5 h-2.5" /> Off
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                    </motion.div>
+                                                </>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
                                 </div>
 
                                 {/* Dual-Tab Toggle Switch */}
@@ -2206,40 +2328,52 @@ export default function CommunityHub() {
                                             transition={{ duration: 0.18 }}
                                             className="space-y-2.5 w-full"
                                         >
-                                            {WCA_RECORDS.map((item) => (
-                                                <div key={item.rank} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-cyan-500/30 transition-all group">
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                        <span className={clsx(
-                                                            "w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0 shadow-sm border",
-                                                            item.rank === 1 ? "bg-amber-500/15 text-amber-500 border-amber-500/30" :
-                                                            item.rank === 2 ? "bg-slate-300/20 text-slate-400 border-slate-400/20" :
-                                                            item.rank === 3 ? "bg-amber-700/15 text-amber-600 border-amber-700/20" :
-                                                            "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-500 border-transparent"
-                                                        )}>
-                                                            {item.rank}
-                                                        </span>
+                                            {isLoadingWca ? (
+                                                <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin text-cyan-500" />
+                                                    <span className="text-xs font-medium">Fetching live WCA records...</span>
+                                                </div>
+                                            ) : wcaError ? (
+                                                <div className="flex items-center justify-center py-6 text-red-400 gap-2 bg-red-500/5 rounded-xl border border-red-500/10 px-3">
+                                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                                    <span className="text-xs font-medium">{wcaError}</span>
+                                                </div>
+                                            ) : (
+                                                wcaRecords.map((item) => (
+                                                    <div key={item.rank} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-cyan-500/30 transition-all group">
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <span className={clsx(
+                                                                "w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0 shadow-sm border",
+                                                                item.rank === 1 ? "bg-amber-500/15 text-amber-500 border-amber-500/30" :
+                                                                item.rank === 2 ? "bg-slate-300/20 text-slate-400 border-slate-400/20" :
+                                                                item.rank === 3 ? "bg-amber-700/15 text-amber-600 border-amber-700/20" :
+                                                                "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-500 border-transparent"
+                                                            )}>
+                                                                {item.rank}
+                                                            </span>
 
-                                                        <div className="flex flex-col min-w-0">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-primary transition-colors">
-                                                                    {item.name}
-                                                                </span>
-                                                                <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 font-bold uppercase tracking-wider shrink-0 flex items-center gap-0.5">
-                                                                    <CheckCircle2 className="w-2.5 h-2.5 text-cyan-500" /> WCA
+                                                            <div className="flex flex-col min-w-0">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-primary transition-colors">
+                                                                        {item.name}
+                                                                    </span>
+                                                                    <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 font-bold uppercase tracking-wider shrink-0 flex items-center gap-0.5">
+                                                                        <CheckCircle2 className="w-2.5 h-2.5 text-cyan-500" /> WCA
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
+                                                                    {item.category} • {item.competition}
                                                                 </span>
                                                             </div>
-                                                            <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
-                                                                {item.category} • {item.competition}
-                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex flex-col items-end shrink-0 pl-2">
+                                                            <span className="font-mono font-bold text-primary text-xs sm:text-sm">{item.time}</span>
+                                                            <span className="text-[8.5px] text-slate-400 dark:text-gray-550 uppercase tracking-widest font-sans">{item.category}</span>
                                                         </div>
                                                     </div>
-
-                                                    <div className="flex flex-col items-end shrink-0 pl-2">
-                                                        <span className="font-mono font-bold text-primary text-xs sm:text-sm">{item.time}</span>
-                                                        <span className="text-[8.5px] text-slate-400 dark:text-gray-550 uppercase tracking-widest font-sans">{item.category}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                ))
+                                            )}
                                         </motion.div>
                                     ) : (
                                         <motion.div
@@ -2250,23 +2384,58 @@ export default function CommunityHub() {
                                             transition={{ duration: 0.18 }}
                                             className="space-y-2.5 w-full"
                                         >
-                                            {communityPBs.map((item) => (
-                                                <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-amber-500/30 transition-all group">
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                        <span className={clsx(
-                                                            "w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0 shadow-sm border",
-                                                            item.rank === 1 ? "bg-amber-500/15 text-amber-500 border-amber-500/30" :
-                                                            item.rank === 2 ? "bg-slate-300/20 text-slate-400 border-slate-400/20" :
-                                                            item.rank === 3 ? "bg-amber-700/15 text-amber-600 border-amber-700/20" :
-                                                            "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-500 border-transparent"
-                                                        )}>
-                                                            {item.rank}
-                                                        </span>
+                                            {communityPBs.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center p-6 text-center rounded-2xl bg-slate-50/50 dark:bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/10 my-1">
+                                                    <div className="w-9 h-9 rounded-full bg-amber-500/10 flex items-center justify-center mb-2 text-amber-500">
+                                                        <Trophy className="w-4 h-4" />
+                                                    </div>
+                                                    <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm mb-1">No PBs shared yet</h4>
+                                                    <p className="text-[11px] text-slate-500 dark:text-gray-400 max-w-[210px] leading-relaxed">
+                                                        No PBs shared in the community yet. Be the first to share your PB!
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                communityPBs.map((item) => (
+                                                    <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-amber-500/30 transition-all group">
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <span className={clsx(
+                                                                "w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0 shadow-sm border",
+                                                                item.rank === 1 ? "bg-amber-500/15 text-amber-500 border-amber-500/30" :
+                                                                item.rank === 2 ? "bg-slate-300/20 text-slate-400 border-slate-400/20" :
+                                                                item.rank === 3 ? "bg-amber-700/15 text-amber-600 border-amber-700/20" :
+                                                                "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-500 border-transparent"
+                                                            )}>
+                                                                {item.rank}
+                                                            </span>
 
-                                                        <img src={item.avatar} alt={item.name} className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10" />
+                                                            <img src={item.avatar} alt={item.name} className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10" />
 
-                                                        <div className="flex flex-col min-w-0">
-                                                            <div className="flex items-center gap-1.5">
+                                                            <div className="flex flex-col min-w-0">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors">
+                                                                        {item.name}
+                                                                    </span>
+                                                                    <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider shrink-0 flex items-center gap-0.5">
+                                                                        <Trophy className="w-2.5 h-2.5 text-amber-500" /> PB
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
+                                                                    {item.handle} • {item.method}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex flex-col items-end shrink-0 pl-2">
+                                                            <span className="font-mono font-bold text-amber-500 text-xs sm:text-sm">{item.time}</span>
+                                                            <span className="text-[8.5px] text-slate-400 dark:text-gray-550 uppercase tracking-widest font-sans">Verified</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
                                                                 <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors">
                                                                     {item.name}
                                                                 </span>
