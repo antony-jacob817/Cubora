@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,7 +6,7 @@ import {
     MessageSquare, Heart, Share2, Trophy, Edit2, Crown,
     Medal, Flame, Star, Globe, CheckCircle2, Lock, AlertCircle,
     Clock, Award, Loader2, Target, Timer, X, Check,
-    TrendingUp, Plus, Trash2, Brain, ChevronDown, ChevronUp,
+    Plus, Trash2, Brain, ChevronDown, ChevronUp,
     ChevronLeft, ChevronRight, Play, Pause, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
