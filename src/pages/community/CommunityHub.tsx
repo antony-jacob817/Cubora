@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,7 +6,7 @@ import {
     MessageSquare, Heart, Share2, Trophy, Edit2, Crown,
     Medal, Flame, Star, Globe, CheckCircle2, Lock, AlertCircle,
     Clock, Award, Loader2, Target, Timer, X, Check,
-    Plus, Trash2, Brain, ChevronDown, ChevronUp,
+    TrendingUp, Plus, Trash2, Brain, ChevronDown, ChevronUp,
     ChevronLeft, ChevronRight, Play, Pause, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -2211,7 +2211,7 @@ export default function CommunityHub() {
                         <div className="flex flex-col gap-5 sm:gap-6 w-full">
 
                             {/* Dual-Tab Leaderboard Widget Card */}
-                            <div className="glass-panel p-5 sm:p-6 w-full text-left">
+                            <div className={clsx("glass-panel p-5 sm:p-6 w-full text-left transition-all relative", isCubeDropdownOpen ? "z-30" : "z-10")}>
                                 {/* Header Title & Interactive Cube Selector Dropdown */}
                                 <div className="flex items-center justify-between mb-4 w-full pb-3 border-b border-slate-200/60 dark:border-white/5 relative z-20">
                                     <div className="flex items-center gap-2">
@@ -2232,13 +2232,13 @@ export default function CommunityHub() {
                                         <AnimatePresence>
                                             {isCubeDropdownOpen && (
                                                 <>
-                                                    <div className="fixed inset-0 z-30" onClick={() => setIsCubeDropdownOpen(false)} />
+                                                    <div className="fixed inset-0 z-40" onClick={() => setIsCubeDropdownOpen(false)} />
                                                     <motion.div
                                                         initial={{ opacity: 0, y: -4, scale: 0.95 }}
                                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                                         exit={{ opacity: 0, y: -4, scale: 0.95 }}
                                                         transition={{ duration: 0.15 }}
-                                                        className="absolute right-0 top-full mt-1.5 w-44 z-40 bg-white dark:bg-[#1C1E22] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl p-1.5 flex flex-col gap-0.5"
+                                                        className="absolute right-0 top-full mt-1.5 w-44 z-50 bg-white dark:bg-[#181A1D] border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl p-1.5 flex flex-col gap-0.5"
                                                     >
                                                         {CUBE_CATEGORIES.map((cat) => (
                                                             <button
