@@ -134,11 +134,11 @@ exports.createPost = async (req, res) => {
     }
 
     let processedSolveData = solveData ? { ...solveData } : {};
-    if (solveData && (type === 'solve' || isPB || solveData.time)) {
+    if (solveData && (type === 'solve' || isPB || solveData.time || solveData.verificationStatus)) {
       if (!processedSolveData.verificationStatus) {
-        if (processedSolveData.isManual) {
+        if (processedSolveData.isManual === true) {
           processedSolveData.verificationStatus = 'unverified';
-        } else if (processedSolveData.phaseSplits && Object.keys(processedSolveData.phaseSplits).length > 0) {
+        } else if (processedSolveData.phaseSplits && typeof processedSolveData.phaseSplits === 'object' && Object.keys(processedSolveData.phaseSplits).length > 0) {
           processedSolveData.verificationStatus = 'verified_phase';
         } else {
           processedSolveData.verificationStatus = 'verified_session';

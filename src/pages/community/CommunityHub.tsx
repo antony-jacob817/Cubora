@@ -1060,8 +1060,8 @@ export default function CommunityHub() {
                     method: attachedSolve.method,
                     scramble: attachedSolve.scramble,
                     phaseSplits: attachedSolve.phaseSplits,
-                    isManual: attachedSolve.isManual,
-                    verificationStatus: attachedSolve.verificationStatus
+                    verificationStatus: attachedSolve.verificationStatus,
+                    isManual: attachedSolve.isManual || false
                 };
             } else if (attachedAlg) {
                 postType = 'algorithm';

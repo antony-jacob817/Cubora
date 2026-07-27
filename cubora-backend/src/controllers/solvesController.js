@@ -69,7 +69,11 @@ exports.saveSolve = async (req, res) => {
     });
 
     // Check & trigger achievements automatically
-    await evaluateAchievements(req.user.id);
+    try {
+      await evaluateAchievements(req.user.id);
+    } catch (achErr) {
+      console.error('Non-blocking achievement evaluation error:', achErr.message);
+    }
 
     res.status(201).json({ success: true, data: solve });
   } catch (error) {

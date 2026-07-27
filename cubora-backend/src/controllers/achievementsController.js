@@ -274,12 +274,18 @@ exports.getAchievements = async (req, res) => {
       }
 
       if (qualifies && !unlockedIds.has(badge.id)) {
-        // Award on-the-fly (fire and forget)
+        // Award on-the-fly (fire and forget with try-catch)
         Achievement.create({
           user: userId,
           badgeId: badge.id,
-          title: badge.title
-        }).catch(() => {});
+          achievementId: badge.id,
+          title: badge.title,
+          category: badge.category || 'General',
+          progress: badge.target || 1,
+          unlockedAt: new Date()
+        }).catch(err => {
+          console.error('Failed to auto-create achievement document (Schema validation error 121 handled):', err.message);
+        });
         unlockedIds.add(badge.id);
       }
 
@@ -334,28 +340,38 @@ exports.evaluateAchievements = async (userId) => {
 
     const checkAndAward = async (badgeId, title) => {
       if (!unlockedIds.has(badgeId)) {
-        await Achievement.create({
-          user: userId,
-          badgeId: badgeId,
-          title: title
-        });
-        newUnlocks.push({ id: badgeId, title });
+        const badge = ALL_BADGES.find(b => b.id === badgeId);
+        try {
+          await Achievement.create({
+            user: userId,
+            badgeId: badgeId,
+            achievementId: badgeId,
+            title: title,
+            category: badge ? badge.category : 'General',
+            progress: badge ? badge.target : 1,
+            unlockedAt: new Date()
+          });
+          newUnlocks.push({ id: badgeId, title });
+        } catch (aErr) {
+          console.error('Failed to create achievement document (Schema validation error 121 handled):', aErr.message);
+        }
 
         // Trigger real-time achievement notification
         try {
           const { createNotification } = require('./notificationController');
-          const badge = ALL_BADGES.find(b => b.id === badgeId);
           if (badge) {
             const trackName = badge.title.split(' (')[0];
             await createNotification({
               recipient: userId,
               type: 'achievement',
               title: 'Trophy Upgraded!',
-              content: `You just hit the ${badge.tier} Tier in the ${trackName} track.`
+              content: `You just hit the ${badge.tier} Tier in the ${trackName} track.`,
+              unread: true,
+              createdAt: new Date()
             });
           }
         } catch (nErr) {
-          console.error('Failed to trigger achievement notification:', nErr);
+          console.error('Failed to trigger achievement notification:', nErr.message);
         }
       }
     };
