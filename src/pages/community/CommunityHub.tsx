@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -89,7 +89,7 @@ interface CommunityPost {
     content: string;
     type: 'solve' | 'algorithm' | 'discussion';
     author: { _id: string; name: string; handle: string; avatar: string };
-    solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string; phaseSplits?: Record<string, number> };
+    solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string; phaseSplits?: Record<string, number>; verificationStatus?: 'unverified' | 'verified_phase' | 'verified_session' | 'flagged'; isManual?: boolean };
     isPB?: boolean;
     likes: number;
     isLikedByMe: boolean;
@@ -617,12 +617,29 @@ export default function CommunityHub() {
         };
     }, []);
 
-    // Strictly compute Cubora Community PBs exclusively from real posts in database (no mock/demo fallback)
+    // Strictly compute Cubora Community PBs exclusively from real verified posts in database
     const communityPBs = useMemo(() => {
-        const communityMap = new Map<string, { id: string; name: string; avatar: string; handle: string; time: string; rawTime: number; method: string }>();
+        const communityMap = new Map<string, { id: string; name: string; avatar: string; handle: string; time: string; rawTime: number; method: string; verificationStatus: 'verified_phase' | 'verified_session' }>();
 
         posts.forEach(p => {
             if (p.isPB && p.solveData?.time) {
+                // Infer or read verification status
+                let status = p.solveData.verificationStatus;
+                if (!status) {
+                    if (p.solveData.isManual) {
+                        status = 'unverified';
+                    } else if (p.solveData.phaseSplits && Object.keys(p.solveData.phaseSplits).length > 0) {
+                        status = 'verified_phase';
+                    } else {
+                        status = 'verified_session';
+                    }
+                }
+
+                // Filter out all 'unverified' (manual entries) and 'flagged' entries from the official leaderboard
+                if (status !== 'verified_phase' && status !== 'verified_session') {
+                    return;
+                }
+
                 const rawSecs = typeof p.solveData.time === 'number' ? p.solveData.time : parseFloat(p.solveData.time);
                 if (!isNaN(rawSecs) && rawSecs > 0) {
                     const authorId = p.author._id || p.author.name;
@@ -635,7 +652,8 @@ export default function CommunityHub() {
                             handle: p.author.handle,
                             time: `${rawSecs.toFixed(2)}s`,
                             rawTime: rawSecs,
-                            method: p.solveData.method || 'CFOP'
+                            method: p.solveData.method || 'CFOP',
+                            verificationStatus: status
                         });
                     }
                 }
@@ -1041,7 +1059,9 @@ export default function CommunityHub() {
                     time: (attachedSolve.timeMs / 1000).toFixed(3) + 's',
                     method: attachedSolve.method,
                     scramble: attachedSolve.scramble,
-                    phaseSplits: attachedSolve.phaseSplits
+                    phaseSplits: attachedSolve.phaseSplits,
+                    isManual: attachedSolve.isManual,
+                    verificationStatus: attachedSolve.verificationStatus
                 };
             } else if (attachedAlg) {
                 postType = 'algorithm';
@@ -2427,7 +2447,15 @@ export default function CommunityHub() {
 
                                                         <div className="flex flex-col items-end shrink-0 pl-2">
                                                             <span className="font-mono font-bold text-amber-500 text-xs sm:text-sm">{item.time}</span>
-                                                            <span className="text-[8.5px] text-slate-400 dark:text-gray-550 uppercase tracking-widest font-sans">Verified</span>
+                                                            {item.verificationStatus === 'verified_phase' ? (
+                                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold tracking-wider shrink-0 flex items-center gap-1 mt-0.5">
+                                                                    🟢 Phase Verified
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold tracking-wider shrink-0 flex items-center gap-1 mt-0.5">
+                                                                    🔵 Session Verified
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))

@@ -133,11 +133,24 @@ exports.createPost = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Post content is required.' });
     }
 
+    let processedSolveData = solveData ? { ...solveData } : {};
+    if (solveData && (type === 'solve' || isPB || solveData.time)) {
+      if (!processedSolveData.verificationStatus) {
+        if (processedSolveData.isManual) {
+          processedSolveData.verificationStatus = 'unverified';
+        } else if (processedSolveData.phaseSplits && Object.keys(processedSolveData.phaseSplits).length > 0) {
+          processedSolveData.verificationStatus = 'verified_phase';
+        } else {
+          processedSolveData.verificationStatus = 'verified_session';
+        }
+      }
+    }
+
     const post = await CommunityPost.create({
       author: req.user.id,
       content: content.trim(),
       type: type || 'discussion',
-      solveData: solveData || {},
+      solveData: processedSolveData,
       isPB: !!isPB,
     });
 

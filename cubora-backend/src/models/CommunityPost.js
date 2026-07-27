@@ -23,6 +23,8 @@ const communityPostSchema = new mongoose.Schema({
     alg: String,
     algType: String,
     phaseSplits: mongoose.Schema.Types.Mixed,
+    verificationStatus: { type: String, enum: ['unverified', 'verified_phase', 'verified_session', 'flagged'] },
+    isManual: { type: Boolean, default: false },
   },
   isPB: { type: Boolean, default: false },
   likes: { type: Number, default: 0 },

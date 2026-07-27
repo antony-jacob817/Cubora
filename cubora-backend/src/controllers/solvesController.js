@@ -13,6 +13,48 @@ exports.saveSolve = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide timeMs and scramble' });
     }
 
+    const isManualSolve = Boolean(isManual);
+    const hasPhaseSplits = Boolean(phaseSplits && typeof phaseSplits === 'object' && Object.keys(phaseSplits).length > 0);
+
+    let verificationStatus = 'unverified';
+
+    if (isManualSolve) {
+      verificationStatus = 'unverified';
+    } else {
+      // Calculate user's historical rolling average (Ao100 or global average) before marking live solve as verified
+      const previousSolves = await SolveHistory.find({ 
+        user: req.user.id, 
+        isDeleted: false, 
+        penalty: { $ne: 'DNF' } 
+      });
+
+      if (previousSolves.length > 0) {
+        const times = previousSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
+        let rollingAvg = null;
+        if (times.length >= 100) {
+          const recent100 = times.slice(-100);
+          const sorted = [...recent100].sort((a, b) => a - b);
+          const trimCount = Math.max(1, Math.ceil(100 * 0.05));
+          const trimmed = sorted.slice(trimCount, -trimCount);
+          if (trimmed.length > 0) {
+            rollingAvg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+          }
+        }
+        if (rollingAvg === null) {
+          rollingAvg = times.reduce((a, b) => a + b, 0) / times.length;
+        }
+
+        // Anti-Cheat Check: If timeMs is less than 35% of historical rolling average, flag it
+        if (rollingAvg && timeMs < 0.35 * rollingAvg) {
+          verificationStatus = 'flagged';
+        }
+      }
+
+      if (verificationStatus !== 'flagged') {
+        verificationStatus = hasPhaseSplits ? 'verified_phase' : 'verified_session';
+      }
+    }
+
     const solve = await SolveHistory.create({
       user: req.user.id,
       sessionId: sessionId || 'main',
@@ -21,8 +63,9 @@ exports.saveSolve = async (req, res) => {
       method: method || 'CFOP',
       penalty: penalty || 'None',
       comments: comments || '',
-      isManual: isManual || false,
-      phaseSplits: phaseSplits || {}
+      isManual: isManualSolve,
+      phaseSplits: phaseSplits || {},
+      verificationStatus
     });
 
     // Check & trigger achievements automatically

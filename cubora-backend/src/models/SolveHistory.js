@@ -10,6 +10,11 @@ const solveHistorySchema = new mongoose.Schema({
   comments: { type: String, default: '' }, // NEW: Solve notes/comments
   isManual: { type: Boolean, default: false }, // NEW: Tracks if time was typed manually
   phaseSplits: { type: Object, default: {} },
+  verificationStatus: {
+    type: String,
+    enum: ['unverified', 'verified_phase', 'verified_session', 'flagged'],
+    default: 'unverified'
+  },
   isDeleted: {
     type: Boolean,
     default: false
