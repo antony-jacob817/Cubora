@@ -88,7 +88,7 @@ interface CommunityPost {
     _id: string;
     content: string;
     type: 'solve' | 'algorithm' | 'discussion';
-    author: { _id: string; name: string; handle: string; avatar: string };
+    author: { _id: string; name: string; handle: string; avatar: string; username?: string };
     solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string; phaseSplits?: Record<string, number>; verificationStatus?: 'unverified' | 'verified_phase' | 'verified_session' | 'flagged'; isManual?: boolean };
     isPB?: boolean;
     likes: number;
@@ -100,7 +100,7 @@ interface CommunityPost {
 interface CommentData {
     _id: string;
     post: string;
-    author: { _id: string; name: string; handle: string; avatar: string };
+    author: { _id: string; name: string; handle: string; avatar: string; username?: string };
     content: string;
     parentId: string | null;
     likes: number;
