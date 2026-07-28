@@ -613,3 +613,82 @@ exports.getPostLikers = async (req, res) => {
   }
 };
 
+// @desc    Get Cubora PBs leaderboard across all community posts
+// @route   GET /api/community/leaderboard/pbs
+// @access  Private
+exports.getPBsLeaderboard = async (req, res) => {
+  try {
+    const posts = await CommunityPost.find({ 
+      isPB: true, 
+      'solveData.isManual': { $ne: true } 
+    }).populate('author', 'name username email avatar');
+
+    const communityMap = new Map();
+
+    posts.forEach(p => {
+      if (!p.solveData || !p.solveData.time) return;
+
+      // Extract raw solve time in seconds
+      const rawSecs = typeof p.solveData.time === 'number' 
+        ? p.solveData.time 
+        : parseFloat(p.solveData.time);
+
+      if (isNaN(rawSecs) || rawSecs <= 0) return;
+
+      // Normalize Author info (object vs string ID)
+      let authorId, authorName, authorHandle, authorAvatar;
+
+      if (p.author && typeof p.author === 'object') {
+        authorId = p.author._id ? p.author._id.toString() : p.author.id || 'unknown';
+        authorName = p.author.name || p.author.username || 'Cubora Solver';
+        const rawHandle = p.author.username || p.author.email?.split('@')[0] || authorName;
+        authorHandle = `@${rawHandle.toLowerCase().replace(/\s+/g, '_')}`;
+        authorAvatar = p.author.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
+      } else {
+        authorId = p.author ? p.author.toString() : 'unknown';
+        authorName = 'Cubora Solver';
+        authorHandle = '@cubora_solver';
+        authorAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorId)}`;
+      }
+
+      // Determine verification status
+      let status = p.solveData.verificationStatus;
+      if (!status || status === 'unverified') {
+        if (p.solveData.isManual === true) {
+          return; // Skip manual solves
+        }
+        if (p.solveData.phaseSplits && typeof p.solveData.phaseSplits === 'object' && Object.keys(p.solveData.phaseSplits).length > 0) {
+          status = 'verified_phase';
+        } else {
+          status = 'verified_session';
+        }
+      }
+
+      if (status === 'flagged') return; // Exclude anti-cheat flagged entries
+
+      const existing = communityMap.get(authorId);
+      if (!existing || rawSecs < existing.rawTime) {
+        communityMap.set(authorId, {
+          id: authorId,
+          name: authorName,
+          avatar: authorAvatar,
+          handle: authorHandle,
+          time: `${rawSecs.toFixed(2)}s`,
+          rawTime: rawSecs,
+          method: p.solveData.method || 'CFOP',
+          verificationStatus: status
+        });
+      }
+    });
+
+    const leaderboard = Array.from(communityMap.values())
+      .sort((a, b) => a.rawTime - b.rawTime)
+      .map((item, index) => ({ ...item, rank: index + 1 }));
+
+    res.status(200).json({ success: true, data: leaderboard });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+

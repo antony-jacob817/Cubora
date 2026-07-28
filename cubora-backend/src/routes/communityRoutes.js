@@ -12,12 +12,16 @@ const {
   editComment,
   deleteComment,
   toggleCommentLike,
-  searchUsers
+  searchUsers,
+  getPBsLeaderboard
 } = require('../controllers/communityController');
 const { protect } = require('../middleware/auth');
 
 // All community routes require authentication
 router.use(protect);
+
+router.route('/leaderboard/pbs')
+  .get(getPBsLeaderboard);
 
 router.route('/users/search')
   .get(searchUsers);

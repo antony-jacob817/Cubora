@@ -529,6 +529,8 @@ export default function CommunityHub() {
     const [leaderboardTab, setLeaderboardTab] = useState<'wca' | 'community'>('wca');
     const [selectedCubeCategory, setSelectedCubeCategory] = useState<string>('3x3');
     const [isCubeDropdownOpen, setIsCubeDropdownOpen] = useState<boolean>(false);
+    const [apiCommunityPBs, setApiCommunityPBs] = useState<any[]>([]);
+    const [isLoadingCommunityPBs, setIsLoadingCommunityPBs] = useState<boolean>(true);
 
     const CUBE_CATEGORIES = [
         { id: '3x3', label: '3x3x3 Cube', disabled: false },
@@ -617,43 +619,87 @@ export default function CommunityHub() {
         };
     }, []);
 
-    // Strictly compute Cubora Community PBs exclusively from real verified posts in database
+    // Fetch Cubora PBs directly from dedicated backend endpoint
+    const fetchCommunityPBs = async () => {
+        setIsLoadingCommunityPBs(true);
+        try {
+            const res = await fetch('http://localhost:5000/api/community/leaderboard/pbs', {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (data.success && Array.isArray(data.data)) {
+                setApiCommunityPBs(data.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch community PBs leaderboard:', err);
+        } finally {
+            setIsLoadingCommunityPBs(false);
+        }
+    };
+
+    useEffect(() => {
+        if (leaderboardTab === 'community') {
+            fetchCommunityPBs();
+        }
+    }, [leaderboardTab, posts.length]);
+
+    // Compute Cubora Community PBs using server data or relaxed client fallback
     const communityPBs = useMemo(() => {
+        if (apiCommunityPBs.length > 0) {
+            return apiCommunityPBs;
+        }
+
         const communityMap = new Map<string, { id: string; name: string; avatar: string; handle: string; time: string; rawTime: number; method: string; verificationStatus: 'verified_phase' | 'verified_session' }>();
 
         posts.forEach(p => {
             if (p.isPB && p.solveData?.time) {
-                // Infer or read verification status
+                if (p.solveData.isManual === true) {
+                    return; // Exclude manual solves
+                }
+
+                // Determine verification status
                 let status = p.solveData.verificationStatus;
-                if (!status) {
-                    if (p.solveData.isManual) {
-                        status = 'unverified';
-                    } else if (p.solveData.phaseSplits && Object.keys(p.solveData.phaseSplits).length > 0) {
+                if (!status || status === 'unverified') {
+                    if (p.solveData.phaseSplits && typeof p.solveData.phaseSplits === 'object' && Object.keys(p.solveData.phaseSplits).length > 0) {
                         status = 'verified_phase';
                     } else {
                         status = 'verified_session';
                     }
                 }
 
-                // Filter out all 'unverified' (manual entries) and 'flagged' entries from the official leaderboard
-                if (status !== 'verified_phase' && status !== 'verified_session') {
-                    return;
-                }
+                if (status === 'flagged') return;
 
                 const rawSecs = typeof p.solveData.time === 'number' ? p.solveData.time : parseFloat(p.solveData.time);
                 if (!isNaN(rawSecs) && rawSecs > 0) {
-                    const authorId = p.author._id || p.author.name;
+                    // Safe author normalization (object vs string ID)
+                    let authorId: string;
+                    let authorName: string;
+                    let authorHandle: string;
+                    let authorAvatar: string;
+
+                    if (p.author && typeof p.author === 'object') {
+                        authorId = p.author._id ? p.author._id.toString() : p.author.name || p._id;
+                        authorName = p.author.name || p.author.username || 'Cubora User';
+                        authorHandle = p.author.handle || `@${authorName.toLowerCase().replace(/\s+/g, '_')}`;
+                        authorAvatar = p.author.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
+                    } else {
+                        authorId = typeof p.author === 'string' ? p.author : p._id;
+                        authorName = 'Cubora User';
+                        authorHandle = '@cubora_user';
+                        authorAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorId)}`;
+                    }
+
                     const existing = communityMap.get(authorId);
                     if (!existing || rawSecs < existing.rawTime) {
                         communityMap.set(authorId, {
-                            id: p.author._id || p._id,
-                            name: p.author.name,
-                            avatar: p.author.avatar,
-                            handle: p.author.handle,
+                            id: authorId,
+                            name: authorName,
+                            avatar: authorAvatar,
+                            handle: authorHandle,
                             time: `${rawSecs.toFixed(2)}s`,
                             rawTime: rawSecs,
                             method: p.solveData.method || 'CFOP',
-                            verificationStatus: status
+                            verificationStatus: status as 'verified_phase' | 'verified_session'
                         });
                     }
                 }
@@ -663,7 +709,7 @@ export default function CommunityHub() {
         return Array.from(communityMap.values())
             .sort((a, b) => a.rawTime - b.rawTime)
             .map((item, index) => ({ ...item, rank: index + 1 }));
-    }, [posts]);
+    }, [posts, apiCommunityPBs]);
 
     interface LikedUser {
         _id: string;
@@ -1089,6 +1135,9 @@ export default function CommunityHub() {
                 setAttachedAlg(null);
                 setIsPBChecked(false);
                 if (textareaRef.current) textareaRef.current.style.height = 'auto';
+                if (isPBChecked) {
+                    fetchCommunityPBs();
+                }
             }
         } catch (err) {
             console.error('Failed to create post:', err);
@@ -2404,7 +2453,12 @@ export default function CommunityHub() {
                                             transition={{ duration: 0.18 }}
                                             className="space-y-2.5 w-full"
                                         >
-                                            {communityPBs.length === 0 ? (
+                                            {isLoadingCommunityPBs && apiCommunityPBs.length === 0 ? (
+                                                <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                                                    <span className="text-xs font-medium">Fetching community PBs...</span>
+                                                </div>
+                                            ) : communityPBs.length === 0 ? (
                                                 <div className="flex flex-col items-center justify-center p-6 text-center rounded-2xl bg-slate-50/50 dark:bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/10 my-1">
                                                     <div className="w-9 h-9 rounded-full bg-amber-500/10 flex items-center justify-center mb-2 text-amber-500">
                                                         <Trophy className="w-4 h-4" />
