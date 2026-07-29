@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2, Crown,
-    Medal, Flame, Star, Globe, CheckCircle2, Lock, AlertCircle,
+    Flame, Star, Globe, CheckCircle2, Lock, AlertCircle,
     Clock, Award, Loader2, Target, Timer, X, Check,
     Plus, Trash2, Brain, ChevronDown, ChevronUp,
     ChevronLeft, ChevronRight, Play, Pause, RotateCcw
@@ -2646,7 +2646,7 @@ export default function CommunityHub() {
                                             {/* Bio Identity Summary */}
                                             <div className="flex flex-col items-center text-center min-w-0">
                                                 <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center justify-center gap-2 tracking-tight">
-                                                    {user?.name || 'Cubora User'} <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-pulse shrink-0" />
+                                                    {user?.name || 'Cubora User'}
                                                 </h2>
 
                                                 {/* Trophy Badge Slots Row */}
