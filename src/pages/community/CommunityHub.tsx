@@ -2467,46 +2467,46 @@ export default function CommunityHub() {
                                             className="space-y-2.5 w-full"
                                         >
                                             {/* Sub-Filter Verification Toggle Pill Row */}
-                                            <div className="flex items-center p-1 bg-slate-100/80 dark:bg-white/5 rounded-xl border border-slate-200/60 dark:border-white/5 mb-3 gap-1 relative">
+                                            <div className="w-full flex items-center p-1 relative select-none overflow-hidden bg-slate-100/80 dark:bg-white/5 rounded-xl border border-slate-200/60 dark:border-white/5 mb-3 gap-1">
                                                 <button
                                                     onClick={() => setPbSubFilter('session')}
                                                     className={clsx(
-                                                        "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all relative z-10 cursor-pointer flex items-center justify-center gap-1.5 select-none",
+                                                        "flex-1 w-1/2 py-1.5 px-2 rounded-lg text-xs font-bold transition-colors relative cursor-pointer flex items-center justify-center select-none whitespace-nowrap text-center min-w-0",
                                                         pbSubFilter === 'session'
-                                                            ? "text-blue-600 dark:text-blue-400 font-extrabold"
+                                                            ? "text-blue-600 dark:text-blue-400"
                                                             : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
                                                     )}
                                                 >
                                                     {pbSubFilter === 'session' && (
                                                         <motion.div
                                                             layoutId="pbSubFilterActive"
-                                                            className="absolute inset-0 bg-white dark:bg-blue-500/15 border border-blue-500/30 rounded-lg shadow-sm"
+                                                            className="absolute inset-0 z-0 bg-white dark:bg-blue-500/15 border border-blue-500/30 rounded-lg shadow-sm"
                                                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                                         />
                                                     )}
-                                                    <span className="relative z-10 flex items-center gap-1">
-                                                        <span>🔵</span> Session Verified
+                                                    <span className="relative z-10 whitespace-nowrap">
+                                                        Session Verified
                                                     </span>
                                                 </button>
 
                                                 <button
                                                     onClick={() => setPbSubFilter('phase')}
                                                     className={clsx(
-                                                        "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all relative z-10 cursor-pointer flex items-center justify-center gap-1.5 select-none",
+                                                        "flex-1 w-1/2 py-1.5 px-2 rounded-lg text-xs font-bold transition-colors relative cursor-pointer flex items-center justify-center select-none whitespace-nowrap text-center min-w-0",
                                                         pbSubFilter === 'phase'
-                                                            ? "text-emerald-600 dark:text-emerald-400 font-extrabold"
+                                                            ? "text-emerald-600 dark:text-emerald-400"
                                                             : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
                                                     )}
                                                 >
                                                     {pbSubFilter === 'phase' && (
                                                         <motion.div
                                                             layoutId="pbSubFilterActive"
-                                                            className="absolute inset-0 bg-white dark:bg-emerald-500/15 border border-emerald-500/30 rounded-lg shadow-sm"
+                                                            className="absolute inset-0 z-0 bg-white dark:bg-emerald-500/15 border border-emerald-500/30 rounded-lg shadow-sm"
                                                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                                         />
                                                     )}
-                                                    <span className="relative z-10 flex items-center gap-1">
-                                                        <span>🟢</span> Phase Verified
+                                                    <span className="relative z-10 whitespace-nowrap">
+                                                        Phase Verified
                                                     </span>
                                                 </button>
                                             </div>
@@ -2568,11 +2568,11 @@ export default function CommunityHub() {
                                                             <span className="font-mono font-bold text-amber-500 text-xs sm:text-sm">{item.time}</span>
                                                             {item.verificationStatus === 'verified_phase' ? (
                                                                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold tracking-wider shrink-0 flex items-center gap-1 mt-0.5">
-                                                                    🟢 Phase Verified
+                                                                    Phase Verified
                                                                 </span>
                                                             ) : (
                                                                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold tracking-wider shrink-0 flex items-center gap-1 mt-0.5">
-                                                                    🔵 Session Verified
+                                                                    Session Verified
                                                                 </span>
                                                             )}
                                                         </div>
