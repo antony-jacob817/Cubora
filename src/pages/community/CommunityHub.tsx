@@ -531,6 +531,7 @@ export default function CommunityHub() {
     const [isCubeDropdownOpen, setIsCubeDropdownOpen] = useState<boolean>(false);
     const [apiCommunityPBs, setApiCommunityPBs] = useState<any[]>([]);
     const [isLoadingCommunityPBs, setIsLoadingCommunityPBs] = useState<boolean>(true);
+    const [pbSubFilter, setPbSubFilter] = useState<'session' | 'phase'>('session');
 
     const CUBE_CATEGORIES = [
         { id: '3x3', label: '3x3x3 Cube', disabled: false },
@@ -710,6 +711,18 @@ export default function CommunityHub() {
             .sort((a, b) => a.rawTime - b.rawTime)
             .map((item, index) => ({ ...item, rank: index + 1 }));
     }, [posts, apiCommunityPBs]);
+
+    // Sub-filter community PBs based on session vs phase verification toggle
+    const filteredCommunityPBs = useMemo(() => {
+        if (pbSubFilter === 'phase') {
+            return communityPBs
+                .filter(item => item.verificationStatus === 'verified_phase')
+                .map((item, index) => ({ ...item, rank: index + 1 }));
+        }
+        return communityPBs
+            .filter(item => item.verificationStatus === 'verified_session')
+            .map((item, index) => ({ ...item, rank: index + 1 }));
+    }, [communityPBs, pbSubFilter]);
 
     interface LikedUser {
         _id: string;
@@ -2453,23 +2466,75 @@ export default function CommunityHub() {
                                             transition={{ duration: 0.18 }}
                                             className="space-y-2.5 w-full"
                                         >
+                                            {/* Sub-Filter Verification Toggle Pill Row */}
+                                            <div className="flex items-center p-1 bg-slate-100/80 dark:bg-white/5 rounded-xl border border-slate-200/60 dark:border-white/5 mb-3 gap-1 relative">
+                                                <button
+                                                    onClick={() => setPbSubFilter('session')}
+                                                    className={clsx(
+                                                        "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all relative z-10 cursor-pointer flex items-center justify-center gap-1.5 select-none",
+                                                        pbSubFilter === 'session'
+                                                            ? "text-blue-600 dark:text-blue-400 font-extrabold"
+                                                            : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                                                    )}
+                                                >
+                                                    {pbSubFilter === 'session' && (
+                                                        <motion.div
+                                                            layoutId="pbSubFilterActive"
+                                                            className="absolute inset-0 bg-white dark:bg-blue-500/15 border border-blue-500/30 rounded-lg shadow-sm"
+                                                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                                        />
+                                                    )}
+                                                    <span className="relative z-10 flex items-center gap-1">
+                                                        <span>🔵</span> Session Verified
+                                                    </span>
+                                                </button>
+
+                                                <button
+                                                    onClick={() => setPbSubFilter('phase')}
+                                                    className={clsx(
+                                                        "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all relative z-10 cursor-pointer flex items-center justify-center gap-1.5 select-none",
+                                                        pbSubFilter === 'phase'
+                                                            ? "text-emerald-600 dark:text-emerald-400 font-extrabold"
+                                                            : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                                                    )}
+                                                >
+                                                    {pbSubFilter === 'phase' && (
+                                                        <motion.div
+                                                            layoutId="pbSubFilterActive"
+                                                            className="absolute inset-0 bg-white dark:bg-emerald-500/15 border border-emerald-500/30 rounded-lg shadow-sm"
+                                                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                                        />
+                                                    )}
+                                                    <span className="relative z-10 flex items-center gap-1">
+                                                        <span>🟢</span> Phase Verified
+                                                    </span>
+                                                </button>
+                                            </div>
+
                                             {isLoadingCommunityPBs && apiCommunityPBs.length === 0 ? (
                                                 <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
                                                     <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
                                                     <span className="text-xs font-medium">Fetching community PBs...</span>
                                                 </div>
-                                            ) : communityPBs.length === 0 ? (
+                                            ) : filteredCommunityPBs.length === 0 ? (
                                                 <div className="flex flex-col items-center justify-center p-6 text-center rounded-2xl bg-slate-50/50 dark:bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/10 my-1">
-                                                    <div className="w-9 h-9 rounded-full bg-amber-500/10 flex items-center justify-center mb-2 text-amber-500">
+                                                    <div className={clsx(
+                                                        "w-9 h-9 rounded-full flex items-center justify-center mb-2",
+                                                        pbSubFilter === 'phase' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                                                    )}>
                                                         <Trophy className="w-4 h-4" />
                                                     </div>
-                                                    <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm mb-1">No PBs shared yet</h4>
-                                                    <p className="text-[11px] text-slate-500 dark:text-gray-400 max-w-[210px] leading-relaxed">
-                                                        No PBs shared in the community yet. Be the first to share your PB!
+                                                    <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm mb-1">
+                                                        {pbSubFilter === 'phase' ? 'No Phase-Verified PBs shared yet' : 'No Session-Verified PBs shared yet'}
+                                                    </h4>
+                                                    <p className="text-[11px] text-slate-500 dark:text-gray-400 max-w-[230px] leading-relaxed">
+                                                        {pbSubFilter === 'phase'
+                                                            ? 'Enable Phase Tracking in the Timer to post one!'
+                                                            : 'No standard session-verified PBs shared yet.'}
                                                     </p>
                                                 </div>
                                             ) : (
-                                                communityPBs.map((item) => (
+                                                filteredCommunityPBs.map((item) => (
                                                     <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-amber-500/30 transition-all group">
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             <span className={clsx(
