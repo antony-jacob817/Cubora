@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -2467,11 +2467,11 @@ export default function CommunityHub() {
                                             className="space-y-2.5 w-full"
                                         >
                                             {/* Sub-Filter Verification Toggle Pill Row */}
-                                            <div className="w-full flex items-center p-1 relative select-none overflow-hidden bg-slate-100/80 dark:bg-white/5 rounded-xl border border-slate-200/60 dark:border-white/5 mb-3 gap-1">
+                                            <div className="flex items-center p-1 bg-slate-100/80 dark:bg-white/5 rounded-xl border border-slate-200/60 dark:border-white/5 mb-3 relative">
                                                 <button
                                                     onClick={() => setPbSubFilter('session')}
                                                     className={clsx(
-                                                        "flex-1 w-1/2 py-1.5 px-2 rounded-lg text-xs font-bold transition-colors relative cursor-pointer flex items-center justify-center select-none whitespace-nowrap text-center min-w-0",
+                                                        "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-colors relative z-10 cursor-pointer flex items-center justify-center gap-1.5 select-none",
                                                         pbSubFilter === 'session'
                                                             ? "text-blue-600 dark:text-blue-400"
                                                             : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
@@ -2480,19 +2480,19 @@ export default function CommunityHub() {
                                                     {pbSubFilter === 'session' && (
                                                         <motion.div
                                                             layoutId="pbSubFilterActive"
-                                                            className="absolute inset-0 z-0 bg-white dark:bg-blue-500/15 border border-blue-500/30 rounded-lg shadow-sm"
+                                                            className="absolute inset-0 bg-white dark:bg-white/10 rounded-lg shadow-sm border border-slate-200/60 dark:border-white/10"
                                                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                                         />
                                                     )}
-                                                    <span className="relative z-10 whitespace-nowrap">
-                                                        Session Verified
+                                                    <span className="relative z-10 truncate flex items-center gap-1.5">
+                                                        <span>Session Verified</span>
                                                     </span>
                                                 </button>
 
                                                 <button
                                                     onClick={() => setPbSubFilter('phase')}
                                                     className={clsx(
-                                                        "flex-1 w-1/2 py-1.5 px-2 rounded-lg text-xs font-bold transition-colors relative cursor-pointer flex items-center justify-center select-none whitespace-nowrap text-center min-w-0",
+                                                        "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-colors relative z-10 cursor-pointer flex items-center justify-center gap-1.5 select-none",
                                                         pbSubFilter === 'phase'
                                                             ? "text-emerald-600 dark:text-emerald-400"
                                                             : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
@@ -2501,12 +2501,12 @@ export default function CommunityHub() {
                                                     {pbSubFilter === 'phase' && (
                                                         <motion.div
                                                             layoutId="pbSubFilterActive"
-                                                            className="absolute inset-0 z-0 bg-white dark:bg-emerald-500/15 border border-emerald-500/30 rounded-lg shadow-sm"
+                                                            className="absolute inset-0 bg-white dark:bg-white/10 rounded-lg shadow-sm border border-slate-200/60 dark:border-white/10"
                                                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                                         />
                                                     )}
-                                                    <span className="relative z-10 whitespace-nowrap">
-                                                        Phase Verified
+                                                    <span className="relative z-10 truncate flex items-center gap-1.5">
+                                                        <span>Phase Verified</span>
                                                     </span>
                                                 </button>
                                             </div>
