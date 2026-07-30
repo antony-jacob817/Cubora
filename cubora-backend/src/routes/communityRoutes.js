@@ -15,10 +15,14 @@ const {
   searchUsers,
   getPBsLeaderboard
 } = require('../controllers/communityController');
+const { getChallengeProgress } = require('../controllers/challengeController');
 const { protect } = require('../middleware/auth');
 
 // All community routes require authentication
 router.use(protect);
+
+router.route('/challenge/progress')
+  .get(getChallengeProgress);
 
 router.route('/leaderboard/pbs')
   .get(getPBsLeaderboard);

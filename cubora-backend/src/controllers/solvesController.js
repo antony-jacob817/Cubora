@@ -1,6 +1,7 @@
 const SolveHistory = require('../models/SolveHistory');
 const Achievement = require('../models/Achievement');
 const { evaluateAchievements } = require('./achievementsController');
+const { evaluateChallengeProgress } = require('./challengeController');
 
 // @desc    Save a new solve record
 // @route   POST /api/solves
@@ -73,6 +74,13 @@ exports.saveSolve = async (req, res) => {
       await evaluateAchievements(req.user.id);
     } catch (achErr) {
       console.error('Non-blocking achievement evaluation error:', achErr.message);
+    }
+
+    // Check & update community challenge progress automatically
+    try {
+      await evaluateChallengeProgress(req.user.id, solve);
+    } catch (chErr) {
+      console.error('Non-blocking challenge evaluation error:', chErr.message);
     }
 
     res.status(201).json({ success: true, data: solve });

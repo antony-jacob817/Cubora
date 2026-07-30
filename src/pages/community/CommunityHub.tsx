@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -530,8 +530,54 @@ export default function CommunityHub() {
     const [selectedCubeCategory, setSelectedCubeCategory] = useState<string>('3x3');
     const [isCubeDropdownOpen, setIsCubeDropdownOpen] = useState<boolean>(false);
     const [apiCommunityPBs, setApiCommunityPBs] = useState<any[]>([]);
+    const [hasFetchedCommunityPBs, setHasFetchedCommunityPBs] = useState<boolean>(false);
     const [isLoadingCommunityPBs, setIsLoadingCommunityPBs] = useState<boolean>(true);
     const [pbSubFilter, setPbSubFilter] = useState<'session' | 'phase'>('session');
+
+    interface ChallengeData {
+        id: string;
+        title: string;
+        description: string;
+        targetCount: number;
+        completedSolvesCount: number;
+        dailyCount: number;
+        dailyLimit: number;
+        percentage: number;
+    }
+
+    const [challengeData, setChallengeData] = useState<ChallengeData | null>(null);
+    const [isLoadingChallenge, setIsLoadingChallenge] = useState<boolean>(true);
+
+    const fetchChallengeProgress = async () => {
+        try {
+            const res = await fetch('http://localhost:5000/api/community/challenge/progress', {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (data.success && data.data) {
+                const target = data.data.challenge.targetCount || 50;
+                const completed = data.data.progress.completedSolvesCount || 0;
+                setChallengeData({
+                    id: data.data.challenge.id || data.data.challenge._id,
+                    title: data.data.challenge.title,
+                    description: data.data.challenge.description,
+                    targetCount: target,
+                    completedSolvesCount: completed,
+                    dailyCount: data.data.progress.dailyCount || 0,
+                    dailyLimit: data.data.progress.dailyLimit || 15,
+                    percentage: Math.min(100, Math.round((completed / target) * 100))
+                });
+            }
+        } catch (err) {
+            console.error('Failed to fetch challenge progress:', err);
+        } finally {
+            setIsLoadingChallenge(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchChallengeProgress();
+    }, []);
 
     const CUBE_CATEGORIES = [
         { id: '3x3', label: '3x3x3 Cube', disabled: false },
@@ -621,7 +667,7 @@ export default function CommunityHub() {
     }, []);
 
     // Fetch Cubora PBs directly from dedicated backend endpoint
-    const fetchCommunityPBs = async () => {
+    const fetchCommunityPBs = useCallback(async () => {
         setIsLoadingCommunityPBs(true);
         try {
             const res = await fetch('http://localhost:5000/api/community/leaderboard/pbs', {
@@ -630,23 +676,24 @@ export default function CommunityHub() {
             const data = await res.json();
             if (data.success && Array.isArray(data.data)) {
                 setApiCommunityPBs(data.data);
+                setHasFetchedCommunityPBs(true);
             }
         } catch (err) {
             console.error('Failed to fetch community PBs leaderboard:', err);
         } finally {
             setIsLoadingCommunityPBs(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         if (leaderboardTab === 'community') {
             fetchCommunityPBs();
         }
-    }, [leaderboardTab, posts.length]);
+    }, [leaderboardTab, posts.length, fetchCommunityPBs]);
 
     // Compute Cubora Community PBs using server data or relaxed client fallback
     const communityPBs = useMemo(() => {
-        if (apiCommunityPBs.length > 0) {
+        if (hasFetchedCommunityPBs) {
             return apiCommunityPBs;
         }
 
@@ -710,7 +757,7 @@ export default function CommunityHub() {
         return Array.from(communityMap.values())
             .sort((a, b) => a.rawTime - b.rawTime)
             .map((item, index) => ({ ...item, rank: index + 1 }));
-    }, [posts, apiCommunityPBs]);
+    }, [posts, apiCommunityPBs, hasFetchedCommunityPBs]);
 
     // Sub-filter community PBs based on session vs phase verification toggle
     const filteredCommunityPBs = useMemo(() => {
@@ -2511,7 +2558,7 @@ export default function CommunityHub() {
                                                 </button>
                                             </div>
 
-                                            {isLoadingCommunityPBs && apiCommunityPBs.length === 0 ? (
+                                            {isLoadingCommunityPBs ? (
                                                 <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
                                                     <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
                                                     <span className="text-xs font-medium">Fetching community PBs...</span>
@@ -2587,14 +2634,29 @@ export default function CommunityHub() {
                             {/* Active Sub-Challenges Framework */}
                             <div className="glass-panel p-5 sm:p-6 border-secondary/20 w-full text-left">
                                 <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg mb-4">Community Challenge</h3>
-                                <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full">
-                                    <h4 className="font-bold text-secondary text-xs sm:text-sm mb-0.5 uppercase tracking-wide">Roux Transition Week</h4>
-                                    <p className="text-xs text-slate-500 dark:text-gray-400 mb-4 leading-normal">Complete 50 verified solves using the Roux method.</p>
-                                    <div className="w-full h-1.5 bg-slate-200/40 dark:bg-background rounded-full overflow-hidden mb-2">
-                                        <div className="h-full bg-secondary w-[40%] transition-all" />
+                                {isLoadingChallenge ? (
+                                    <div className="flex items-center justify-center py-6 text-slate-400 gap-2">
+                                        <Loader2 className="w-4 h-4 animate-spin text-secondary" />
+                                        <span className="text-xs font-medium">Loading challenge...</span>
                                     </div>
-                                    <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-gray-400">20 / 50 Solves</span>
-                                </div>
+                                ) : challengeData ? (
+                                    <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full">
+                                        <h4 className="font-bold text-secondary text-xs sm:text-sm mb-0.5 uppercase tracking-wide">{challengeData.title}</h4>
+                                        <p className="text-xs text-slate-500 dark:text-gray-400 mb-4 leading-normal">{challengeData.description}</p>
+                                        <div className="w-full h-1.5 bg-slate-200/40 dark:bg-background rounded-full overflow-hidden mb-2">
+                                            <div
+                                                className="h-full bg-secondary transition-all duration-500 ease-out"
+                                                style={{ width: `${challengeData.percentage}%` }}
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-500 dark:text-gray-400">
+                                            <span>{challengeData.completedSolvesCount} / {challengeData.targetCount} Solves</span>
+                                            <span className="text-[10px] text-slate-400 font-sans">({challengeData.dailyCount}/{challengeData.dailyLimit} today)</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-xs text-slate-400 py-4 text-center">No active community challenge right now.</div>
+                                )}
                             </div>
                         </div>
                 </motion.div>
