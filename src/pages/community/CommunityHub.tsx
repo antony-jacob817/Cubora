@@ -3634,6 +3634,10 @@ export default function CommunityHub() {
                             ))
                         )}
                     </div>
+                </Modal>,
+                document.body
+            )}
+
             {/* Community Challenge Completers Modal */}
             {isCompletersModalOpen && createPortal(
                 <Modal
