@@ -1,6 +1,8 @@
 const CommunityPost = require('../models/CommunityPost');
 const Comment = require('../models/Comment');
 const Notification = require('../models/Notification');
+const Challenge = require('../models/Challenge');
+const UserChallengeProgress = require('../models/UserChallengeProgress');
 const { createNotification } = require('./notificationController');
 
 // Helper to determine post category for dynamic notification formatting
@@ -690,5 +692,129 @@ exports.getPBsLeaderboard = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// @desc    Get active rotating weekly challenge & user's progress
+// @route   GET /api/community/challenge/active
+// @access  Private
+exports.getActiveChallenge = async (req, res) => {
+  try {
+    const now = new Date();
+    let activeChallenge = await Challenge.findOne({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now }
+    });
+
+    if (!activeChallenge) {
+      activeChallenge = await Challenge.findOne({ isActive: true }).sort({ weekNumber: -1 });
+    }
+
+    // Auto-seed default challenge if none exists in database
+    if (!activeChallenge) {
+      const startDate = new Date();
+      const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      activeChallenge = await Challenge.create({
+        title: 'ROUX TRANSITION WEEK',
+        description: 'Complete 50 verified solves using the Roux method.',
+        targetCount: 50,
+        methodFilter: 'Roux',
+        weekNumber: 12,
+        startDate,
+        endDate,
+        isActive: true
+      });
+    }
+
+    // Find or initialize UserChallengeProgress
+    let progress = await UserChallengeProgress.findOne({
+      user: req.user.id,
+      challenge: activeChallenge._id
+    });
+
+    if (!progress) {
+      progress = await UserChallengeProgress.create({
+        user: req.user.id,
+        challenge: activeChallenge._id,
+        completedSolvesCount: 0,
+        dailyCount: 0,
+        lastSolveDate: new Date(),
+        isCompleted: false
+      });
+    } else {
+      // Check if daily count needs resetting
+      const lastDate = new Date(progress.lastSolveDate).toDateString();
+      if (lastDate !== now.toDateString()) {
+        progress.dailyCount = 0;
+        await progress.save();
+      }
+    }
+
+    const percentage = Math.min(100, Math.round((progress.completedSolvesCount / activeChallenge.targetCount) * 100));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        challenge: {
+          id: activeChallenge._id,
+          title: activeChallenge.title,
+          description: activeChallenge.description,
+          targetCount: activeChallenge.targetCount,
+          methodFilter: activeChallenge.methodFilter,
+          weekNumber: activeChallenge.weekNumber,
+          startDate: activeChallenge.startDate,
+          endDate: activeChallenge.endDate
+        },
+        progress: {
+          completedSolvesCount: progress.completedSolvesCount,
+          dailyCount: progress.dailyCount,
+          dailyLimit: 15,
+          isCompleted: progress.isCompleted,
+          percentage
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Get community members who completed the active challenge
+// @route   GET /api/community/challenge/completers
+// @access  Private
+exports.getChallengeCompleters = async (req, res) => {
+  try {
+    const activeChallenge = await Challenge.findOne({ isActive: true });
+    if (!activeChallenge) {
+      return res.status(200).json({ success: true, count: 0, data: [] });
+    }
+
+    const completersDocs = await UserChallengeProgress.find({
+      challenge: activeChallenge._id,
+      isCompleted: true
+    })
+      .populate('user', 'name username handle avatar email')
+      .sort({ completedAt: 1 });
+
+    const completers = completersDocs.map(doc => {
+      const u = doc.user || {};
+      const authorName = u.name || u.username || 'Cubora Solver';
+      const handle = u.handle || `@${(u.username || u.email?.split('@')[0] || authorName).toLowerCase().replace(/\s+/g, '_')}`;
+      const avatar = u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
+      return {
+        id: doc._id,
+        userId: u._id,
+        name: authorName,
+        handle,
+        avatar,
+        completedAt: doc.completedAt
+      };
+    });
+
+    res.status(200).json({ success: true, count: completers.length, data: completers });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 
 

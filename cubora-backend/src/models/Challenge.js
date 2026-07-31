@@ -4,9 +4,10 @@ const challengeSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
   targetCount: { type: Number, default: 50 },
-  methodFilter: { type: String, default: 'Roux' }, // 'Roux', 'CFOP', 'any', etc.
-  startDate: { type: Date, default: Date.now },
-  endDate: { type: Date },
+  methodFilter: { type: String, default: null },
+  weekNumber: { type: Number, required: true },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
