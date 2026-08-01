@@ -533,77 +533,6 @@ export default function CommunityHub() {
     const [isLoadingCommunityPBs, setIsLoadingCommunityPBs] = useState<boolean>(true);
     const [pbSubFilter, setPbSubFilter] = useState<'session' | 'phase'>('session');
 
-    interface ActiveChallengeData {
-        id: string;
-        title: string;
-        description: string;
-        targetCount: number;
-        methodFilter: string | null;
-        weekNumber: number;
-        completedSolvesCount: number;
-        dailyCount: number;
-        dailyLimit: number;
-        isCompleted: boolean;
-        percentage: number;
-    }
-
-    interface CompleterUser {
-        id: string;
-        userId: string;
-        name: string;
-        handle: string;
-        avatar: string;
-        completedAt: string;
-    }
-
-    const [challengeData, setChallengeData] = useState<ActiveChallengeData | null>(null);
-    const [isLoadingChallenge, setIsLoadingChallenge] = useState<boolean>(true);
-    const [completersList, setCompletersList] = useState<CompleterUser[]>([]);
-    const [isCompletersModalOpen, setIsCompletersModalOpen] = useState<boolean>(false);
-
-    const fetchChallengeData = async () => {
-        setIsLoadingChallenge(true);
-        try {
-            const [chRes, compRes] = await Promise.all([
-                fetch('http://localhost:5000/api/community/challenge/active', { headers: getAuthHeaders() }),
-                fetch('http://localhost:5000/api/community/challenge/completers', { headers: getAuthHeaders() })
-            ]);
-
-            const chJson = await chRes.json();
-            const compJson = await compRes.json();
-
-            if (chJson.success && chJson.data) {
-                const target = chJson.data.challenge.targetCount || 50;
-                const completed = chJson.data.progress.completedSolvesCount || 0;
-                setChallengeData({
-                    id: chJson.data.challenge.id,
-                    title: chJson.data.challenge.title,
-                    description: chJson.data.challenge.description,
-                    targetCount: target,
-                    methodFilter: chJson.data.challenge.methodFilter,
-                    weekNumber: chJson.data.challenge.weekNumber || 12,
-                    completedSolvesCount: completed,
-                    dailyCount: chJson.data.progress.dailyCount || 0,
-                    dailyLimit: chJson.data.progress.dailyLimit || 15,
-                    isCompleted: chJson.data.progress.isCompleted || false,
-                    percentage: chJson.data.progress.percentage || Math.min(100, Math.round((completed / target) * 100))
-                });
-            }
-
-            if (compJson.success && Array.isArray(compJson.data)) {
-                setCompletersList(compJson.data);
-            }
-        } catch (err) {
-            console.error('Failed to fetch challenge or completers data:', err);
-        } finally {
-            setIsLoadingChallenge(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchChallengeData();
-    }, []);
-
     const CUBE_CATEGORIES = [
         { id: '3x3', label: '3x3x3 Cube', disabled: false },
         { id: '2x2', label: '2x2x2 Cube', disabled: true, note: 'Coming soon' },
@@ -2657,94 +2586,15 @@ export default function CommunityHub() {
 
                             {/* Active Sub-Challenges Framework */}
                             <div className="glass-panel p-5 sm:p-6 border-secondary/20 w-full text-left">
-                                <div className="flex items-center justify-between mb-3.5 w-full gap-2">
-                                    <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg flex items-center gap-2 truncate min-w-0">
-                                        <Award className="w-5 h-5 text-secondary shrink-0" />
-                                        <span className="truncate">Community Challenge</span>
-                                    </h3>
-                                    {challengeData?.weekNumber && (
-                                        <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-secondary/15 text-secondary border border-secondary/20 font-mono font-bold uppercase tracking-wider shrink-0">
-                                            WEEK {challengeData.weekNumber}
-                                        </span>
-                                    )}
+                                <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg mb-4">Community Challenge</h3>
+                                <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full">
+                                    <h4 className="font-bold text-secondary text-xs sm:text-sm mb-0.5 uppercase tracking-wide">Roux Transition Week</h4>
+                                    <p className="text-xs text-slate-500 dark:text-gray-400 mb-4 leading-normal">Complete 50 verified solves using the Roux method.</p>
+                                    <div className="w-full h-1.5 bg-slate-200/40 dark:bg-background rounded-full overflow-hidden mb-2">
+                                        <div className="h-full bg-secondary w-[40%] transition-all" />
+                                    </div>
+                                    <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-gray-400">20 / 50 Solves</span>
                                 </div>
-
-                                {isLoadingChallenge ? (
-                                    <div className="flex items-center justify-center py-6 text-slate-400 gap-2">
-                                        <Loader2 className="w-4 h-4 animate-spin text-secondary" />
-                                        <span className="text-xs font-medium">Loading challenge...</span>
-                                    </div>
-                                ) : challengeData ? (
-                                    <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full relative overflow-hidden">
-                                        <div className="flex items-center justify-between gap-2 mb-1">
-                                            <h4 className="font-bold text-secondary text-xs sm:text-sm uppercase tracking-wide truncate min-w-0">
-                                                {challengeData.title}
-                                            </h4>
-                                            {challengeData.isCompleted && (
-                                                <span className="text-[9px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 font-bold uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" /> Finished
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        <p className="text-xs text-slate-500 dark:text-gray-400 mb-3.5 leading-relaxed truncate min-w-0">
-                                            {challengeData.description}
-                                        </p>
-
-                                        {/* Animated Progress Bar */}
-                                        <div className="w-full h-2 bg-slate-200/50 dark:bg-white/10 rounded-full overflow-hidden mb-2 relative">
-                                            <motion.div
-                                                className="h-full bg-secondary rounded-full"
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${challengeData.percentage}%` }}
-                                                transition={{ duration: 0.8, ease: "easeOut" }}
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-600 dark:text-gray-300">
-                                            <span>{challengeData.completedSolvesCount} / {challengeData.targetCount} Solves</span>
-                                            <span className="text-[10px] text-slate-400 dark:text-gray-500 font-sans font-medium">
-                                                ({challengeData.dailyCount}/{challengeData.dailyLimit} today)
-                                            </span>
-                                        </div>
-
-                                        {/* Who Completed It Showcase Ring */}
-                                        <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-white/5 flex items-center justify-between gap-2 min-w-0">
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                <span className="text-[11px] font-medium text-slate-500 dark:text-gray-400 truncate min-w-0">
-                                                    Completed by <strong className="text-slate-800 dark:text-gray-200 font-bold">{completersList.length}</strong> {completersList.length === 1 ? 'member' : 'members'}
-                                                </span>
-                                            </div>
-
-                                            {completersList.length > 0 ? (
-                                                <button
-                                                    onClick={() => setIsCompletersModalOpen(true)}
-                                                    className="flex items-center -space-x-2 overflow-hidden shrink-0 hover:opacity-90 transition-opacity cursor-pointer p-0.5 rounded-full hover:ring-2 hover:ring-secondary/30"
-                                                    title="View all community completers"
-                                                >
-                                                    {completersList.slice(0, 5).map((comp, idx) => (
-                                                        <img
-                                                            key={comp.id || idx}
-                                                            src={comp.avatar}
-                                                            alt={comp.name}
-                                                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#181A1D] object-cover"
-                                                            title={comp.name}
-                                                        />
-                                                    ))}
-                                                    {completersList.length > 5 && (
-                                                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/20 border border-secondary/30 text-[9px] font-bold text-secondary ring-2 ring-white dark:ring-[#181A1D]">
-                                                            +{completersList.length - 5}
-                                                        </span>
-                                                    )}
-                                                </button>
-                                            ) : (
-                                                <span className="text-[10px] text-slate-400 dark:text-gray-500 italic shrink-0">Be the first to complete!</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-xs text-slate-400 py-4 text-center">No active community challenge right now.</div>
-                                )}
                             </div>
                         </div>
                 </motion.div>
@@ -3630,66 +3480,6 @@ export default function CommunityHub() {
                                         <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate">{u.name}</span>
                                         <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate">{u.handle}</span>
                                     </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </Modal>,
-                document.body
-            )}
-
-            {/* Community Challenge Completers Modal */}
-            {isCompletersModalOpen && createPortal(
-                <Modal
-                    isOpen={isCompletersModalOpen}
-                    onClose={() => setIsCompletersModalOpen(false)}
-                    className="w-[92vw] max-w-[420px] p-5 flex flex-col gap-4 relative text-left"
-                >
-                    <button
-                        onClick={() => setIsCompletersModalOpen(false)}
-                        className="absolute sm:top-5 sm:right-4 top-2 right-2 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-white transition-colors z-10"
-                        aria-label="Close modal"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-
-                    <div className="flex flex-col w-full pr-8">
-                        <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white flex items-center gap-2">
-                            <Trophy className="w-5 h-5 text-amber-500 shrink-0" />
-                            <span>Challenge Completers</span>
-                        </h3>
-                        <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                            Community members who finished {challengeData?.title || 'the weekly challenge'}.
-                        </p>
-                    </div>
-
-                    <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1 custom-scrollbar w-full">
-                        {completersList.length === 0 ? (
-                            <div className="py-8 text-center text-slate-400 text-xs">
-                                No community members have completed this challenge yet.
-                            </div>
-                        ) : (
-                            completersList.map((c, index) => (
-                                <div key={c.id || index} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-amber-500/30 transition-all group">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono text-slate-400 shrink-0">
-                                            #{index + 1}
-                                        </span>
-                                        <img src={c.avatar} alt={c.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10" />
-                                        <div className="flex flex-col min-w-0">
-                                            <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors">
-                                                {c.name}
-                                            </span>
-                                            <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate">
-                                                {c.handle}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    {c.completedAt && (
-                                        <span className="text-[9.5px] text-slate-400 dark:text-gray-500 font-mono shrink-0 pl-2">
-                                            {new Date(c.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                        </span>
-                                    )}
                                 </div>
                             ))
                         )}

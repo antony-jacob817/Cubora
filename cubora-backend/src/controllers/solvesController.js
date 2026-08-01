@@ -1,7 +1,5 @@
 const SolveHistory = require('../models/SolveHistory');
 const Achievement = require('../models/Achievement');
-const Challenge = require('../models/Challenge');
-const UserChallengeProgress = require('../models/UserChallengeProgress');
 const { evaluateAchievements } = require('./achievementsController');
 
 // @desc    Save a new solve record
@@ -19,7 +17,6 @@ exports.saveSolve = async (req, res) => {
     const hasPhaseSplits = Boolean(phaseSplits && typeof phaseSplits === 'object' && Object.keys(phaseSplits).length > 0);
 
     let verificationStatus = 'unverified';
-    let userRollingAvg = null;
 
     if (isManualSolve) {
       verificationStatus = 'unverified';
@@ -33,21 +30,22 @@ exports.saveSolve = async (req, res) => {
 
       if (previousSolves.length > 0) {
         const times = previousSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
+        let rollingAvg = null;
         if (times.length >= 100) {
           const recent100 = times.slice(-100);
           const sorted = [...recent100].sort((a, b) => a - b);
           const trimCount = Math.max(1, Math.ceil(100 * 0.05));
           const trimmed = sorted.slice(trimCount, -trimCount);
           if (trimmed.length > 0) {
-            userRollingAvg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+            rollingAvg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
           }
         }
-        if (userRollingAvg === null) {
-          userRollingAvg = times.reduce((a, b) => a + b, 0) / times.length;
+        if (rollingAvg === null) {
+          rollingAvg = times.reduce((a, b) => a + b, 0) / times.length;
         }
 
         // Anti-Cheat Check: If timeMs is less than 35% of historical rolling average, flag it
-        if (userRollingAvg && timeMs < 0.35 * userRollingAvg) {
+        if (rollingAvg && timeMs < 0.35 * rollingAvg) {
           verificationStatus = 'flagged';
         }
       }
@@ -69,83 +67,6 @@ exports.saveSolve = async (req, res) => {
       phaseSplits: phaseSplits || {},
       verificationStatus
     });
-
-    // Evaluate Community Challenge Progression with Anti-Cheat Controls
-    try {
-      const now = new Date();
-      let activeChallenge = await Challenge.findOne({
-        isActive: true,
-        startDate: { $lte: now },
-        endDate: { $gte: now }
-      });
-
-      if (!activeChallenge) {
-        activeChallenge = await Challenge.findOne({ isActive: true }).sort({ weekNumber: -1 });
-      }
-
-      if (activeChallenge) {
-        // Anti-Cheat Criteria:
-        // 1. isManual === false (Live timer solves only)
-        // 2. verificationStatus is 'verified_session' or 'verified_phase'
-        // 3. timeMs >= 50% of user's historical rolling average
-        // 4. Solve method matches active challenge requirement (if set)
-        // 5. Daily cap of 15 qualifying solves per day is not exceeded
-
-        const isLiveTimer = !isManualSolve;
-        const isVerifiedStatus = verificationStatus === 'verified_session' || verificationStatus === 'verified_phase';
-        let isAbove50PercentAvg = true;
-        if (typeof userRollingAvg === 'number' && userRollingAvg > 0) {
-          isAbove50PercentAvg = timeMs >= 0.50 * userRollingAvg;
-        }
-
-        let isMethodMatch = true;
-        if (activeChallenge.methodFilter && activeChallenge.methodFilter.trim() !== '') {
-          const reqMethod = (method || 'CFOP').toUpperCase();
-          const filterMethod = activeChallenge.methodFilter.toUpperCase();
-          isMethodMatch = reqMethod.includes(filterMethod) || filterMethod.includes(reqMethod);
-        }
-
-        if (isLiveTimer && isVerifiedStatus && isAbove50PercentAvg && isMethodMatch) {
-          let progress = await UserChallengeProgress.findOne({
-            user: req.user.id,
-            challenge: activeChallenge._id
-          });
-
-          if (!progress) {
-            progress = await UserChallengeProgress.create({
-              user: req.user.id,
-              challenge: activeChallenge._id,
-              completedSolvesCount: 0,
-              dailyCount: 0,
-              lastSolveDate: now,
-              isCompleted: false
-            });
-          }
-
-          const lastDateStr = new Date(progress.lastSolveDate).toDateString();
-          const todayStr = now.toDateString();
-
-          if (lastDateStr !== todayStr) {
-            progress.dailyCount = 0;
-          }
-
-          if (progress.dailyCount < 15 && !progress.isCompleted) {
-            progress.completedSolvesCount += 1;
-            progress.dailyCount += 1;
-            progress.lastSolveDate = now;
-
-            if (progress.completedSolvesCount >= activeChallenge.targetCount) {
-              progress.isCompleted = true;
-              progress.completedAt = now;
-            }
-
-            await progress.save();
-          }
-        }
-      }
-    } catch (chErr) {
-      console.error('Non-blocking community challenge progress error:', chErr.message);
-    }
 
     // Check & trigger achievements automatically
     try {
