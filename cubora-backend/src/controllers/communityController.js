@@ -1,6 +1,8 @@
 const CommunityPost = require('../models/CommunityPost');
 const Comment = require('../models/Comment');
 const Notification = require('../models/Notification');
+const Challenge = require('../models/Challenge');
+const { WEEKLY_CHALLENGE_POOL } = require('../utils/challengePool');
 const { createNotification } = require('./notificationController');
 
 // Helper to determine post category for dynamic notification formatting
@@ -690,5 +692,97 @@ exports.getPBsLeaderboard = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// @desc    Get active 53-week community challenge with deterministic ISO week selection
+// @route   GET /api/community/challenge/active
+// @access  Private
+exports.getActiveChallenge = async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const pastDaysOfYear = (now - startOfYear) / 86400000;
+    const weekNumber = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+    const year = now.getFullYear();
+    const poolIndex = (weekNumber - 1) % 53;
+
+    let challenge = await Challenge.findOne({ weekNumber, year })
+      .populate('participants.user', 'name username email avatar');
+
+    if (!challenge) {
+      const template = WEEKLY_CHALLENGE_POOL[poolIndex] || WEEKLY_CHALLENGE_POOL[0];
+      try {
+        challenge = await Challenge.create({
+          weekNumber,
+          year,
+          title: template.title,
+          description: template.description,
+          methodFilter: template.methodFilter,
+          targetCount: template.targetCount,
+          maxTimeMs: template.maxTimeMs,
+          penaltyAllowed: template.penaltyAllowed,
+          phaseSplitRequired: template.phaseSplitRequired
+        });
+        challenge = await Challenge.findById(challenge._id)
+          .populate('participants.user', 'name username email avatar');
+      } catch (cErr) {
+        if (cErr.code === 11000) {
+          challenge = await Challenge.findOne({ weekNumber, year })
+            .populate('participants.user', 'name username email avatar');
+        } else {
+          throw cErr;
+        }
+      }
+    }
+
+    // Populate list of participants who completed the challenge
+    const completers = (challenge.participants || [])
+      .filter(p => p.completed && p.user)
+      .map(p => {
+        const u = p.user;
+        const authorName = u.name || u.username || 'Cubora Solver';
+        const handle = `@${(u.username || u.email?.split('@')[0] || authorName).toLowerCase().replace(/\s+/g, '_')}`;
+        const avatar = u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
+        return {
+          _id: u._id,
+          name: authorName,
+          handle,
+          avatar,
+          completedAt: p.completedAt
+        };
+      });
+
+    // Calculate current authenticated user's progress count
+    let userProgress = 0;
+    if (req.user && req.user.id) {
+      const participant = (challenge.participants || []).find(
+        p => p.user && (p.user._id ? p.user._id.toString() : p.user.toString()) === req.user.id.toString()
+      );
+      if (participant) {
+        userProgress = participant.progressCount;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: challenge._id,
+        weekNumber: challenge.weekNumber,
+        year: challenge.year,
+        title: challenge.title,
+        description: challenge.description,
+        methodFilter: challenge.methodFilter,
+        targetCount: challenge.targetCount,
+        maxTimeMs: challenge.maxTimeMs,
+        penaltyAllowed: challenge.penaltyAllowed,
+        phaseSplitRequired: challenge.phaseSplitRequired,
+        userProgress,
+        completers
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 
 

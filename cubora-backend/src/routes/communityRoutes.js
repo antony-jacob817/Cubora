@@ -13,12 +13,16 @@ const {
   deleteComment,
   toggleCommentLike,
   searchUsers,
-  getPBsLeaderboard
+  getPBsLeaderboard,
+  getActiveChallenge
 } = require('../controllers/communityController');
 const { protect } = require('../middleware/auth');
 
 // All community routes require authentication
 router.use(protect);
+
+router.route('/challenge/active')
+  .get(getActiveChallenge);
 
 router.route('/leaderboard/pbs')
   .get(getPBsLeaderboard);

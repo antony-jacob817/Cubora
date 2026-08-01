@@ -533,6 +533,50 @@ export default function CommunityHub() {
     const [isLoadingCommunityPBs, setIsLoadingCommunityPBs] = useState<boolean>(true);
     const [pbSubFilter, setPbSubFilter] = useState<'session' | 'phase'>('session');
 
+    // Active 53-Week Challenge State
+    interface CompleterUser {
+        _id: string;
+        name: string;
+        handle: string;
+        avatar: string;
+    }
+
+    interface ActiveChallengeData {
+        _id: string;
+        weekNumber: number;
+        year: number;
+        title: string;
+        description: string;
+        methodFilter: string;
+        targetCount: number;
+        userProgress: number;
+        completers: CompleterUser[];
+    }
+
+    const [activeChallenge, setActiveChallenge] = useState<ActiveChallengeData | null>(null);
+    const [isLoadingChallenge, setIsLoadingChallenge] = useState<boolean>(true);
+
+    const fetchActiveChallenge = async () => {
+        setIsLoadingChallenge(true);
+        try {
+            const res = await fetch('http://localhost:5000/api/community/challenge/active', {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (data.success && data.data) {
+                setActiveChallenge(data.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch active challenge:', err);
+        } finally {
+            setIsLoadingChallenge(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchActiveChallenge();
+    }, []);
+
     const CUBE_CATEGORIES = [
         { id: '3x3', label: '3x3x3 Cube', disabled: false },
         { id: '2x2', label: '2x2x2 Cube', disabled: true, note: 'Coming soon' },
@@ -2586,15 +2630,84 @@ export default function CommunityHub() {
 
                             {/* Active Sub-Challenges Framework */}
                             <div className="glass-panel p-5 sm:p-6 border-secondary/20 w-full text-left">
-                                <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg mb-4">Community Challenge</h3>
-                                <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full">
-                                    <h4 className="font-bold text-secondary text-xs sm:text-sm mb-0.5 uppercase tracking-wide">Roux Transition Week</h4>
-                                    <p className="text-xs text-slate-500 dark:text-gray-400 mb-4 leading-normal">Complete 50 verified solves using the Roux method.</p>
-                                    <div className="w-full h-1.5 bg-slate-200/40 dark:bg-background rounded-full overflow-hidden mb-2">
-                                        <div className="h-full bg-secondary w-[40%] transition-all" />
-                                    </div>
-                                    <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-gray-400">20 / 50 Solves</span>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-display font-bold text-slate-900 dark:text-white text-base sm:text-lg">Community Challenge</h3>
+                                    {activeChallenge && (
+                                        <span className="text-[10px] font-mono font-extrabold uppercase tracking-widest px-2 py-0.5 rounded bg-secondary/15 text-secondary border border-secondary/30">
+                                            WEEK {activeChallenge.weekNumber}
+                                        </span>
+                                    )}
                                 </div>
+
+                                {isLoadingChallenge ? (
+                                    <div className="flex items-center justify-center py-6 text-slate-400 gap-2">
+                                        <Loader2 className="w-4 h-4 animate-spin text-secondary" />
+                                        <span className="text-xs font-medium">Loading challenge...</span>
+                                    </div>
+                                ) : activeChallenge ? (
+                                    <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full relative">
+                                        <div className="flex items-center justify-between mb-1 gap-2">
+                                            <h4 className="font-bold text-secondary text-xs sm:text-sm uppercase tracking-wide truncate">
+                                                {activeChallenge.title}
+                                            </h4>
+                                            {activeChallenge.methodFilter && (
+                                                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary/20 text-secondary border border-secondary/30 shrink-0 font-mono">
+                                                    {activeChallenge.methodFilter}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <p className="text-xs text-slate-500 dark:text-gray-400 mb-4 leading-normal">
+                                            {activeChallenge.description}
+                                        </p>
+
+                                        {/* Overlapping Completer Avatar Ring */}
+                                        {activeChallenge.completers && activeChallenge.completers.length > 0 && (
+                                            <div className="flex items-center gap-2 mb-3.5 pb-3 border-b border-secondary/10">
+                                                <div className="flex -space-x-2 overflow-hidden py-0.5">
+                                                    {activeChallenge.completers.slice(0, 5).map((comp) => (
+                                                        <img
+                                                            key={comp._id}
+                                                            src={comp.avatar}
+                                                            alt={comp.name}
+                                                            title={`${comp.name} (${comp.handle}) - Completed!`}
+                                                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#181A1D] object-cover shrink-0"
+                                                        />
+                                                    ))}
+                                                </div>
+                                                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                                    {activeChallenge.completers.length} {activeChallenge.completers.length === 1 ? 'solver completed' : 'solvers completed'}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Animated Progress Bar */}
+                                        {(() => {
+                                            const percentage = Math.min(100, Math.round((activeChallenge.userProgress / activeChallenge.targetCount) * 100));
+                                            return (
+                                                <>
+                                                    <div className="w-full h-2 bg-slate-200/40 dark:bg-background rounded-full overflow-hidden mb-2 relative">
+                                                        <div
+                                                            className="h-full bg-secondary transition-all duration-500 rounded-full"
+                                                            style={{ width: `${percentage}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-500 dark:text-gray-400">
+                                                        <span>{activeChallenge.userProgress} / {activeChallenge.targetCount} Solves</span>
+                                                        <span className={percentage === 100 ? "text-emerald-500" : "text-secondary"}>
+                                                            {percentage}%
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                ) : (
+                                    <div className="py-4 text-center text-xs text-slate-500">
+                                        No active challenge available.
+                                    </div>
+                                )}
                             </div>
                         </div>
                 </motion.div>

@@ -75,11 +75,87 @@ exports.saveSolve = async (req, res) => {
       console.error('Non-blocking achievement evaluation error:', achErr.message);
     }
 
+    // Check & evaluate weekly challenge progress automatically
+    try {
+      await evaluateChallengeProgress(req.user.id, solve);
+    } catch (chErr) {
+      console.error('Non-blocking challenge evaluation error:', chErr.message);
+    }
+
     res.status(201).json({ success: true, data: solve });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// Helper function to evaluate solve progress against active weekly challenge
+async function evaluateChallengeProgress(userId, solve) {
+  try {
+    const Challenge = require('../models/Challenge');
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const pastDaysOfYear = (now - startOfYear) / 86400000;
+    const weekNumber = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+    const year = now.getFullYear();
+
+    const activeChallenge = await Challenge.findOne({ weekNumber, year });
+    if (!activeChallenge) return;
+
+    // Validate anti-cheat and solve criteria
+    if (solve.verificationStatus === 'flagged') return;
+
+    // 1. Method check
+    if (activeChallenge.methodFilter && activeChallenge.methodFilter !== 'Any') {
+      const solveMethod = (solve.method || '').toUpperCase();
+      const targetMethod = activeChallenge.methodFilter.toUpperCase();
+      if (!solveMethod.includes(targetMethod) && !targetMethod.includes(solveMethod)) {
+        return;
+      }
+    }
+
+    // 2. Max time threshold check
+    if (activeChallenge.maxTimeMs && solve.timeMs > activeChallenge.maxTimeMs) {
+      return;
+    }
+
+    // 3. Penalty check
+    if (activeChallenge.penaltyAllowed === false && solve.penalty !== 'None') {
+      return;
+    }
+
+    // 4. Phase split telemetry check
+    if (activeChallenge.phaseSplitRequired === true) {
+      const hasSplits = solve.phaseSplits && typeof solve.phaseSplits === 'object' && Object.keys(solve.phaseSplits).length > 0;
+      if (!hasSplits) return;
+    }
+
+    // Solve qualifies! Update participant progress in MongoDB
+    let participant = activeChallenge.participants.find(
+      p => p.user && p.user.toString() === userId.toString()
+    );
+
+    if (!participant) {
+      activeChallenge.participants.push({
+        user: userId,
+        progressCount: 1,
+        completed: 1 >= activeChallenge.targetCount,
+        completedAt: 1 >= activeChallenge.targetCount ? new Date() : null
+      });
+    } else {
+      if (!participant.completed) {
+        participant.progressCount += 1;
+        if (participant.progressCount >= activeChallenge.targetCount) {
+          participant.completed = true;
+          participant.completedAt = new Date();
+        }
+      }
+    }
+
+    await activeChallenge.save();
+  } catch (err) {
+    console.error('Non-blocking challenge progress evaluation error:', err.message);
+  }
+}
 
 // @desc    Update a solve record (Apply +2, DNF, or add comments)
 // @route   PUT /api/solves/:id
