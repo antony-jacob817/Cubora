@@ -70,7 +70,7 @@ exports.saveSolve = async (req, res) => {
 
     // Check & trigger achievements automatically
     try {
-      await evaluateAchievements(req.user.id);
+      await evaluateAchievements(req.user.id, solve);
     } catch (achErr) {
       console.error('Non-blocking achievement evaluation error:', achErr.message);
     }

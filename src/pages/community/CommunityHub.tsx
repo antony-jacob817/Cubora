@@ -798,11 +798,18 @@ export default function CommunityHub() {
 
     // Intercept location.state payloads from notification dropdown clicks
     useEffect(() => {
+        if (location.state?.activeTab === 'profile') {
+            setActiveTab('profile');
+        }
+    }, [location.state]);
+
+    useEffect(() => {
         const state = location.state as {
             openPostId?: string;
             highlightCommentId?: string;
             focusReply?: boolean;
             showLikes?: boolean;
+            activeTab?: string;
         } | null;
 
         if (!state || !state.openPostId) return;

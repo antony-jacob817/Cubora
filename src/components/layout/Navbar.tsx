@@ -212,6 +212,10 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
       navigate('/community', {
         state: { openPostId: postId, showLikes: true }
       });
+    } else if (type === 'achievement') {
+      navigate('/community', {
+        state: { activeTab: 'profile' }
+      });
     }
   };
 

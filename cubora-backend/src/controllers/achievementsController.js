@@ -329,7 +329,7 @@ exports.getAchievements = async (req, res) => {
 };
 
 // HELPER FOR REAL-TIME ACHIEVEMENT TRIGGERS
-exports.evaluateAchievements = async (userId) => {
+exports.evaluateAchievements = async (userId, solve = null) => {
   try {
     const user = await User.findById(userId);
     if (!user) return [];
@@ -351,27 +351,9 @@ exports.evaluateAchievements = async (userId) => {
             progress: badge ? badge.target : 1,
             unlockedAt: new Date()
           });
-          newUnlocks.push({ id: badgeId, title });
+          newUnlocks.push({ id: badgeId, title: badge ? badge.title : title });
         } catch (aErr) {
-          console.error('Failed to create achievement document (Schema validation error 121 handled):', aErr.message);
-        }
-
-        // Trigger real-time achievement notification
-        try {
-          const { createNotification } = require('./notificationController');
-          if (badge) {
-            const trackName = badge.title.split(' (')[0];
-            await createNotification({
-              recipient: userId,
-              type: 'achievement',
-              title: 'Trophy Upgraded!',
-              content: `You just hit the ${badge.tier} Tier in the ${trackName} track.`,
-              unread: true,
-              createdAt: new Date()
-            });
-          }
-        } catch (nErr) {
-          console.error('Failed to trigger achievement notification:', nErr.message);
+          console.error('Failed to create achievement document:', aErr.message);
         }
       }
     };
@@ -380,12 +362,39 @@ exports.evaluateAchievements = async (userId) => {
     const solves = await SolveHistory.find({ user: userId, isDeleted: false }).sort({ date: 1 });
     const totalSolves = solves.length;
     
-    const validSolves = solves.filter(s => s.penalty !== 'DNF');
-    const validTimes = validSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
+    // Anti-cheat gate calculation for speed/time metrics
+    const nonCheatSolves = solves.filter(s =>
+      s.penalty !== 'DNF' &&
+      !s.isManual &&
+      s.verificationStatus !== 'flagged'
+    );
+
+    let rollingAvg = 0;
+    if (nonCheatSolves.length > 0) {
+      const recentSolves = nonCheatSolves.slice(-20);
+      const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
+      rollingAvg = sum / recentSolves.length;
+    }
+
+    let skipSpeedMetrics = false;
+    if (solve) {
+      const isFlagged = solve.verificationStatus === 'flagged';
+      const isManual = solve.isManual === true;
+      const isSuspicious = rollingAvg > 0 && solve.timeMs < 0.50 * rollingAvg;
+
+      if (isFlagged || isManual || isSuspicious) {
+        skipSpeedMetrics = true;
+      }
+    }
+
+    const validSpeedSolves = nonCheatSolves.filter(s =>
+      !(rollingAvg > 0 && s.timeMs < 0.50 * rollingAvg)
+    );
+
+    const validTimes = validSpeedSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
     
     const bestTimeMs = validTimes.length > 0 ? Math.min(...validTimes) : null;
     const bestTimeSec = bestTimeMs ? parseFloat((bestTimeMs / 1000).toFixed(3)) : null;
-
     const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
 
     const sessionCounts = await SolveHistory.aggregate([
@@ -425,6 +434,10 @@ exports.evaluateAchievements = async (userId) => {
 
     // Check all badges
     for (const badge of ALL_BADGES) {
+      if (skipSpeedMetrics && (badge.group === 'speed-frontier' || badge.group === 'fingertrick-maestro')) {
+        continue;
+      }
+
       let qualifies = false;
       
       switch (badge.group) {
@@ -456,6 +469,34 @@ exports.evaluateAchievements = async (userId) => {
 
       if (qualifies) {
         await checkAndAward(badge.id, badge.title);
+      }
+    }
+
+    // Trigger ONLY ONE consolidated notification if any achievements were unlocked in this session
+    if (newUnlocks.length > 0) {
+      try {
+        const { createNotification } = require('./notificationController');
+        let notifTitle = '';
+        let notifContent = '';
+
+        if (newUnlocks.length === 1) {
+          notifTitle = 'TROPHY UNLOCKED!';
+          notifContent = `You unlocked ${newUnlocks[0].title}!`;
+        } else {
+          notifTitle = `${newUnlocks.length} TROPHIES UNLOCKED!`;
+          notifContent = 'Unlocked: ' + newUnlocks.map(a => a.title).join(', ');
+        }
+
+        await createNotification({
+          recipient: userId,
+          type: 'achievement',
+          title: notifTitle,
+          content: notifContent,
+          unread: true,
+          createdAt: new Date()
+        });
+      } catch (nErr) {
+        console.error('Failed to trigger achievement notification:', nErr.message);
       }
     }
 
