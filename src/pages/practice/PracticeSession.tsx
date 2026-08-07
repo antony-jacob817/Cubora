@@ -698,6 +698,7 @@ export default function PracticeSession() {
                 setTime(0); 
                 resetTimer(); 
                 fetchGlobalPb();
+                window.dispatchEvent(new Event('cubora_notification_update'));
             }
         } catch (err) {
             console.error('Failed to delete solve record:', err);

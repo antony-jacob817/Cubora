@@ -231,15 +231,16 @@ exports.deleteSolve = async (req, res) => {
     
     // Purge corresponding notifications linked to this solve
     const Notification = require('../models/Notification');
+    const userId = req.user._id || req.user.id;
     await Notification.deleteMany({
-      $or: [{ solve: solve._id }, { solveId: solve._id }],
-      recipient: req.user.id
+      $or: [{ solve: req.params.id }, { solveId: req.params.id }],
+      $or: [{ recipient: userId }, { user: userId }]
     });
 
     // Recalculate/revert user achievements
     const { recalculateUserAchievements } = require('./achievementsController');
     if (typeof recalculateUserAchievements === 'function') {
-      await recalculateUserAchievements(req.user.id);
+      await recalculateUserAchievements(userId);
     }
 
     res.status(200).json({ success: true, data: {} });

@@ -302,19 +302,6 @@ exports.getAchievements = async (req, res) => {
           console.error('Failed to auto-create achievement document:', err.message);
         });
         unlockedIds.add(badge.id);
-
-        const { createNotification } = require('./notificationController');
-        const trackName = badge.title.split(' (')[0];
-        createNotification({
-          recipient: userId,
-          type: 'achievement',
-          title: 'TROPHY UNLOCKED!',
-          content: `You hit the ${badge.tier} Tier in ${trackName}!`,
-          unread: true,
-          createdAt: new Date()
-        }).catch(err => {
-          console.error('Failed to auto-create achievement notification:', err.message);
-        });
       }
 
       const isUnlocked = unlockedIds.has(badge.id);
@@ -507,32 +494,32 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       }
     }
 
-    // Deduplicate newUnlocks per track to retain ONLY the highest newly reached tier for each track
+    // Filter unlockedTiers so that if a user hits multiple tiers in the same track during one solve, keep ONLY the highest tier
     const TIER_RANK = { 'Bronze': 1, 'Silver': 2, 'Gold': 3, 'Emerald': 4, 'Diamond': 5, 'Ruby': 6 };
-    const highestUnlocksMap = new Map();
+    const unlockedTiersMap = new Map();
     for (const item of newUnlocks) {
-      const existing = highestUnlocksMap.get(item.trackName);
+      const existing = unlockedTiersMap.get(item.trackName);
       if (!existing) {
-        highestUnlocksMap.set(item.trackName, item);
+        unlockedTiersMap.set(item.trackName, item);
       } else {
         const existingRank = TIER_RANK[existing.tier] || 0;
         const currentRank = TIER_RANK[item.tier] || 0;
         if (currentRank > existingRank) {
-          highestUnlocksMap.set(item.trackName, item);
+          unlockedTiersMap.set(item.trackName, item);
         }
       }
     }
-    const highestUnlocks = Array.from(highestUnlocksMap.values());
+    const unlockedTiers = Array.from(unlockedTiersMap.values());
 
     const createdNotifications = [];
-    if (highestUnlocks.length === 1) {
+    if (unlockedTiers.length === 1) {
       const { createNotification } = require('./notificationController');
-      const ach = highestUnlocks[0];
+      const item = unlockedTiers[0];
       const notifDoc = await createNotification({
         recipient: userId,
         type: 'achievement',
         title: 'TROPHY UNLOCKED!',
-        content: `You reached ${ach.tier} in ${ach.trackName}!`,
+        content: `You reached ${item.tier} Tier in ${item.trackName}!`,
         unread: true,
         solve: solve ? solve._id : null,
         solveId: solve ? solve._id : null,
@@ -541,15 +528,14 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       if (notifDoc) {
         createdNotifications.push(notifDoc);
       }
-    } else if (highestUnlocks.length > 1) {
+    } else if (unlockedTiers.length > 1) {
       const { createNotification } = require('./notificationController');
-      const count = highestUnlocks.length;
-      const tracksText = highestUnlocks.map(a => `${a.trackName} (${a.tier})`).join(', ');
+      const trackSummary = unlockedTiers.map(t => `${t.trackName} (${t.tier})`).join(', ');
       const notifDoc = await createNotification({
         recipient: userId,
         type: 'achievement',
-        title: `${count} TROPHIES UNLOCKED!`,
-        content: `Reached new tiers in: ${tracksText}.`,
+        title: `${unlockedTiers.length} TROPHIES UNLOCKED!`,
+        content: `Reached new tiers in: ${trackSummary}.`,
         unread: true,
         solve: solve ? solve._id : null,
         solveId: solve ? solve._id : null,
