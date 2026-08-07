@@ -159,11 +159,26 @@ exports.getAchievements = async (req, res) => {
     const unlocked = await Achievement.find({ user: userId });
     const unlockedIds = new Set(unlocked.map(a => a.badgeId));
 
-    // Calculate metrics
-    const solves = await SolveHistory.find({ user: userId, isDeleted: false }).sort({ date: 1 });
+    // Calculate metrics strictly from non-flagged and non-manual solves
+    const solves = await SolveHistory.find({
+      user: userId,
+      isDeleted: false,
+      verificationStatus: { $ne: 'flagged' },
+      isManual: { $ne: true }
+    }).sort({ date: 1 });
     const totalSolves = solves.length;
     
-    const validSolves = solves.filter(s => s.penalty !== 'DNF');
+    const validSolvesForAvg = solves.filter(s => s.penalty !== 'DNF');
+    let rollingAvg = 0;
+    if (validSolvesForAvg.length > 0) {
+      const recentSolves = validSolvesForAvg.slice(-20);
+      const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
+      rollingAvg = sum / recentSolves.length;
+    }
+
+    const validSolves = solves.filter(s =>
+      s.penalty !== 'DNF' && !(rollingAvg > 0 && s.timeMs < 0.50 * rollingAvg)
+    );
     const validTimes = validSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
     
     // 1. Best Single Solve
@@ -175,7 +190,7 @@ exports.getAchievements = async (req, res) => {
 
     // 3. Max session solves
     const sessionCounts = await SolveHistory.aggregate([
-      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false } },
+      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false, verificationStatus: { $ne: 'flagged' }, isManual: { $ne: true } } },
       { $group: { _id: "$sessionId", count: { $sum: 1 } } }
     ]);
     const maxSessionSolves = sessionCounts.length > 0 ? Math.max(...sessionCounts.map(s => s.count)) : 0;
@@ -334,6 +349,37 @@ exports.evaluateAchievements = async (userId, solve = null) => {
     const user = await User.findById(userId);
     if (!user) return [];
 
+    // Query non-flagged, non-manual solves for rolling average & stats evaluation
+    const solves = await SolveHistory.find({
+      user: userId,
+      isDeleted: false,
+      verificationStatus: { $ne: 'flagged' },
+      isManual: { $ne: true }
+    }).sort({ date: 1 });
+
+    const nonCheatSolves = solves.filter(s => s.penalty !== 'DNF');
+
+    let rollingAvg = 0;
+    if (nonCheatSolves.length > 0) {
+      const previousSolves = solve
+        ? nonCheatSolves.filter(s => s._id.toString() !== solve._id.toString())
+        : nonCheatSolves;
+      const recentSolves = (previousSolves.length > 0 ? previousSolves : nonCheatSolves).slice(-20);
+      const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
+      rollingAvg = sum / recentSolves.length;
+    }
+
+    // Strict Anti-Cheat Gate: completely return early if solve is flagged, manual, or anomalous
+    if (solve) {
+      const isFlagged = solve.verificationStatus === 'flagged';
+      const isManual = solve.isManual === true;
+      const isSuspicious = rollingAvg > 0 && solve.timeMs < 0.50 * rollingAvg;
+
+      if (isFlagged || isManual || isSuspicious) {
+        return [];
+      }
+    }
+
     const unlocked = await Achievement.find({ user: userId });
     const unlockedIds = new Set(unlocked.map(a => a.badgeId));
     const newUnlocks = [];
@@ -358,34 +404,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       }
     };
 
-    // Calculate metrics
-    const solves = await SolveHistory.find({ user: userId, isDeleted: false }).sort({ date: 1 });
     const totalSolves = solves.length;
-    
-    // Anti-cheat gate calculation for speed/time metrics
-    const nonCheatSolves = solves.filter(s =>
-      s.penalty !== 'DNF' &&
-      !s.isManual &&
-      s.verificationStatus !== 'flagged'
-    );
-
-    let rollingAvg = 0;
-    if (nonCheatSolves.length > 0) {
-      const recentSolves = nonCheatSolves.slice(-20);
-      const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
-      rollingAvg = sum / recentSolves.length;
-    }
-
-    let skipSpeedMetrics = false;
-    if (solve) {
-      const isFlagged = solve.verificationStatus === 'flagged';
-      const isManual = solve.isManual === true;
-      const isSuspicious = rollingAvg > 0 && solve.timeMs < 0.50 * rollingAvg;
-
-      if (isFlagged || isManual || isSuspicious) {
-        skipSpeedMetrics = true;
-      }
-    }
 
     const validSpeedSolves = nonCheatSolves.filter(s =>
       !(rollingAvg > 0 && s.timeMs < 0.50 * rollingAvg)
@@ -398,7 +417,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
     const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
 
     const sessionCounts = await SolveHistory.aggregate([
-      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false } },
+      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false, verificationStatus: { $ne: 'flagged' }, isManual: { $ne: true } } },
       { $group: { _id: "$sessionId", count: { $sum: 1 } } }
     ]);
     const maxSessionSolves = sessionCounts.length > 0 ? Math.max(...sessionCounts.map(s => s.count)) : 0;
@@ -434,10 +453,6 @@ exports.evaluateAchievements = async (userId, solve = null) => {
 
     // Check all badges
     for (const badge of ALL_BADGES) {
-      if (skipSpeedMetrics && (badge.group === 'speed-frontier' || badge.group === 'fingertrick-maestro')) {
-        continue;
-      }
-
       let qualifies = false;
       
       switch (badge.group) {
