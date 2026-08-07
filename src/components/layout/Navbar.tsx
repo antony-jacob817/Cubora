@@ -222,12 +222,13 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
   useEffect(() => {
     if (!user) return;
     fetchNotifications();
-    const handleNotificationUpdate = (e?: Event) => {
-      fetchNotifications();
+    const handleNotificationUpdate = async (e?: Event) => {
       const customEvt = e as CustomEvent;
-      if (customEvt?.detail?.newNotifications?.length) {
-        const incoming = customEvt.detail.newNotifications.map((n: any) => ({
-          id: n._id,
+      const newNotifs = customEvt?.detail?.newNotifications;
+      await fetchNotifications();
+      if (newNotifs && newNotifs.length > 0) {
+        const incoming = newNotifs.map((n: any) => ({
+          id: n._id || n.id,
           type: n.type,
           title: n.title,
           content: n.content,

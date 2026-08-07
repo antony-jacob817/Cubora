@@ -53,7 +53,10 @@ exports.getNotifications = async (req, res, next) => {
       console.error('Failed to run dynamic streak warning check:', streakErr);
     }
 
-    const notifications = await Notification.find({ recipient: req.user.id })
+    const userId = req.user._id || req.user.id;
+    const notifications = await Notification.find({
+      $or: [{ recipient: userId }, { user: userId }]
+    })
       .populate('sender', 'username name avatar')
       .sort({ createdAt: -1 });
 
@@ -68,9 +71,10 @@ exports.getNotifications = async (req, res, next) => {
 
 exports.markRead = async (req, res, next) => {
   try {
+    const userId = req.user._id || req.user.id;
     const notification = await Notification.findOne({
       _id: req.params.id,
-      recipient: req.user.id
+      $or: [{ recipient: userId }, { user: userId }]
     });
 
     if (!notification) {
@@ -94,8 +98,9 @@ exports.markRead = async (req, res, next) => {
 
 exports.markAllRead = async (req, res, next) => {
   try {
+    const userId = req.user._id || req.user.id;
     await Notification.updateMany(
-      { recipient: req.user.id, unread: true },
+      { $or: [{ recipient: userId }, { user: userId }], unread: true },
       { $set: { unread: false } }
     );
 
