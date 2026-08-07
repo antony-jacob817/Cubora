@@ -622,10 +622,12 @@ exports.recalculateUserAchievements = async (userId) => {
     const totalScans = await CubeScan.countDocuments({ user: userId });
     const totalWins = user.multiplayerWins || 0;
 
-    // Delete any achievement record in DB that user no longer qualifies for
+    // Evaluate all badges against current valid solves
+    // For any achievement in DB that no longer meets its target threshold, purge it from DB
     const existingAchievements = await Achievement.find({ user: userId });
     for (const ach of existingAchievements) {
-      const badge = ALL_BADGES.find(b => b.id === ach.badgeId);
+      const bId = ach.badgeId || ach.achievementId;
+      const badge = ALL_BADGES.find(b => b.id === bId);
       if (!badge) continue;
 
       let qualifies = false;
@@ -641,10 +643,13 @@ exports.recalculateUserAchievements = async (userId) => {
       }
 
       if (!qualifies) {
-        await Achievement.deleteOne({ _id: ach._id });
+        await Achievement.deleteMany({
+          user: userId,
+          $or: [{ badgeId: badge.id }, { achievementId: badge.id }]
+        });
       }
     }
   } catch (err) {
-    console.error('Error recalculating achievements:', err);
+    console.error('Error recalculating achievements on solve deletion:', err);
   }
 };
