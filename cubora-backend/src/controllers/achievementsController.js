@@ -344,7 +344,7 @@ exports.getAchievements = async (req, res) => {
 };
 
 // HELPER FOR REAL-TIME ACHIEVEMENT TRIGGERS
-exports.evaluateAchievements = async (userId, solve = null) => {
+exports.evaluateAchievements = async (userId, solve = null, isPB = false) => {
   try {
     const user = await User.findById(userId);
     if (!user) return { newUnlocks: [], newNotifications: [] };
@@ -512,14 +512,21 @@ exports.evaluateAchievements = async (userId, solve = null) => {
     const unlockedTiers = Array.from(unlockedTiersMap.values());
 
     const createdNotifications = [];
+    const { createNotification } = require('./notificationController');
+    const solveSecStr = solve ? (solve.timeMs / 1000).toFixed(3) + 's' : '';
+
     if (unlockedTiers.length === 1) {
-      const { createNotification } = require('./notificationController');
       const item = unlockedTiers[0];
+      const title = isPB ? 'NEW PB & TROPHY UNLOCKED!' : 'TROPHY UNLOCKED!';
+      const content = isPB
+        ? `New PB set: ${solveSecStr}! You reached ${item.tier} Tier in ${item.trackName}!`
+        : `You reached ${item.tier} Tier in ${item.trackName}!`;
+
       const notifDoc = await createNotification({
         recipient: userId,
-        type: 'achievement',
-        title: 'TROPHY UNLOCKED!',
-        content: `You reached ${item.tier} Tier in ${item.trackName}!`,
+        type: isPB ? 'pb' : 'achievement',
+        title,
+        content,
         unread: true,
         solve: solve ? solve._id : null,
         solveId: solve ? solve._id : null,
@@ -529,16 +536,37 @@ exports.evaluateAchievements = async (userId, solve = null) => {
         createdNotifications.push(notifDoc);
       }
     } else if (unlockedTiers.length > 1) {
-      const { createNotification } = require('./notificationController');
       const trackSummary = unlockedTiers.map(t => `${t.trackName} (${t.tier})`).join(', ');
+      const title = isPB
+        ? `NEW PB & ${unlockedTiers.length} TROPHIES UNLOCKED!`
+        : `${unlockedTiers.length} TROPHIES UNLOCKED!`;
+      const content = isPB
+        ? `New PB set: ${solveSecStr}! Reached new tiers in: ${trackSummary}.`
+        : `Reached new tiers in: ${trackSummary}.`;
+
       const notifDoc = await createNotification({
         recipient: userId,
-        type: 'achievement',
-        title: `${unlockedTiers.length} TROPHIES UNLOCKED!`,
-        content: `Reached new tiers in: ${trackSummary}.`,
+        type: isPB ? 'pb' : 'achievement',
+        title,
+        content,
         unread: true,
         solve: solve ? solve._id : null,
         solveId: solve ? solve._id : null,
+        createdAt: new Date()
+      });
+      if (notifDoc) {
+        createdNotifications.push(notifDoc);
+      }
+    } else if (isPB && solve) {
+      // isPB === true AND no new achievement tier was unlocked
+      const notifDoc = await createNotification({
+        recipient: userId,
+        type: 'pb',
+        title: 'NEW PERSONAL BEST!',
+        content: `New PB set: ${solveSecStr}!`,
+        unread: true,
+        solve: solve._id,
+        solveId: solve._id,
         createdAt: new Date()
       });
       if (notifDoc) {
