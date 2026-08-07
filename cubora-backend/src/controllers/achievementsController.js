@@ -507,32 +507,52 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       }
     }
 
-    // Single Notification Emission for Batched Unlocked Achievements
+    // Deduplicate newUnlocks per track to retain ONLY the highest newly reached tier for each track
+    const TIER_RANK = { 'Bronze': 1, 'Silver': 2, 'Gold': 3, 'Emerald': 4, 'Diamond': 5, 'Ruby': 6 };
+    const highestUnlocksMap = new Map();
+    for (const item of newUnlocks) {
+      const existing = highestUnlocksMap.get(item.trackName);
+      if (!existing) {
+        highestUnlocksMap.set(item.trackName, item);
+      } else {
+        const existingRank = TIER_RANK[existing.tier] || 0;
+        const currentRank = TIER_RANK[item.tier] || 0;
+        if (currentRank > existingRank) {
+          highestUnlocksMap.set(item.trackName, item);
+        }
+      }
+    }
+    const highestUnlocks = Array.from(highestUnlocksMap.values());
+
     const createdNotifications = [];
-    if (newUnlocks.length === 1) {
+    if (highestUnlocks.length === 1) {
       const { createNotification } = require('./notificationController');
-      const ach = newUnlocks[0];
+      const ach = highestUnlocks[0];
       const notifDoc = await createNotification({
         recipient: userId,
         type: 'achievement',
         title: 'TROPHY UNLOCKED!',
-        content: `You hit the ${ach.tier} Tier in ${ach.trackName}!`,
+        content: `You reached ${ach.tier} in ${ach.trackName}!`,
         unread: true,
+        solve: solve ? solve._id : null,
+        solveId: solve ? solve._id : null,
         createdAt: new Date()
       });
       if (notifDoc) {
         createdNotifications.push(notifDoc);
       }
-    } else if (newUnlocks.length > 1) {
+    } else if (highestUnlocks.length > 1) {
       const { createNotification } = require('./notificationController');
-      const count = newUnlocks.length;
-      const tracks = newUnlocks.map(a => a.trackName).join(', ');
+      const count = highestUnlocks.length;
+      const tracksText = highestUnlocks.map(a => `${a.trackName} (${a.tier})`).join(', ');
       const notifDoc = await createNotification({
         recipient: userId,
         type: 'achievement',
         title: `${count} TROPHIES UNLOCKED!`,
-        content: `You hit new tiers in: ${tracks}.`,
+        content: `Reached new tiers in: ${tracksText}.`,
         unread: true,
+        solve: solve ? solve._id : null,
+        solveId: solve ? solve._id : null,
         createdAt: new Date()
       });
       if (notifDoc) {
@@ -544,5 +564,99 @@ exports.evaluateAchievements = async (userId, solve = null) => {
   } catch (error) {
     console.error('Error evaluating achievements:', error);
     return { newUnlocks: [], newNotifications: [] };
+  }
+};
+
+// HELPER FOR RECALCULATING & REVERTING ACHIEVEMENTS ON SOLVE DELETION
+exports.recalculateUserAchievements = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    const solves = await SolveHistory.find({
+      user: userId,
+      isDeleted: false,
+      verificationStatus: { $ne: 'flagged' },
+      isManual: { $ne: true }
+    }).sort({ date: 1 });
+
+    const totalSolves = solves.length;
+    const nonCheatSolves = solves.filter(s => s.penalty !== 'DNF');
+
+    let rollingAvg = 0;
+    if (nonCheatSolves.length > 0) {
+      const recentSolves = nonCheatSolves.slice(-20);
+      const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
+      rollingAvg = sum / recentSolves.length;
+    }
+
+    const validSpeedSolves = nonCheatSolves.filter(s =>
+      !(rollingAvg > 0 && s.timeMs < 0.50 * rollingAvg)
+    );
+
+    const validTimes = validSpeedSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
+    const bestTimeMs = validTimes.length > 0 ? Math.min(...validTimes) : null;
+    const bestTimeSec = bestTimeMs ? parseFloat((bestTimeMs / 1000).toFixed(3)) : null;
+    const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
+
+    const sessionCounts = await SolveHistory.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false, verificationStatus: { $ne: 'flagged' }, isManual: { $ne: true } } },
+      { $group: { _id: "$sessionId", count: { $sum: 1 } } }
+    ]);
+    const maxSessionSolves = sessionCounts.length > 0 ? Math.max(...sessionCounts.map(s => s.count)) : 0;
+
+    let maxCleanStreak = 0;
+    let currentCleanStreak = 0;
+    for (const solveItem of solves) {
+      if (solveItem.penalty === 'None') {
+        currentCleanStreak++;
+        if (currentCleanStreak > maxCleanStreak) {
+          maxCleanStreak = currentCleanStreak;
+        }
+      } else {
+        currentCleanStreak = 0;
+      }
+    }
+
+    let currentStreak = 0;
+    const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const checkDate = new Date();
+      checkDate.setDate(today.getDate() - i);
+      if (uniqueDays.has(checkDate.toDateString())) {
+        currentStreak++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+
+    const totalScans = await CubeScan.countDocuments({ user: userId });
+    const totalWins = user.multiplayerWins || 0;
+
+    // Delete any achievement record in DB that user no longer qualifies for
+    const existingAchievements = await Achievement.find({ user: userId });
+    for (const ach of existingAchievements) {
+      const badge = ALL_BADGES.find(b => b.id === ach.badgeId);
+      if (!badge) continue;
+
+      let qualifies = false;
+      switch (badge.group) {
+        case 'solves-marathon': qualifies = totalSolves >= badge.target; break;
+        case 'speed-frontier': qualifies = bestTimeSec !== null && bestTimeSec <= badge.target; break;
+        case 'consistency-grind': qualifies = currentStreak >= badge.target; break;
+        case 'fingertrick-maestro': qualifies = bestTps >= badge.target; break;
+        case 'session-marathoner': qualifies = maxSessionSolves >= badge.target; break;
+        case 'flawless-execution': qualifies = maxCleanStreak >= badge.target; break;
+        case 'visionary-scanner': qualifies = totalScans >= badge.target; break;
+        case 'gladiator-arena': qualifies = totalWins >= badge.target; break;
+      }
+
+      if (!qualifies) {
+        await Achievement.deleteOne({ _id: ach._id });
+      }
+    }
+  } catch (err) {
+    console.error('Error recalculating achievements:', err);
   }
 };

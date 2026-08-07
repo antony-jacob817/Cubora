@@ -109,7 +109,7 @@ exports.markAllRead = async (req, res, next) => {
 };
 
 // Helper function to create/update notifications (for internal use by other controllers)
-exports.createNotification = async ({ recipient, sender, type, title, content, post, comment, unread = true }) => {
+exports.createNotification = async ({ recipient, sender, type, title, content, post, comment, solve, solveId, unread = true }) => {
   try {
     // Check if recipient is the same as sender (don't notify oneself)
     if (recipient && sender && recipient.toString() === sender.toString()) {
@@ -125,6 +125,8 @@ exports.createNotification = async ({ recipient, sender, type, title, content, p
       content,
       post,
       comment,
+      solve: solve || solveId,
+      solveId: solveId || solve,
       unread
     });
     return notification;

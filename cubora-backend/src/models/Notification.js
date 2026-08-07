@@ -31,6 +31,14 @@ const notificationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Comment'
   },
+  solve: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'SolveHistory'
+  },
+  solveId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'SolveHistory'
+  },
   unread: {
     type: Boolean,
     default: true

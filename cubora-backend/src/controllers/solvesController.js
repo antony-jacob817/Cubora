@@ -229,6 +229,19 @@ exports.deleteSolve = async (req, res) => {
     solve.isDeleted = true;
     await solve.save();
     
+    // Purge corresponding notifications linked to this solve
+    const Notification = require('../models/Notification');
+    await Notification.deleteMany({
+      $or: [{ solve: solve._id }, { solveId: solve._id }],
+      recipient: req.user.id
+    });
+
+    // Recalculate/revert user achievements
+    const { recalculateUserAchievements } = require('./achievementsController');
+    if (typeof recalculateUserAchievements === 'function') {
+      await recalculateUserAchievements(req.user.id);
+    }
+
     res.status(200).json({ success: true, data: {} });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
