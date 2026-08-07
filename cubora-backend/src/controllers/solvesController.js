@@ -68,29 +68,11 @@ exports.saveSolve = async (req, res) => {
       verificationStatus
     });
 
-    // Check if this solve is a Personal Best (PB)
-    let isPB = false;
-    if (verificationStatus !== 'flagged' && !isManualSolve && penalty !== 'DNF') {
-      const previousBestSolve = await SolveHistory.findOne({
-        user: req.user.id,
-        _id: { $ne: solve._id },
-        isDeleted: false,
-        isManual: { $ne: true },
-        verificationStatus: { $ne: 'flagged' },
-        penalty: { $ne: 'DNF' }
-      }).sort({ timeMs: 1 });
-
-      const finalTimeMs = timeMs + (penalty === '+2' ? 2000 : 0);
-      if (!previousBestSolve || finalTimeMs < previousBestSolve.timeMs) {
-        isPB = true;
-      }
-    }
-
     // Check & trigger achievements automatically
     let newUnlocks = [];
     let newNotifications = [];
     try {
-      const achRes = await evaluateAchievements(req.user.id, solve, isPB);
+      const achRes = await evaluateAchievements(req.user.id, solve);
       if (achRes && achRes.newNotifications) {
         newUnlocks = achRes.newUnlocks || [];
         newNotifications = achRes.newNotifications || [];
@@ -111,7 +93,6 @@ exports.saveSolve = async (req, res) => {
     res.status(201).json({
       success: true,
       data: solve,
-      isPB,
       newUnlocks,
       newNotifications
     });

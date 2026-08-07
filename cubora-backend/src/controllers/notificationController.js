@@ -109,16 +109,18 @@ exports.markAllRead = async (req, res, next) => {
 };
 
 // Helper function to create/update notifications (for internal use by other controllers)
-exports.createNotification = async ({ recipient, sender, type, title, content, post, comment, solve, solveId, unread = true }) => {
+exports.createNotification = async ({ recipient, user, sender, type, title, content, post, comment, solve, solveId, unread = true }) => {
   try {
+    const targetUser = recipient || user;
     // Check if recipient is the same as sender (don't notify oneself)
-    if (recipient && sender && recipient.toString() === sender.toString()) {
+    if (targetUser && sender && targetUser.toString() === sender.toString()) {
       return null;
     }
 
     // Default: create a new notification
     const notification = await Notification.create({
-      recipient,
+      recipient: targetUser,
+      user: targetUser,
       sender,
       type,
       title,

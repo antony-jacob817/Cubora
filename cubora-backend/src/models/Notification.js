@@ -3,8 +3,11 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema({
   recipient: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
+  },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
   sender: {
     type: mongoose.Schema.Types.ObjectId,
@@ -12,7 +15,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['mention', 'reply', 'like', 'streak', 'achievement', 'pb'],
+    enum: ['mention', 'reply', 'like', 'streak', 'achievement'],
     required: true
   },
   title: {
