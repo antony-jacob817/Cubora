@@ -222,8 +222,13 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
   useEffect(() => {
     if (!user) return;
     fetchNotifications();
+    const handleNotificationUpdate = () => fetchNotifications();
+    window.addEventListener('cubora_notification_update', handleNotificationUpdate);
     const interval = setInterval(fetchNotifications, 20000); 
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('cubora_notification_update', handleNotificationUpdate);
+      clearInterval(interval);
+    };
   }, [user]);
 
   const unreadCount = useMemo(() => notifications.filter(n => n.unread).length, [notifications]);

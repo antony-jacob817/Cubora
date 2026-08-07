@@ -397,7 +397,14 @@ exports.evaluateAchievements = async (userId, solve = null) => {
             progress: badge ? badge.target : 1,
             unlockedAt: new Date()
           });
-          newUnlocks.push({ id: badgeId, title: badge ? badge.title : title });
+          unlockedIds.add(badgeId);
+          const trackName = badge ? badge.title.split(' (')[0] : title;
+          newUnlocks.push({
+            id: badgeId,
+            title: badge ? badge.title : title,
+            tier: badge ? badge.tier : '',
+            trackName
+          });
         } catch (aErr) {
           console.error('Failed to create achievement document:', aErr.message);
         }
@@ -424,8 +431,8 @@ exports.evaluateAchievements = async (userId, solve = null) => {
 
     let maxCleanStreak = 0;
     let currentCleanStreak = 0;
-    for (const solve of solves) {
-      if (solve.penalty === 'None') {
+    for (const solveItem of solves) {
+      if (solveItem.penalty === 'None') {
         currentCleanStreak++;
         if (currentCleanStreak > maxCleanStreak) {
           maxCleanStreak = currentCleanStreak;
@@ -487,32 +494,29 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       }
     }
 
-    // Trigger ONLY ONE consolidated notification if any achievements were unlocked in this session
+    // Guarantee Notification Emission on Tier Upgrades / Unlocks
     if (newUnlocks.length > 0) {
-      try {
-        const { createNotification } = require('./notificationController');
-        let notifTitle = '';
-        let notifContent = '';
+      const { createNotification } = require('./notificationController');
+      let notifTitle = '';
+      let notifContent = '';
 
-        if (newUnlocks.length === 1) {
-          notifTitle = 'TROPHY UNLOCKED!';
-          notifContent = `You unlocked ${newUnlocks[0].title}!`;
-        } else {
-          notifTitle = `${newUnlocks.length} TROPHIES UNLOCKED!`;
-          notifContent = 'Unlocked: ' + newUnlocks.map(a => a.title).join(', ');
-        }
-
-        await createNotification({
-          recipient: userId,
-          type: 'achievement',
-          title: notifTitle,
-          content: notifContent,
-          unread: true,
-          createdAt: new Date()
-        });
-      } catch (nErr) {
-        console.error('Failed to trigger achievement notification:', nErr.message);
+      if (newUnlocks.length === 1) {
+        const unlock = newUnlocks[0];
+        notifTitle = 'TROPHY UPGRADED!';
+        notifContent = `You just hit the ${unlock.tier} Tier in the ${unlock.trackName} track.`;
+      } else {
+        notifTitle = `${newUnlocks.length} TROPHIES UNLOCKED!`;
+        notifContent = 'Unlocked: ' + newUnlocks.map(a => a.title).join(', ');
       }
+
+      await createNotification({
+        recipient: userId,
+        type: 'achievement',
+        title: notifTitle,
+        content: notifContent,
+        unread: true,
+        createdAt: new Date()
+      });
     }
 
     return newUnlocks;
