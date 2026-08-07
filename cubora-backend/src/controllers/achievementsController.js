@@ -308,8 +308,8 @@ exports.getAchievements = async (req, res) => {
         createNotification({
           recipient: userId,
           type: 'achievement',
-          title: 'TROPHY UPGRADED!',
-          content: `You just hit the ${badge.tier} Tier in the ${trackName} track.`,
+          title: 'TROPHY UNLOCKED!',
+          content: `You hit the ${badge.tier} Tier in ${trackName}!`,
           unread: true,
           createdAt: new Date()
         }).catch(err => {
@@ -507,27 +507,31 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       }
     }
 
-    // Guarantee Notification Emission on Tier Upgrades / Unlocks
+    // Single Notification Emission for Batched Unlocked Achievements
     const createdNotifications = [];
-    if (newUnlocks.length > 0) {
+    if (newUnlocks.length === 1) {
       const { createNotification } = require('./notificationController');
-      let notifTitle = '';
-      let notifContent = '';
-
-      if (newUnlocks.length === 1) {
-        const unlock = newUnlocks[0];
-        notifTitle = 'TROPHY UPGRADED!';
-        notifContent = `You just hit the ${unlock.tier} Tier in the ${unlock.trackName} track.`;
-      } else {
-        notifTitle = `${newUnlocks.length} TROPHIES UNLOCKED!`;
-        notifContent = 'Unlocked: ' + newUnlocks.map(a => a.title).join(', ');
-      }
-
+      const ach = newUnlocks[0];
       const notifDoc = await createNotification({
         recipient: userId,
         type: 'achievement',
-        title: notifTitle,
-        content: notifContent,
+        title: 'TROPHY UNLOCKED!',
+        content: `You hit the ${ach.tier} Tier in ${ach.trackName}!`,
+        unread: true,
+        createdAt: new Date()
+      });
+      if (notifDoc) {
+        createdNotifications.push(notifDoc);
+      }
+    } else if (newUnlocks.length > 1) {
+      const { createNotification } = require('./notificationController');
+      const count = newUnlocks.length;
+      const tracks = newUnlocks.map(a => a.trackName).join(', ');
+      const notifDoc = await createNotification({
+        recipient: userId,
+        type: 'achievement',
+        title: `${count} TROPHIES UNLOCKED!`,
+        content: `You hit new tiers in: ${tracks}.`,
         unread: true,
         createdAt: new Date()
       });
