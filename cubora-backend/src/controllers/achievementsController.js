@@ -381,7 +381,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
     }
 
     const unlocked = await Achievement.find({ user: userId });
-    const unlockedIds = new Set(unlocked.map(a => a.badgeId));
+    const unlockedIds = new Set(unlocked.flatMap(a => [a.badgeId, a.achievementId].filter(Boolean)));
     const newUnlocks = [];
 
     const checkAndAward = async (badgeId, title) => {

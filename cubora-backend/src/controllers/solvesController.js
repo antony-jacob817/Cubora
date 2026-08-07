@@ -83,50 +83,7 @@ exports.saveSolve = async (req, res) => {
       console.error('Non-blocking achievement evaluation error:', achErr.message);
     }
 
-    // Check & trigger Personal Best (PB) notification if solve sets a new fastest time
-    const solveTime = timeMs + (penalty === '+2' ? 2000 : 0);
-    if (penalty !== 'DNF' && verificationStatus !== 'flagged') {
-      try {
-        const validPreviousSolves = await SolveHistory.find({
-          user: req.user.id,
-          isDeleted: false,
-          verificationStatus: { $ne: 'flagged' },
-          penalty: { $ne: 'DNF' },
-          _id: { $ne: solve._id }
-        });
-        
-        let isNewPB = false;
-        if (validPreviousSolves.length === 0) {
-          isNewPB = true;
-        } else {
-          const previousTimes = validPreviousSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
-          const minPrevious = Math.min(...previousTimes);
-          if (solveTime < minPrevious) {
-            isNewPB = true;
-          }
-        }
 
-        if (isNewPB) {
-          const { createNotification } = require('./notificationController');
-          const pbNotif = await createNotification({
-            recipient: req.user.id,
-            user: req.user.id,
-            type: 'achievement',
-            title: 'NEW PERSONAL BEST!',
-            content: `New PB! You completed a solve in ${(solveTime / 1000).toFixed(3)}s!`,
-            unread: true,
-            solve: solve._id,
-            solveId: solve._id,
-            createdAt: new Date()
-          });
-          if (pbNotif) {
-            newNotifications.unshift(pbNotif);
-          }
-        }
-      } catch (pbErr) {
-        console.error('Non-blocking PB notification evaluation error:', pbErr.message);
-      }
-    }
 
     // Check & evaluate weekly challenge progress automatically
     try {
