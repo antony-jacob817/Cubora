@@ -289,7 +289,7 @@ exports.getAchievements = async (req, res) => {
       }
 
       if (qualifies && !unlockedIds.has(badge.id)) {
-        // Award on-the-fly (fire and forget with try-catch)
+        // Award on-the-fly
         Achievement.create({
           user: userId,
           badgeId: badge.id,
@@ -299,9 +299,22 @@ exports.getAchievements = async (req, res) => {
           progress: badge.target || 1,
           unlockedAt: new Date()
         }).catch(err => {
-          console.error('Failed to auto-create achievement document (Schema validation error 121 handled):', err.message);
+          console.error('Failed to auto-create achievement document:', err.message);
         });
         unlockedIds.add(badge.id);
+
+        const { createNotification } = require('./notificationController');
+        const trackName = badge.title.split(' (')[0];
+        createNotification({
+          recipient: userId,
+          type: 'achievement',
+          title: 'TROPHY UPGRADED!',
+          content: `You just hit the ${badge.tier} Tier in the ${trackName} track.`,
+          unread: true,
+          createdAt: new Date()
+        }).catch(err => {
+          console.error('Failed to auto-create achievement notification:', err.message);
+        });
       }
 
       const isUnlocked = unlockedIds.has(badge.id);
@@ -347,7 +360,7 @@ exports.getAchievements = async (req, res) => {
 exports.evaluateAchievements = async (userId, solve = null) => {
   try {
     const user = await User.findById(userId);
-    if (!user) return [];
+    if (!user) return { newUnlocks: [], newNotifications: [] };
 
     // Query non-flagged, non-manual solves for rolling average & stats evaluation
     const solves = await SolveHistory.find({
@@ -376,7 +389,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       const isSuspicious = rollingAvg > 0 && solve.timeMs < 0.50 * rollingAvg;
 
       if (isFlagged || isManual || isSuspicious) {
-        return [];
+        return { newUnlocks: [], newNotifications: [] };
       }
     }
 
@@ -495,6 +508,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
     }
 
     // Guarantee Notification Emission on Tier Upgrades / Unlocks
+    const createdNotifications = [];
     if (newUnlocks.length > 0) {
       const { createNotification } = require('./notificationController');
       let notifTitle = '';
@@ -509,7 +523,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
         notifContent = 'Unlocked: ' + newUnlocks.map(a => a.title).join(', ');
       }
 
-      await createNotification({
+      const notifDoc = await createNotification({
         recipient: userId,
         type: 'achievement',
         title: notifTitle,
@@ -517,11 +531,14 @@ exports.evaluateAchievements = async (userId, solve = null) => {
         unread: true,
         createdAt: new Date()
       });
+      if (notifDoc) {
+        createdNotifications.push(notifDoc);
+      }
     }
 
-    return newUnlocks;
+    return { newUnlocks, newNotifications: createdNotifications };
   } catch (error) {
     console.error('Error evaluating achievements:', error);
-    return [];
+    return { newUnlocks: [], newNotifications: [] };
   }
 };

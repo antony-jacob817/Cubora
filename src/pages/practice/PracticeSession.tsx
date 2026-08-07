@@ -329,6 +329,9 @@ export default function PracticeSession() {
             if (data.success) {
                 setSolves(prev => [data.data, ...prev]);
                 fetchGlobalPb();
+                window.dispatchEvent(new CustomEvent('cubora_notification_update', {
+                    detail: { newNotifications: data.newNotifications || [] }
+                }));
             }
         } catch (err) {
             console.error('Failed to save manual solve:', err);
@@ -632,7 +635,9 @@ export default function PracticeSession() {
                     setTime(0);
                     resetTimer();
                     fetchGlobalPb();
-                    window.dispatchEvent(new Event('cubora_notification_update'));
+                    window.dispatchEvent(new CustomEvent('cubora_notification_update', {
+                        detail: { newNotifications: data.newNotifications || [] }
+                    }));
                 }
             })
             .catch(err => console.error('Failed to auto-save solve:', err));

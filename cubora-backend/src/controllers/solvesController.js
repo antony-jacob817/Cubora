@@ -69,8 +69,16 @@ exports.saveSolve = async (req, res) => {
     });
 
     // Check & trigger achievements automatically
+    let newUnlocks = [];
+    let newNotifications = [];
     try {
-      await evaluateAchievements(req.user.id, solve);
+      const achRes = await evaluateAchievements(req.user.id, solve);
+      if (achRes && achRes.newNotifications) {
+        newUnlocks = achRes.newUnlocks || [];
+        newNotifications = achRes.newNotifications || [];
+      } else if (Array.isArray(achRes)) {
+        newUnlocks = achRes;
+      }
     } catch (achErr) {
       console.error('Non-blocking achievement evaluation error:', achErr.message);
     }
@@ -82,7 +90,12 @@ exports.saveSolve = async (req, res) => {
       console.error('Non-blocking challenge evaluation error:', chErr.message);
     }
 
-    res.status(201).json({ success: true, data: solve });
+    res.status(201).json({
+      success: true,
+      data: solve,
+      newUnlocks,
+      newNotifications
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -109,7 +109,7 @@ exports.markAllRead = async (req, res, next) => {
 };
 
 // Helper function to create/update notifications (for internal use by other controllers)
-exports.createNotification = async ({ recipient, sender, type, title, content, post, comment }) => {
+exports.createNotification = async ({ recipient, sender, type, title, content, post, comment, unread = true }) => {
   try {
     // Check if recipient is the same as sender (don't notify oneself)
     if (recipient && sender && recipient.toString() === sender.toString()) {
@@ -124,11 +124,12 @@ exports.createNotification = async ({ recipient, sender, type, title, content, p
       title,
       content,
       post,
-      comment
+      comment,
+      unread
     });
     return notification;
   } catch (err) {
-    console.error('Failed to create notification:', err);
-    return null;
+    console.error('Failed to create notification in MongoDB database:', err);
+    throw err;
   }
 };

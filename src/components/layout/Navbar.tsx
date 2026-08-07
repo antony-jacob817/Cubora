@@ -222,11 +222,31 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
   useEffect(() => {
     if (!user) return;
     fetchNotifications();
-    const handleNotificationUpdate = () => fetchNotifications();
-    window.addEventListener('cubora_notification_update', handleNotificationUpdate);
+    const handleNotificationUpdate = (e?: Event) => {
+      fetchNotifications();
+      const customEvt = e as CustomEvent;
+      if (customEvt?.detail?.newNotifications?.length) {
+        const incoming = customEvt.detail.newNotifications.map((n: any) => ({
+          id: n._id,
+          type: n.type,
+          title: n.title,
+          content: n.content,
+          time: 'Just now',
+          unread: n.unread !== undefined ? n.unread : true,
+          postId: n.post?._id || n.post || n.postId,
+          commentId: n.comment?._id || n.commentId
+        }));
+        setNotifications(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const toAdd = incoming.filter((n: any) => !existingIds.has(n.id));
+          return [...toAdd, ...prev];
+        });
+      }
+    };
+    window.addEventListener('cubora_notification_update', handleNotificationUpdate as EventListener);
     const interval = setInterval(fetchNotifications, 20000); 
     return () => {
-      window.removeEventListener('cubora_notification_update', handleNotificationUpdate);
+      window.removeEventListener('cubora_notification_update', handleNotificationUpdate as EventListener);
       clearInterval(interval);
     };
   }, [user]);
