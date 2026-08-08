@@ -380,13 +380,22 @@ exports.evaluateAchievements = async (userId, solve = null) => {
       }
     }
 
+    const Notification = require('../models/Notification');
     const unlocked = await Achievement.find({ user: userId });
     const unlockedIds = new Set(unlocked.flatMap(a => [a.badgeId, a.achievementId].filter(Boolean)));
+    
+    const existingNotifications = await Notification.find({
+      $or: [{ recipient: userId }, { user: userId }],
+      type: 'achievement'
+    });
+    const notifiedContents = existingNotifications.map(n => n.content || '');
     const newUnlocks = [];
 
     const checkAndAward = async (badgeId, title) => {
-      if (!unlockedIds.has(badgeId)) {
-        const badge = ALL_BADGES.find(b => b.id === badgeId);
+      const badge = ALL_BADGES.find(b => b.id === badgeId);
+      const isAlreadyUnlockedInDb = unlockedIds.has(badgeId);
+
+      if (!isAlreadyUnlockedInDb) {
         try {
           await Achievement.create({
             user: userId,
@@ -398,15 +407,23 @@ exports.evaluateAchievements = async (userId, solve = null) => {
             unlockedAt: new Date()
           });
           unlockedIds.add(badgeId);
-          const trackName = badge ? badge.title.split(' (')[0] : title;
+        } catch (aErr) {
+          console.error('Failed to create achievement document:', aErr.message);
+        }
+      }
+
+      const trackName = badge ? badge.title.split(' (')[0] : title;
+      const tierName = badge ? badge.tier : '';
+      const hasBeenNotified = notifiedContents.some(c => c.includes(trackName) && c.includes(tierName));
+
+      if (!isAlreadyUnlockedInDb || !hasBeenNotified) {
+        if (!newUnlocks.some(u => u.id === badgeId)) {
           newUnlocks.push({
             id: badgeId,
             title: badge ? badge.title : title,
-            tier: badge ? badge.tier : '',
+            tier: tierName,
             trackName
           });
-        } catch (aErr) {
-          console.error('Failed to create achievement document:', aErr.message);
         }
       }
     };
