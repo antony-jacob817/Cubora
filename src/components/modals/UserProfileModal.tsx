@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Trophy, Target, Flame, Timer, Loader2, Clock, Star, Award } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { getAuthHeaders } from '@/context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { clsx } from 'clsx';
 
 interface UserProfileModalProps {
@@ -138,6 +138,7 @@ const groupAchievements = (achList: AchievementData[]): GroupedAchievement[] => 
 };
 
 export function UserProfileModal({ handle, onClose, onNavigateSelfProfile, currentUserId }: UserProfileModalProps) {
+  const { getAuthHeaders } = useAuth();
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
