@@ -122,16 +122,7 @@ exports.createNotification = async ({ recipient, user, sender, type, title, cont
       return null;
     }
 
-    // Anti-spam deduplication: check if an identical notification was created for this user recently
-    const existingRecent = await Notification.findOne({
-      $or: [{ recipient: targetUser }, { user: targetUser }],
-      title,
-      content,
-      createdAt: { $gte: new Date(Date.now() - 60000) }
-    });
-    if (existingRecent) {
-      return existingRecent;
-    }
+
 
     // Default: create a new notification
     const notification = await Notification.create({

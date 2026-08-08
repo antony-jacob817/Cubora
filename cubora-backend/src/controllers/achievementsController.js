@@ -373,7 +373,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
     if (solve) {
       const isFlagged = solve.verificationStatus === 'flagged';
       const isManual = solve.isManual === true;
-      const isSuspicious = rollingAvg > 0 && solve.timeMs < 0.50 * rollingAvg;
+      const isSuspicious = rollingAvg > 0 && solve.timeMs < 0.20 * rollingAvg;
 
       if (isFlagged || isManual || isSuspicious) {
         return { newUnlocks: [], newNotifications: [] };
@@ -414,7 +414,7 @@ exports.evaluateAchievements = async (userId, solve = null) => {
     const totalSolves = solves.length;
 
     const validSpeedSolves = nonCheatSolves.filter(s =>
-      !(rollingAvg > 0 && s.timeMs < 0.50 * rollingAvg)
+      !(rollingAvg > 0 && s.timeMs < 0.20 * rollingAvg)
     );
 
     const validTimes = validSpeedSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
