@@ -41,6 +41,15 @@ const TierProgressBarColors: Record<string, string> = {
     ruby: 'bg-rose-500'
 };
 
+const TierIconColors: Record<string, string> = {
+    bronze: 'text-amber-600 dark:text-amber-500',
+    silver: 'text-slate-400 dark:text-slate-400',
+    gold: 'text-yellow-500 dark:text-yellow-400',
+    emerald: 'text-emerald-500 dark:text-emerald-400',
+    diamond: 'text-cyan-500 dark:text-cyan-400',
+    ruby: 'text-rose-500 dark:text-rose-400'
+};
+
 const ICON_MAP: Record<string, any> = {
     'Target': Target,
     'Trophy': Trophy,
@@ -1796,33 +1805,24 @@ export default function CommunityHub() {
                                                              <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover mt-0.5" />
                                                              
                                                              {/* Equipped Trophy Badges Micro-Row */}
-                                                             <div className="flex items-center justify-center gap-1 mt-1.5">
+                                                             <div className="flex items-center justify-center gap-1.5 mt-1.5">
                                                                  {[0, 1, 2].map((slotIdx) => {
                                                                      const badgeId = post.author.equippedBadges?.[slotIdx] || null;
                                                                      const badgeInfo = getBadgeInfo(badgeId, achievements);
-                                                                     if (!badgeInfo) {
-                                                                         return (
-                                                                             <div
-                                                                                 key={slotIdx}
-                                                                                 className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border border-dashed border-slate-300/40 dark:border-white/10 bg-slate-50/20 dark:bg-white/[0.01]"
-                                                                             />
-                                                                         );
-                                                                     }
+                                                                     if (!badgeInfo) return null;
 
                                                                      const { title, tier, Icon } = badgeInfo;
-                                                                     const colorClass = TierColors[tier] || 'text-slate-400 bg-white/5 border-white/10';
+                                                                     const colorClass = TierIconColors[tier] || 'text-slate-400';
 
                                                                      return (
-                                                                         <div
+                                                                         <Icon
                                                                              key={slotIdx}
                                                                              title={title}
                                                                              className={clsx(
-                                                                                 "w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center shrink-0 transition-all hover:scale-110 cursor-pointer",
+                                                                                 "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-transform hover:scale-125 cursor-pointer",
                                                                                  colorClass
                                                                              )}
-                                                                         >
-                                                                             <Icon className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
-                                                                         </div>
+                                                                         />
                                                                      );
                                                                  })}
                                                              </div>
