@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+﻿import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -42,12 +42,12 @@ const TierProgressBarColors: Record<string, string> = {
 };
 
 const TierIconColors: Record<string, string> = {
-    bronze: 'text-amber-600 dark:text-amber-500',
-    silver: 'text-slate-400 dark:text-slate-400',
-    gold: 'text-yellow-500 dark:text-yellow-400',
-    emerald: 'text-emerald-500 dark:text-emerald-400',
-    diamond: 'text-cyan-500 dark:text-cyan-400',
-    ruby: 'text-rose-500 dark:text-rose-400'
+    bronze: 'text-amber-800 dark:text-amber-800',
+    silver: 'text-slate-500 dark:text-slate-400',
+    gold: 'text-yellow-600 dark:text-yellow-500',
+    emerald: 'text-emerald-600 dark:text-emerald-500',
+    diamond: 'text-cyan-600 dark:text-cyan-400',
+    ruby: 'text-rose-600 dark:text-rose-500'
 };
 
 const ICON_MAP: Record<string, any> = {
@@ -1819,7 +1819,7 @@ export default function CommunityHub() {
                                                                              key={slotIdx}
                                                                              title={title}
                                                                              className={clsx(
-                                                                                 "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-transform hover:scale-125 cursor-pointer",
+                                                                                 "w-2.5 h-2.5 sm:w-2.5 sm:h-2.5 shrink-0 transition-transform hover:scale-125 cursor-pointer",
                                                                                  colorClass
                                                                              )}
                                                                          />
