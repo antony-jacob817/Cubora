@@ -13,6 +13,7 @@ const {
   deleteComment,
   toggleCommentLike,
   searchUsers,
+  getPublicUserProfile,
   getPBsLeaderboard,
   getActiveChallenge
 } = require('../controllers/communityController');
@@ -29,6 +30,9 @@ router.route('/leaderboard/pbs')
 
 router.route('/users/search')
   .get(searchUsers);
+
+router.route('/users/profile/:handle')
+  .get(getPublicUserProfile);
 
 router.route('/')
   .get(getPosts)

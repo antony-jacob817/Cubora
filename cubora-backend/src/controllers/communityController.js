@@ -584,6 +584,172 @@ exports.searchUsers = async (req, res) => {
   }
 };
 
+// @desc    Get public user profile & stats by handle
+// @route   GET /api/community/users/profile/:handle
+// @access  Private
+exports.getPublicUserProfile = async (req, res) => {
+  try {
+    const rawHandle = req.params.handle.toLowerCase().replace(/^@/, '');
+    const User = require('../models/User');
+    const SolveHistory = require('../models/SolveHistory');
+    const Achievement = require('../models/Achievement');
+    const CubeScan = require('../models/CubeScan');
+    const { ALL_BADGES, BADGE_GROUPS } = require('./achievementsController');
+
+    let user = await User.findOne({
+      $or: [
+        { username: new RegExp(`^${rawHandle}$`, 'i') },
+        { email: new RegExp(`^${rawHandle}@`, 'i') }
+      ]
+    }).select('-password');
+
+    if (!user && mongoose.Types.ObjectId.isValid(rawHandle)) {
+      user = await User.findById(rawHandle).select('-password');
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const userId = user._id;
+
+    // Solves
+    const solves = await SolveHistory.find({
+      user: userId,
+      isDeleted: false,
+      verificationStatus: { $ne: 'flagged' },
+      isManual: { $ne: true }
+    }).sort({ date: 1 });
+    const totalSolves = solves.length;
+
+    const validSolvesForAvg = solves.filter(s => s.penalty !== 'DNF');
+    let rollingAvg = 0;
+    if (validSolvesForAvg.length > 0) {
+      const recentSolves = validSolvesForAvg.slice(-20);
+      const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
+      rollingAvg = sum / recentSolves.length;
+    }
+
+    const validSolves = solves.filter(s =>
+      s.penalty !== 'DNF' && !(rollingAvg > 0 && s.timeMs < 0.20 * rollingAvg)
+    );
+    const validTimes = validSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
+
+    const bestTimeMs = validTimes.length > 0 ? Math.min(...validTimes) : null;
+    const bestTimeSec = bestTimeMs ? parseFloat((bestTimeMs / 1000).toFixed(3)) : null;
+    const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
+
+    const globalAvgMs = validTimes.length > 0 ? (validTimes.reduce((a, b) => a + b, 0) / validTimes.length) : null;
+
+    const sessionCounts = await SolveHistory.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false, verificationStatus: { $ne: 'flagged' }, isManual: { $ne: true } } },
+      { $group: { _id: "$sessionId", count: { $sum: 1 } } }
+    ]);
+    const maxSessionSolves = sessionCounts.length > 0 ? Math.max(...sessionCounts.map(s => s.count)) : 0;
+
+    let maxCleanStreak = 0;
+    let currentCleanStreak = 0;
+    for (const solve of solves) {
+      if (solve.penalty === 'None') {
+        currentCleanStreak++;
+        if (currentCleanStreak > maxCleanStreak) {
+          maxCleanStreak = currentCleanStreak;
+        }
+      } else {
+        currentCleanStreak = 0;
+      }
+    }
+
+    let currentStreak = 0;
+    const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const checkDate = new Date();
+      checkDate.setDate(today.getDate() - i);
+      if (uniqueDays.has(checkDate.toDateString())) {
+        currentStreak++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+
+    const totalScans = await CubeScan.countDocuments({ user: userId });
+    const totalWins = user.multiplayerWins || 0;
+
+    const unlocked = await Achievement.find({ user: userId });
+    const unlockedIds = new Set(unlocked.flatMap(a => [a.badgeId, a.achievementId].filter(Boolean)));
+
+    const achievementsList = (ALL_BADGES || []).map(badge => {
+      let userValue = 0;
+      switch (badge.group) {
+        case 'solves-marathon': userValue = totalSolves; break;
+        case 'speed-frontier': userValue = bestTimeSec ? bestTimeSec : 0; break;
+        case 'consistency-grind': userValue = currentStreak; break;
+        case 'fingertrick-maestro': userValue = bestTps; break;
+        case 'session-marathoner': userValue = maxSessionSolves; break;
+        case 'flawless-execution': userValue = maxCleanStreak; break;
+        case 'visionary-scanner': userValue = totalScans; break;
+        case 'gladiator-arena': userValue = totalWins; break;
+      }
+
+      const isUnlocked = unlockedIds.has(badge.id);
+      let progress = 0;
+      const progressTarget = badge.target;
+
+      if (badge.group === 'speed-frontier') {
+        if (isUnlocked) {
+          progress = progressTarget;
+        } else if (userValue > 0) {
+          progress = parseFloat(((progressTarget / userValue) * progressTarget).toFixed(2));
+        } else {
+          progress = 0;
+        }
+      } else {
+        progress = Math.min(userValue, progressTarget);
+      }
+
+      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id || a.achievementId === badge.id);
+
+      return {
+        id: badge.id,
+        title: badge.title,
+        description: badge.description,
+        icon: badge.icon,
+        category: badge.category,
+        isUnlocked,
+        unlockedAt: unlockedRecord ? unlockedRecord.unlockedAt : null,
+        progress,
+        progressTarget
+      };
+    });
+
+    const userHandle = (user.username || user.email.split('@')[0]).toLowerCase();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        username: user.username,
+        handle: userHandle,
+        avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name)}`,
+        about: user.about || 'Speedcuber',
+        createdAt: user.createdAt,
+        equippedBadges: user.equippedBadges || [],
+        metrics: {
+          pb: bestTimeSec !== null ? `${bestTimeSec}s` : '--',
+          totalSolves: totalSolves,
+          streak: `${currentStreak} Day${currentStreak === 1 ? '' : 's'}`,
+          globalAverage: globalAvgMs ? `${(globalAvgMs / 1000).toFixed(3)} s` : '--'
+        },
+        achievements: achievementsList
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // @desc    Get users who liked a post
 // @route   GET /api/community/:postId/likers
 // @access  Private

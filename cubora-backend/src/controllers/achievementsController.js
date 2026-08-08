@@ -145,6 +145,9 @@ BADGE_GROUPS.forEach(g => {
   });
 });
 
+exports.ALL_BADGES = ALL_BADGES;
+exports.BADGE_GROUPS = BADGE_GROUPS;
+
 // @desc    Get all user achievements (locked & unlocked status)
 // @route   GET /api/achievements
 // @access  Private
