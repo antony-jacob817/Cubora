@@ -157,7 +157,7 @@ exports.getAchievements = async (req, res) => {
     }
 
     const unlocked = await Achievement.find({ user: userId });
-    const unlockedIds = new Set(unlocked.map(a => a.badgeId));
+    const unlockedIds = new Set(unlocked.flatMap(a => [a.badgeId, a.achievementId].filter(Boolean)));
 
     // Calculate metrics strictly from non-flagged and non-manual solves
     const solves = await SolveHistory.find({
@@ -228,8 +228,6 @@ exports.getAchievements = async (req, res) => {
 
     // 7. Arena wins
     const totalWins = user.multiplayerWins || 0;
-
-    const newlyUnlockedInGet = [];
 
     const achievementsList = ALL_BADGES.map(badge => {
       let userValue = 0;
@@ -304,13 +302,6 @@ exports.getAchievements = async (req, res) => {
           console.error('Failed to auto-create achievement document:', err.message);
         });
         unlockedIds.add(badge.id);
-        const trackName = badge.title.split(' (')[0];
-        newlyUnlockedInGet.push({
-          id: badge.id,
-          title: badge.title,
-          tier: badge.tier,
-          trackName
-        });
       }
 
       const isUnlocked = unlockedIds.has(badge.id);
@@ -331,7 +322,7 @@ exports.getAchievements = async (req, res) => {
         progress = Math.min(userValue, progressTarget);
       }
 
-      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id);
+      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id || a.achievementId === badge.id);
 
       return {
         id: badge.id,
@@ -345,50 +336,6 @@ exports.getAchievements = async (req, res) => {
         progressTarget
       };
     });
-
-    if (newlyUnlockedInGet.length > 0) {
-      const TIER_RANK = { 'Bronze': 1, 'Silver': 2, 'Gold': 3, 'Emerald': 4, 'Diamond': 5, 'Ruby': 6 };
-      const getTrackMap = new Map();
-      for (const item of newlyUnlockedInGet) {
-        const existing = getTrackMap.get(item.trackName);
-        if (!existing) {
-          getTrackMap.set(item.trackName, item);
-        } else {
-          const existingRank = TIER_RANK[existing.tier] || 0;
-          const currentRank = TIER_RANK[item.tier] || 0;
-          if (currentRank > existingRank) {
-            getTrackMap.set(item.trackName, item);
-          }
-        }
-      }
-      const deduplicatedGetBadges = Array.from(getTrackMap.values());
-
-      if (deduplicatedGetBadges.length === 1) {
-        const { createNotification } = require('./notificationController');
-        const item = deduplicatedGetBadges[0];
-        createNotification({
-          recipient: userId,
-          user: userId,
-          type: 'achievement',
-          title: 'TROPHY UNLOCKED!',
-          content: `You reached ${item.tier} in ${item.trackName}!`,
-          unread: true,
-          createdAt: new Date()
-        }).catch(e => console.error('Failed to emit notification in getAchievements:', e));
-      } else if (deduplicatedGetBadges.length > 1) {
-        const { createNotification } = require('./notificationController');
-        const trackSummary = deduplicatedGetBadges.map(t => `${t.trackName} (${t.tier})`).join(', ');
-        createNotification({
-          recipient: userId,
-          user: userId,
-          type: 'achievement',
-          title: `${deduplicatedGetBadges.length} TROPHIES UNLOCKED!`,
-          content: `New tiers reached: ${trackSummary}.`,
-          unread: true,
-          createdAt: new Date()
-        }).catch(e => console.error('Failed to emit notification in getAchievements:', e));
-      }
-    }
 
     res.status(200).json({ success: true, data: achievementsList });
   } catch (error) {
