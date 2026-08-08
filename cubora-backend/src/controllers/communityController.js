@@ -377,70 +377,60 @@ exports.createComment = async (req, res) => {
     // Parse mentions: look for @username patterns in content
     const mentionRegex = /@([a-zA-Z0-9_.-]+)/g;
     let match;
-    const mentionedUsernames = new Set();
+    const mentionedUsernames = [];
     while ((match = mentionRegex.exec(content)) !== null) {
-      mentionedUsernames.add(match[1].toLowerCase());
-    }
-
-    let parentCommentAuthorId = null;
-    if (parentId) {
-      const parentComment = await Comment.findById(parentId).populate('author', 'username');
-      if (parentComment && parentComment.author) {
-        parentCommentAuthorId = parentComment.author._id ? parentComment.author._id.toString() : parentComment.author.toString();
-      }
+      mentionedUsernames.push(match[1].toLowerCase());
     }
 
     const notifiedUserIds = new Set();
-    // Don't notify oneself
-    notifiedUserIds.add(req.user.id.toString());
 
-    // 1. Direct Reply to Comment -> Send ONLY 'reply' notification to parent comment author
-    if (parentId && parentCommentAuthorId && parentCommentAuthorId !== req.user.id.toString()) {
-      await createNotification({
-        recipient: parentCommentAuthorId,
-        sender: req.user.id,
-        type: 'reply',
-        title: 'Reply to Comment',
-        content: `${req.user.name} replied to your comment.`,
-        post: post._id,
-        comment: comment._id
-      });
-      notifiedUserIds.add(parentCommentAuthorId);
-    }
-
-    // 2. Top-Level Comment on Post -> Send ONLY 'reply' notification to post author
-    if (!parentId && post.author.toString() !== req.user.id.toString()) {
-      await createNotification({
-        recipient: post.author,
-        sender: req.user.id,
-        type: 'reply',
-        title: 'Reply on Post',
-        content: `${req.user.name} replied to your ${category} post.`,
-        post: post._id,
-        comment: comment._id
-      });
-      notifiedUserIds.add(post.author.toString());
-    }
-
-    // 3. Notify Mentioned Users (excluding post author / parent comment author who already received reply notifications)
-    if (mentionedUsernames.size > 0) {
+    // Notify mentioned users
+    if (mentionedUsernames.length > 0) {
       const User = require('../models/User');
-      const mentionedUsers = await User.find({ username: { $in: Array.from(mentionedUsernames) } });
+      const mentionedUsers = await User.find({ username: { $in: mentionedUsernames } });
       
       for (const u of mentionedUsers) {
-        const uId = u._id.toString();
-        if (!notifiedUserIds.has(uId)) {
+        if (u._id.toString() !== req.user.id.toString()) {
           await createNotification({
             recipient: u._id,
             sender: req.user.id,
             type: 'mention',
-            title: 'Mentioned in Comment',
+            title: 'MENTIONED IN COMMENT',
             content: `@${req.user.username || req.user.name} mentioned you in a comment: '${content}'`,
             post: post._id,
             comment: comment._id
           });
-          notifiedUserIds.add(uId);
+          notifiedUserIds.add(u._id.toString());
         }
+      }
+    }
+
+    // Trigger reply notifications only if the recipient wasn't already notified via mention
+    if (!parentId) {
+      if (post.author.toString() !== req.user.id.toString() && !notifiedUserIds.has(post.author.toString())) {
+        await createNotification({
+          recipient: post.author,
+          sender: req.user.id,
+          type: 'reply',
+          title: 'Reply on Post',
+          content: `${req.user.name} replied to your ${category} post.`,
+          post: post._id,
+          comment: comment._id
+        });
+      }
+    } else {
+      // Direct reply to comment
+      const parentComment = await Comment.findById(parentId);
+      if (parentComment && parentComment.author.toString() !== req.user.id.toString() && !notifiedUserIds.has(parentComment.author.toString())) {
+        await createNotification({
+          recipient: parentComment.author,
+          sender: req.user.id,
+          type: 'reply',
+          title: 'Reply to Comment',
+          content: `${req.user.name} replied to your comment.`,
+          post: post._id,
+          comment: comment._id
+        });
       }
     }
 
