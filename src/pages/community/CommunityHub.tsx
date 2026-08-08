@@ -2797,7 +2797,7 @@ export default function CommunityHub() {
                                                 </>
                                             );
                                         })()}
-                                    </div>
+                                    </>
                                 ) : (
                                     <div className="py-4 text-center text-xs text-slate-500">
                                         No active challenge available.
