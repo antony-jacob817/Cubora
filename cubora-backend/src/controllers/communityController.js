@@ -408,7 +408,21 @@ exports.createComment = async (req, res) => {
       notifiedUserIds.add(parentCommentAuthorId);
     }
 
-    // 2. Notify Mentioned Users (excluding those already notified via direct reply)
+    // 2. Top-Level Comment on Post -> Send ONLY 'reply' notification to post author
+    if (!parentId && post.author.toString() !== req.user.id.toString()) {
+      await createNotification({
+        recipient: post.author,
+        sender: req.user.id,
+        type: 'reply',
+        title: 'Reply on Post',
+        content: `${req.user.name} replied to your ${category} post.`,
+        post: post._id,
+        comment: comment._id
+      });
+      notifiedUserIds.add(post.author.toString());
+    }
+
+    // 3. Notify Mentioned Users (excluding post author / parent comment author who already received reply notifications)
     if (mentionedUsernames.size > 0) {
       const User = require('../models/User');
       const mentionedUsers = await User.find({ username: { $in: Array.from(mentionedUsernames) } });
@@ -428,20 +442,6 @@ exports.createComment = async (req, res) => {
           notifiedUserIds.add(uId);
         }
       }
-    }
-
-    // 3. Notify Post Author if top-level comment and post author hasn't been notified yet
-    if (!parentId && post.author.toString() !== req.user.id.toString() && !notifiedUserIds.has(post.author.toString())) {
-      await createNotification({
-        recipient: post.author,
-        sender: req.user.id,
-        type: 'reply',
-        title: 'Reply on Post',
-        content: `${req.user.name} replied to your ${category} post.`,
-        post: post._id,
-        comment: comment._id
-      });
-      notifiedUserIds.add(post.author.toString());
     }
 
     await comment.populate('author', 'name email username avatar');
