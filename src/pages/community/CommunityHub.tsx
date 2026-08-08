@@ -64,6 +64,15 @@ const BADGE_GROUPS_MAP: Record<string, { title: string; icon: any }> = {
     'gladiator-arena': { title: 'Gladiator Arena', icon: Medal },
 };
 
+const TierIconColors: Record<string, string> = {
+    bronze: 'text-amber-600 dark:text-amber-500',
+    silver: 'text-slate-400 dark:text-slate-300',
+    gold: 'text-yellow-500 dark:text-yellow-400',
+    emerald: 'text-emerald-500 dark:text-emerald-400',
+    diamond: 'text-cyan-400 dark:text-cyan-300',
+    ruby: 'text-rose-500 dark:text-rose-400'
+};
+
 const getBadgeInfo = (badgeId: string | null) => {
     if (!badgeId) return null;
     const lastHyphen = badgeId.lastIndexOf('-');
@@ -75,6 +84,7 @@ const getBadgeInfo = (badgeId: string | null) => {
     const groupInfo = BADGE_GROUPS_MAP[group] || { title: group, icon: Trophy };
     const fullTitle = `${groupInfo.title} (${tierName})`;
     const colorClass = TierColors[rawTier] || '';
+    const iconColorClass = TierIconColors[rawTier] || 'text-slate-400';
 
     return {
         group,
@@ -82,7 +92,8 @@ const getBadgeInfo = (badgeId: string | null) => {
         tierName,
         fullTitle,
         Icon: groupInfo.icon,
-        colorClass
+        colorClass,
+        iconColorClass
     };
 };
 const mapPhaseToStandardName = (phase: string, method: string): string => {
@@ -1789,34 +1800,26 @@ export default function CommunityHub() {
                                                         <div className="flex flex-col items-center shrink-0">
                                                             <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 object-cover mt-0.5" />
                                                             
-                                                            {/* Equipped Badges Row Under Avatar */}
-                                                            <div className="flex items-center justify-center gap-1 mt-1.5">
-                                                                {[0, 1, 2].map((slotIdx) => {
-                                                                    const badgeId = post.author?.equippedBadges?.[slotIdx] || null;
-                                                                    const info = getBadgeInfo(badgeId);
-                                                                    if (!info) {
+                                                            {/* Equipped Badges Row Under Avatar (Icons Only) */}
+                                                            {post.author?.equippedBadges?.some(Boolean) && (
+                                                                <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                                                                    {[0, 1, 2].map((slotIdx) => {
+                                                                        const badgeId = post.author?.equippedBadges?.[slotIdx] || null;
+                                                                        const info = getBadgeInfo(badgeId);
+                                                                        if (!info) return null;
+                                                                        const { fullTitle, Icon, iconColorClass } = info;
                                                                         return (
-                                                                            <div 
-                                                                                key={slotIdx} 
-                                                                                className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-md border border-dashed border-slate-300/60 dark:border-white/10 bg-slate-50/40 dark:bg-white/[0.01]" 
-                                                                            />
+                                                                            <div
+                                                                                key={slotIdx}
+                                                                                title={fullTitle}
+                                                                                className="flex items-center justify-center transition-transform hover:scale-125 cursor-pointer"
+                                                                            >
+                                                                                <Icon className={clsx("w-3.5 h-3.5 shrink-0 drop-shadow-xs", iconColorClass)} />
+                                                                            </div>
                                                                         );
-                                                                    }
-                                                                    const { fullTitle, Icon, colorClass } = info;
-                                                                    return (
-                                                                        <div
-                                                                            key={slotIdx}
-                                                                            title={fullTitle}
-                                                                            className={clsx(
-                                                                                "w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-md border flex items-center justify-center transition-transform hover:scale-110 cursor-pointer shadow-xs",
-                                                                                colorClass
-                                                                            )}
-                                                                        >
-                                                                            <Icon className="w-2.5 h-2.5 shrink-0" />
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
+                                                                    })}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div className="min-w-0 flex-1">
                                                             {/* Name + Badges inline on the right of name */}
