@@ -7,8 +7,7 @@ import {
     Flame, Star, Globe, CheckCircle2, Lock, AlertCircle,
     Clock, Award, Loader2, Target, Timer, X, Check,
     Plus, Trash2, Brain, ChevronDown, ChevronUp,
-    ChevronLeft, ChevronRight, Play, Pause, RotateCcw,
-    Medal
+    ChevronLeft, ChevronRight, Play, Pause, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -50,10 +49,9 @@ const ICON_MAP: Record<string, any> = {
     'Clock': Clock,
     'Star': Star,
     'Award': Award,
-    'Medal': Medal,
 };
 
-const BADGE_GROUPS_MAP: Record<string, { title: string; icon: any }> = {
+const BADGE_GROUP_META: Record<string, { title: string; icon: any }> = {
     'solves-marathon': { title: 'Solves Marathon', icon: Target },
     'speed-frontier': { title: 'Speed Frontier', icon: Trophy },
     'consistency-grind': { title: 'Consistency Grind', icon: Flame },
@@ -61,41 +59,38 @@ const BADGE_GROUPS_MAP: Record<string, { title: string; icon: any }> = {
     'session-marathoner': { title: 'Session Marathoner', icon: Clock },
     'flawless-execution': { title: 'Flawless Execution', icon: Star },
     'visionary-scanner': { title: 'Visionary Scanner', icon: Award },
-    'gladiator-arena': { title: 'Gladiator Arena', icon: Medal },
+    'gladiator-arena': { title: 'Gladiator Arena', icon: Award }
 };
 
-const TierIconColors: Record<string, string> = {
-    bronze: 'text-amber-600 dark:text-amber-500',
-    silver: 'text-slate-400 dark:text-slate-300',
-    gold: 'text-yellow-500 dark:text-yellow-400',
-    emerald: 'text-emerald-500 dark:text-emerald-400',
-    diamond: 'text-cyan-400 dark:text-cyan-300',
-    ruby: 'text-rose-500 dark:text-rose-400'
-};
-
-const getBadgeInfo = (badgeId: string | null) => {
+const getBadgeInfo = (badgeId: string | null, achievementsList: any[] = []) => {
     if (!badgeId) return null;
-    const lastHyphen = badgeId.lastIndexOf('-');
-    if (lastHyphen === -1) return null;
-    const group = badgeId.substring(0, lastHyphen);
-    const rawTier = badgeId.substring(lastHyphen + 1).toLowerCase();
-    const tierName = rawTier.charAt(0).toUpperCase() + rawTier.slice(1);
+    const found = achievementsList.find(a => a.id === badgeId);
+    if (found) {
+        const tier = badgeId.substring(badgeId.lastIndexOf('-') + 1).toLowerCase();
+        const tierCap = tier.charAt(0).toUpperCase() + tier.slice(1);
+        const iconComponent = ICON_MAP[found.icon] || Trophy;
+        const trackTitle = found.title ? found.title.split(' (')[0] : (found.group || 'Achievement');
+        return {
+            title: `${trackTitle} (${tierCap})`,
+            tier,
+            Icon: iconComponent
+        };
+    }
 
-    const groupInfo = BADGE_GROUPS_MAP[group] || { title: group, icon: Trophy };
-    const fullTitle = `${groupInfo.title} (${tierName})`;
-    const colorClass = TierColors[rawTier] || '';
-    const iconColorClass = TierIconColors[rawTier] || 'text-slate-400';
+    const lastDash = badgeId.lastIndexOf('-');
+    if (lastDash === -1) return null;
+    const groupKey = badgeId.substring(0, lastDash);
+    const tier = badgeId.substring(lastDash + 1).toLowerCase();
+    const tierCap = tier.charAt(0).toUpperCase() + tier.slice(1);
+    const meta = BADGE_GROUP_META[groupKey] || { title: groupKey, icon: Trophy };
 
     return {
-        group,
-        tier: rawTier,
-        tierName,
-        fullTitle,
-        Icon: groupInfo.icon,
-        colorClass,
-        iconColorClass
+        title: `${meta.title} (${tierCap})`,
+        tier,
+        Icon: meta.icon
     };
 };
+
 const mapPhaseToStandardName = (phase: string, method: string): string => {
     const p = phase.toLowerCase();
     const m = (method || 'CFOP').toUpperCase();
@@ -134,7 +129,7 @@ interface CommunityPost {
     _id: string;
     content: string;
     type: 'solve' | 'algorithm' | 'discussion';
-    author: { _id: string; name: string; handle: string; avatar: string; username?: string };
+    author: { _id: string; name: string; handle: string; avatar: string; username?: string; equippedBadges?: (string | null)[] };
     solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string; phaseSplits?: Record<string, number>; verificationStatus?: 'unverified' | 'verified_phase' | 'verified_session' | 'flagged'; isManual?: boolean };
     isPB?: boolean;
     likes: number;
@@ -146,7 +141,7 @@ interface CommunityPost {
 interface CommentData {
     _id: string;
     post: string;
-    author: { _id: string; name: string; handle: string; avatar: string; username?: string };
+    author: { _id: string; name: string; handle: string; avatar: string; username?: string; equippedBadges?: (string | null)[] };
     content: string;
     parentId: string | null;
     likes: number;
@@ -1798,29 +1793,40 @@ export default function CommunityHub() {
                                                 <div className="flex justify-between items-start gap-3 mb-3.5 w-full">
                                                     <div className="flex items-start gap-3 min-w-0 flex-1">
                                                         <div className="flex flex-col items-center shrink-0">
-                                                            <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 object-cover mt-0.5" />
-                                                            
-                                                            {/* Equipped Badges Row Under Avatar (Icons Only) */}
-                                                            {post.author?.equippedBadges?.some(Boolean) && (
-                                                                <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                                                                    {[0, 1, 2].map((slotIdx) => {
-                                                                        const badgeId = post.author?.equippedBadges?.[slotIdx] || null;
-                                                                        const info = getBadgeInfo(badgeId);
-                                                                        if (!info) return null;
-                                                                        const { fullTitle, Icon, iconColorClass } = info;
-                                                                        return (
-                                                                            <div
-                                                                                key={slotIdx}
-                                                                                title={fullTitle}
-                                                                                className="flex items-center justify-center transition-transform hover:scale-125 cursor-pointer"
-                                                                            >
-                                                                                <Icon className={clsx("w-3.5 h-3.5 shrink-0 drop-shadow-xs", iconColorClass)} />
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                             <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover mt-0.5" />
+                                                             
+                                                             {/* Equipped Trophy Badges Micro-Row */}
+                                                             <div className="flex items-center justify-center gap-1 mt-1.5">
+                                                                 {[0, 1, 2].map((slotIdx) => {
+                                                                     const badgeId = post.author.equippedBadges?.[slotIdx] || null;
+                                                                     const badgeInfo = getBadgeInfo(badgeId, achievements);
+                                                                     if (!badgeInfo) {
+                                                                         return (
+                                                                             <div
+                                                                                 key={slotIdx}
+                                                                                 className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border border-dashed border-slate-300/40 dark:border-white/10 bg-slate-50/20 dark:bg-white/[0.01]"
+                                                                             />
+                                                                         );
+                                                                     }
+
+                                                                     const { title, tier, Icon } = badgeInfo;
+                                                                     const colorClass = TierColors[tier] || 'text-slate-400 bg-white/5 border-white/10';
+
+                                                                     return (
+                                                                         <div
+                                                                             key={slotIdx}
+                                                                             title={title}
+                                                                             className={clsx(
+                                                                                 "w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center shrink-0 transition-all hover:scale-110 cursor-pointer",
+                                                                                 colorClass
+                                                                             )}
+                                                                         >
+                                                                             <Icon className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+                                                                         </div>
+                                                                     );
+                                                                 })}
+                                                             </div>
+                                                         </div>
                                                         <div className="min-w-0 flex-1">
                                                             {/* Name + Badges inline on the right of name */}
                                                             <div className="flex items-center flex-wrap gap-1.5">
