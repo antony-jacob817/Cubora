@@ -41,6 +41,7 @@ function transformPost(post, userId) {
       name: authorName,
       handle: `@${authorUsername.toLowerCase().replace(/\s+/g, '_')}`,
       avatar: authorAvatar,
+      equippedBadges: p.author?.equippedBadges || [null, null, null],
     },
     isLikedByMe: p.likedBy?.some(id => id.toString() === userId) || false,
     timeAgo: getTimeAgo(p.createdAt),
@@ -61,6 +62,7 @@ function transformComment(comment, userId) {
       name: authorName,
       handle: `@${authorUsername.toLowerCase().replace(/\s+/g, '_')}`,
       avatar: authorAvatar,
+      equippedBadges: c.author?.equippedBadges || [null, null, null],
     },
     isLikedByMe: c.likedBy?.some(id => id.toString() === userId) || false,
     timeAgo: getTimeAgo(c.createdAt),
@@ -93,7 +95,7 @@ exports.getPosts = async (req, res) => {
     }
 
     const posts = await CommunityPost.find(query)
-      .populate('author', 'name email username avatar')
+      .populate('author', 'name email username avatar equippedBadges')
       .sort({ createdAt: -1 })
       .limit(limitNum + 1);
 
@@ -156,7 +158,7 @@ exports.createPost = async (req, res) => {
       isPB: !!isPB,
     });
 
-    await post.populate('author', 'name email username avatar');
+    await post.populate('author', 'name email username avatar equippedBadges');
 
     const response = {
       ...transformPost(post, req.user.id),
@@ -190,7 +192,7 @@ exports.editPost = async (req, res) => {
 
     post.content = content.trim();
     await post.save();
-    await post.populate('author', 'name email username avatar');
+    await post.populate('author', 'name email username avatar equippedBadges');
 
     const commentCount = await Comment.countDocuments({ post: post._id });
     const response = {
@@ -340,7 +342,7 @@ exports.toggleLike = async (req, res) => {
 exports.getComments = async (req, res) => {
   try {
     const comments = await Comment.find({ post: req.params.postId })
-      .populate('author', 'name email username avatar')
+      .populate('author', 'name email username avatar equippedBadges')
       .sort({ createdAt: 1 });
 
     const transformed = comments.map(c => transformComment(c, req.user.id));
@@ -434,7 +436,7 @@ exports.createComment = async (req, res) => {
       }
     }
 
-    await comment.populate('author', 'name email username avatar');
+    await comment.populate('author', 'name email username avatar equippedBadges');
 
     res.status(201).json({ success: true, data: transformComment(comment, req.user.id) });
   } catch (error) {
@@ -498,7 +500,7 @@ exports.editComment = async (req, res) => {
 
     comment.content = content.trim();
     await comment.save();
-    await comment.populate('author', 'name email username avatar');
+    await comment.populate('author', 'name email username avatar equippedBadges');
 
     res.status(200).json({ success: true, data: transformComment(comment, req.user.id) });
   } catch (error) {
@@ -584,195 +586,6 @@ exports.searchUsers = async (req, res) => {
   }
 };
 
-// @desc    Get public user profile & stats
-// @route   GET /api/community/users/profile/:handle
-// @access  Private
-exports.getUserProfile = async (req, res) => {
-  try {
-    const rawHandle = req.params.handle.replace(/^@/, '').toLowerCase().trim();
-    const User = require('../models/User');
-    const SolveHistory = require('../models/SolveHistory');
-    const Achievement = require('../models/Achievement');
-    const CubeScan = require('../models/CubeScan');
-    const mongoose = require('mongoose');
-    const { ALL_BADGES } = require('./achievementsController');
-
-    let filter = {
-      $or: [
-        { username: rawHandle },
-        { email: new RegExp(`^${rawHandle}@`, 'i') }
-      ]
-    };
-
-    if (mongoose.Types.ObjectId.isValid(rawHandle)) {
-      filter.$or.push({ _id: rawHandle });
-    }
-
-    const user = await User.findOne(filter).select('-password');
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    const userId = user._id;
-    const userHandle = `@${(user.username || user.email.split('@')[0]).toLowerCase().replace(/\s+/g, '_')}`;
-
-    // Query valid non-deleted solves
-    const solves = await SolveHistory.find({
-      user: userId,
-      isDeleted: false,
-      verificationStatus: { $ne: 'flagged' },
-      isManual: { $ne: true }
-    }).sort({ date: 1 });
-
-    const totalSolves = solves.length;
-    const nonCheatSolves = solves.filter(s => s.penalty !== 'DNF');
-
-    let rollingAvg = 0;
-    if (nonCheatSolves.length > 0) {
-      const recentSolves = nonCheatSolves.slice(-20);
-      const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
-      rollingAvg = sum / recentSolves.length;
-    }
-
-    const validSpeedSolves = nonCheatSolves.filter(s =>
-      !(rollingAvg > 0 && s.timeMs < 0.20 * rollingAvg)
-    );
-    const validTimes = validSpeedSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
-    const bestTimeMs = validTimes.length > 0 ? Math.min(...validTimes) : null;
-    const bestTimeSec = bestTimeMs ? parseFloat((bestTimeMs / 1000).toFixed(3)) : null;
-    const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
-
-    const sessionCounts = await SolveHistory.aggregate([
-      { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false, verificationStatus: { $ne: 'flagged' }, isManual: { $ne: true } } },
-      { $group: { _id: "$sessionId", count: { $sum: 1 } } }
-    ]);
-    const maxSessionSolves = sessionCounts.length > 0 ? Math.max(...sessionCounts.map(s => s.count)) : 0;
-
-    let maxCleanStreak = 0;
-    let currentCleanStreak = 0;
-    for (const solve of solves) {
-      if (solve.penalty === 'None') {
-        currentCleanStreak++;
-        if (currentCleanStreak > maxCleanStreak) maxCleanStreak = currentCleanStreak;
-      } else {
-        currentCleanStreak = 0;
-      }
-    }
-
-    let currentStreak = 0;
-    const uniqueDays = new Set(solves.map(s => new Date(s.date).toDateString()));
-    const today = new Date();
-    for (let i = 0; i < 365; i++) {
-      const checkDate = new Date();
-      checkDate.setDate(today.getDate() - i);
-      if (uniqueDays.has(checkDate.toDateString())) {
-        currentStreak++;
-      } else if (i > 0) {
-        break;
-      }
-    }
-
-    const totalScans = await CubeScan.countDocuments({ user: userId });
-    const totalWins = user.multiplayerWins || 0;
-
-    const unlocked = await Achievement.find({ user: userId });
-    const unlockedIds = new Set(unlocked.flatMap(a => [a.badgeId, a.achievementId].filter(Boolean)));
-
-    const achievementsList = (ALL_BADGES || []).map(badge => {
-      let userValue = 0;
-      let qualifies = false;
-
-      switch (badge.group) {
-        case 'solves-marathon':
-          userValue = totalSolves;
-          qualifies = totalSolves >= badge.target;
-          break;
-        case 'speed-frontier':
-          userValue = bestTimeSec ? bestTimeSec : 0;
-          qualifies = bestTimeSec !== null && bestTimeSec <= badge.target;
-          break;
-        case 'consistency-grind':
-          userValue = currentStreak;
-          qualifies = currentStreak >= badge.target;
-          break;
-        case 'fingertrick-maestro':
-          userValue = bestTps;
-          qualifies = bestTps >= badge.target;
-          break;
-        case 'session-marathoner':
-          userValue = maxSessionSolves;
-          qualifies = maxSessionSolves >= badge.target;
-          break;
-        case 'flawless-execution':
-          userValue = maxCleanStreak;
-          qualifies = maxCleanStreak >= badge.target;
-          break;
-        case 'visionary-scanner':
-          userValue = totalScans;
-          qualifies = totalScans >= badge.target;
-          break;
-        case 'gladiator-arena':
-          userValue = totalWins;
-          qualifies = totalWins >= badge.target;
-          break;
-      }
-
-      const isUnlocked = qualifies || unlockedIds.has(badge.id);
-      const progressTarget = badge.target;
-      let progress = 0;
-
-      if (badge.group === 'speed-frontier') {
-        if (isUnlocked) {
-          progress = progressTarget;
-        } else if (userValue > 0) {
-          progress = parseFloat(((progressTarget / userValue) * progressTarget).toFixed(2));
-        } else {
-          progress = 0;
-        }
-      } else {
-        progress = Math.min(userValue, progressTarget);
-      }
-
-      const unlockedRecord = unlocked.find(a => (a.badgeId === badge.id || a.achievementId === badge.id));
-
-      return {
-        id: badge.id,
-        title: badge.title,
-        description: badge.description,
-        icon: badge.icon,
-        category: badge.category,
-        isUnlocked,
-        unlockedAt: unlockedRecord ? unlockedRecord.unlockedAt : (qualifies ? new Date() : null),
-        progress,
-        progressTarget
-      };
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        _id: user._id,
-        name: user.name,
-        username: user.username || user.email.split('@')[0],
-        handle: userHandle,
-        avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name)}`,
-        about: user.about || 'Speedcuber',
-        createdAt: user.created_at || user.createdAt,
-        equippedBadges: user.equippedBadges || [null, null, null],
-        metrics: {
-          pb: bestTimeSec ? `${bestTimeSec}s` : '--',
-          totalSolves: totalSolves,
-          streak: `${currentStreak} ${currentStreak === 1 ? 'Day' : 'Days'}`,
-          globalAverage: rollingAvg > 0 ? `${(rollingAvg / 1000).toFixed(3)} s` : '--'
-        },
-        achievements: achievementsList
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
 // @desc    Get users who liked a post
 // @route   GET /api/community/:postId/likers
 // @access  Private
@@ -810,7 +623,7 @@ exports.getPBsLeaderboard = async (req, res) => {
     const posts = await CommunityPost.find({ 
       isPB: true, 
       'solveData.isManual': { $ne: true } 
-    }).populate('author', 'name username email avatar');
+    }).populate('author', 'name username email avatar equippedBadges');
 
     const communityMap = new Map();
 

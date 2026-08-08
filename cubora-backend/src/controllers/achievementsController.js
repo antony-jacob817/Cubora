@@ -670,6 +670,3 @@ exports.recalculateUserAchievements = async (userId) => {
     console.error('Error recalculating achievements on solve deletion:', err);
   }
 };
-
-module.exports.ALL_BADGES = ALL_BADGES;
-module.exports.BADGE_GROUPS = BADGE_GROUPS;

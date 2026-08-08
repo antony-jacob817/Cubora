@@ -22,7 +22,6 @@ import * as THREE from 'three';
 import { AnimatedCube } from '@/components/3d/AnimatedCube';
 import { useSolvePlayback } from '@/hooks/useSolvePlayback';
 import { useTheme } from '@/context/ThemeContext';
-import { UserProfileModal } from '@/components/modals/UserProfileModal';
 
 const TierColors: Record<string, string> = {
     bronze: 'text-amber-800 dark:text-amber-800 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25',
@@ -50,7 +49,67 @@ const ICON_MAP: Record<string, any> = {
     'Clock': Clock,
     'Star': Star,
     'Award': Award,
+    'Crown': Crown,
 };
+
+const BADGE_MAP: Record<string, { title: string; icon: any; group: string; tier: string }> = {
+    'solves-marathon-bronze': { title: 'Solves Marathon (Bronze)', icon: Target, group: 'Solves Marathon', tier: 'bronze' },
+    'solves-marathon-silver': { title: 'Solves Marathon (Silver)', icon: Target, group: 'Solves Marathon', tier: 'silver' },
+    'solves-marathon-gold': { title: 'Solves Marathon (Gold)', icon: Target, group: 'Solves Marathon', tier: 'gold' },
+    'solves-marathon-emerald': { title: 'Solves Marathon (Emerald)', icon: Target, group: 'Solves Marathon', tier: 'emerald' },
+    'solves-marathon-diamond': { title: 'Solves Marathon (Diamond)', icon: Target, group: 'Solves Marathon', tier: 'diamond' },
+    'solves-marathon-ruby': { title: 'Solves Marathon (Ruby)', icon: Target, group: 'Solves Marathon', tier: 'ruby' },
+
+    'speed-frontier-bronze': { title: 'Speed Frontier (Bronze)', icon: Trophy, group: 'Speed Frontier', tier: 'bronze' },
+    'speed-frontier-silver': { title: 'Speed Frontier (Silver)', icon: Trophy, group: 'Speed Frontier', tier: 'silver' },
+    'speed-frontier-gold': { title: 'Speed Frontier (Gold)', icon: Trophy, group: 'Speed Frontier', tier: 'gold' },
+    'speed-frontier-emerald': { title: 'Speed Frontier (Emerald)', icon: Trophy, group: 'Speed Frontier', tier: 'emerald' },
+    'speed-frontier-diamond': { title: 'Speed Frontier (Diamond)', icon: Trophy, group: 'Speed Frontier', tier: 'diamond' },
+    'speed-frontier-ruby': { title: 'Speed Frontier (Ruby)', icon: Trophy, group: 'Speed Frontier', tier: 'ruby' },
+
+    'consistency-grind-bronze': { title: 'Consistency Grind (Bronze)', icon: Flame, group: 'Consistency Grind', tier: 'bronze' },
+    'consistency-grind-silver': { title: 'Consistency Grind (Silver)', icon: Flame, group: 'Consistency Grind', tier: 'silver' },
+    'consistency-grind-gold': { title: 'Consistency Grind (Gold)', icon: Flame, group: 'Consistency Grind', tier: 'gold' },
+    'consistency-grind-emerald': { title: 'Consistency Grind (Emerald)', icon: Flame, group: 'Consistency Grind', tier: 'emerald' },
+    'consistency-grind-diamond': { title: 'Consistency Grind (Diamond)', icon: Flame, group: 'Consistency Grind', tier: 'diamond' },
+    'consistency-grind-ruby': { title: 'Consistency Grind (Ruby)', icon: Flame, group: 'Consistency Grind', tier: 'ruby' },
+
+    'fingertrick-maestro-bronze': { title: 'Fingertrick Maestro (Bronze)', icon: Timer, group: 'Fingertrick Maestro', tier: 'bronze' },
+    'fingertrick-maestro-silver': { title: 'Fingertrick Maestro (Silver)', icon: Timer, group: 'Fingertrick Maestro', tier: 'silver' },
+    'fingertrick-maestro-gold': { title: 'Fingertrick Maestro (Gold)', icon: Timer, group: 'Fingertrick Maestro', tier: 'gold' },
+    'fingertrick-maestro-emerald': { title: 'Fingertrick Maestro (Emerald)', icon: Timer, group: 'Fingertrick Maestro', tier: 'emerald' },
+    'fingertrick-maestro-diamond': { title: 'Fingertrick Maestro (Diamond)', icon: Timer, group: 'Fingertrick Maestro', tier: 'diamond' },
+    'fingertrick-maestro-ruby': { title: 'Fingertrick Maestro (Ruby)', icon: Timer, group: 'Fingertrick Maestro', tier: 'ruby' },
+
+    'session-marathoner-bronze': { title: 'Session Marathoner (Bronze)', icon: Clock, group: 'Session Marathoner', tier: 'bronze' },
+    'session-marathoner-silver': { title: 'Session Marathoner (Silver)', icon: Clock, group: 'Session Marathoner', tier: 'silver' },
+    'session-marathoner-gold': { title: 'Session Marathoner (Gold)', icon: Clock, group: 'Session Marathoner', tier: 'gold' },
+    'session-marathoner-emerald': { title: 'Session Marathoner (Emerald)', icon: Clock, group: 'Session Marathoner', tier: 'emerald' },
+    'session-marathoner-diamond': { title: 'Session Marathoner (Diamond)', icon: Clock, group: 'Session Marathoner', tier: 'diamond' },
+    'session-marathoner-ruby': { title: 'Session Marathoner (Ruby)', icon: Clock, group: 'Session Marathoner', tier: 'ruby' },
+
+    'flawless-execution-bronze': { title: 'Flawless Execution (Bronze)', icon: Star, group: 'Flawless Execution', tier: 'bronze' },
+    'flawless-execution-silver': { title: 'Flawless Execution (Silver)', icon: Star, group: 'Flawless Execution', tier: 'silver' },
+    'flawless-execution-gold': { title: 'Flawless Execution (Gold)', icon: Star, group: 'Flawless Execution', tier: 'gold' },
+    'flawless-execution-emerald': { title: 'Flawless Execution (Emerald)', icon: Star, group: 'Flawless Execution', tier: 'emerald' },
+    'flawless-execution-diamond': { title: 'Flawless Execution (Diamond)', icon: Star, group: 'Flawless Execution', tier: 'diamond' },
+    'flawless-execution-ruby': { title: 'Flawless Execution (Ruby)', icon: Star, group: 'Flawless Execution', tier: 'ruby' },
+
+    'visionary-scanner-bronze': { title: 'Visionary Scanner (Bronze)', icon: Award, group: 'Visionary Scanner', tier: 'bronze' },
+    'visionary-scanner-silver': { title: 'Visionary Scanner (Silver)', icon: Award, group: 'Visionary Scanner', tier: 'silver' },
+    'visionary-scanner-gold': { title: 'Visionary Scanner (Gold)', icon: Award, group: 'Visionary Scanner', tier: 'gold' },
+    'visionary-scanner-emerald': { title: 'Visionary Scanner (Emerald)', icon: Award, group: 'Visionary Scanner', tier: 'emerald' },
+    'visionary-scanner-diamond': { title: 'Visionary Scanner (Diamond)', icon: Award, group: 'Visionary Scanner', tier: 'diamond' },
+    'visionary-scanner-ruby': { title: 'Visionary Scanner (Ruby)', icon: Award, group: 'Visionary Scanner', tier: 'ruby' },
+
+    'gladiator-arena-bronze': { title: 'Gladiator Arena (Bronze)', icon: Crown, group: 'Gladiator Arena', tier: 'bronze' },
+    'gladiator-arena-silver': { title: 'Gladiator Arena (Silver)', icon: Crown, group: 'Gladiator Arena', tier: 'silver' },
+    'gladiator-arena-gold': { title: 'Gladiator Arena (Gold)', icon: Crown, group: 'Gladiator Arena', tier: 'gold' },
+    'gladiator-arena-emerald': { title: 'Gladiator Arena (Emerald)', icon: Crown, group: 'Gladiator Arena', tier: 'emerald' },
+    'gladiator-arena-diamond': { title: 'Gladiator Arena (Diamond)', icon: Crown, group: 'Gladiator Arena', tier: 'diamond' },
+    'gladiator-arena-ruby': { title: 'Gladiator Arena (Ruby)', icon: Crown, group: 'Gladiator Arena', tier: 'ruby' }
+};
+
 const mapPhaseToStandardName = (phase: string, method: string): string => {
     const p = phase.toLowerCase();
     const m = (method || 'CFOP').toUpperCase();
@@ -89,7 +148,7 @@ interface CommunityPost {
     _id: string;
     content: string;
     type: 'solve' | 'algorithm' | 'discussion';
-    author: { _id: string; name: string; handle: string; avatar: string; username?: string };
+    author: { _id: string; name: string; handle: string; avatar: string; username?: string; equippedBadges?: (string | null)[] };
     solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string; phaseSplits?: Record<string, number>; verificationStatus?: 'unverified' | 'verified_phase' | 'verified_session' | 'flagged'; isManual?: boolean };
     isPB?: boolean;
     likes: number;
@@ -211,20 +270,13 @@ const groupAchievements = (achList: AchievementData[]): GroupedAchievement[] => 
         };
     });
 };
-const renderContentWithMentions = (content: string, onMentionClick?: (handle: string) => void) => {
+const renderContentWithMentions = (content: string) => {
     if (!content) return '';
-    const parts = content.split(/(@[a-zA-Z0-9_.-]+)/g);
+    const parts = content.split(/(@\w+)/g);
     return parts.map((part, index) => {
         if (part.startsWith('@')) {
             return (
-                <span
-                    key={index}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (onMentionClick) onMentionClick(part);
-                    }}
-                    className="text-primary font-bold hover:underline cursor-pointer select-all"
-                >
+                <span key={index} className="text-primary font-bold hover:underline cursor-pointer select-all">
                     {part}
                 </span>
             );
@@ -528,25 +580,6 @@ export default function CommunityHub() {
     const [mentionSuggestions, setMentionSuggestions] = useState<any[]>([]);
     const [activeMentionPostId, setActiveMentionPostId] = useState<string | null>(null);
     const [activeMentionCommentId, setActiveMentionCommentId] = useState<string | null>(null);
-
-    // Public Profile Modal state & Self-Profile Guard handler
-    const [publicProfileHandle, setPublicProfileHandle] = useState<string | null>(null);
-
-    const handleViewProfile = (targetUser: { _id?: string; handle?: string; username?: string }) => {
-        if (!targetUser) return;
-        const targetHandle = (targetUser.handle || targetUser.username || '').replace(/^@/, '').toLowerCase().trim();
-        const myHandle = (user?.username || user?.email?.split('@')[0] || '').toLowerCase().trim();
-
-        const isSelf = (targetUser._id && user?._id && targetUser._id.toString() === user._id.toString()) ||
-                       (targetHandle && myHandle && targetHandle === myHandle);
-
-        if (isSelf) {
-            setPublicProfileHandle(null);
-            setActiveTab('profile');
-        } else if (targetHandle) {
-            setPublicProfileHandle(targetHandle);
-        }
-    };
 
     // Router location & navigation hooks
     const location = useLocation();
@@ -1778,22 +1811,47 @@ export default function CommunityHub() {
                                             <div key={post._id} id={`post-${post._id}`} className="glass-panel p-4 sm:p-6 flex flex-col bg-white/40 dark:bg-white/[0.01] w-full">
                                                 <div className="flex justify-between items-start gap-3 mb-3.5 w-full">
                                                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                                                        <img 
-                                                            src={post.author.avatar} 
-                                                            alt={post.author.name} 
-                                                            loading="lazy" 
-                                                            onClick={() => handleViewProfile(post.author)}
-                                                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover mt-0.5 cursor-pointer hover:opacity-80 transition-opacity" 
-                                                        />
+                                                        {/* Avatar & Equipped Badges Column */}
+                                                        <div className="flex flex-col items-center shrink-0">
+                                                            <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 object-cover mt-0.5" />
+                                                            
+                                                            {/* Equipped Trophy Badges Row (3 Slots) */}
+                                                            <div className="flex items-center justify-center gap-1 mt-1.5">
+                                                                {[0, 1, 2].map((slotIndex) => {
+                                                                    const badgeId = post.author?.equippedBadges?.[slotIndex] || null;
+                                                                    const badgeInfo = badgeId ? BADGE_MAP[badgeId] : null;
+                                                                    const IconComponent = badgeInfo ? badgeInfo.icon : null;
+                                                                    const tier = badgeInfo ? badgeInfo.tier : null;
+                                                                    const badgeColorClass = tier ? (TierColors[tier] || '') : '';
+
+                                                                    if (!badgeId || !badgeInfo || !IconComponent) {
+                                                                        return (
+                                                                            <div
+                                                                                key={slotIndex}
+                                                                                className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border border-dashed border-slate-300 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02]"
+                                                                            />
+                                                                        );
+                                                                    }
+
+                                                                    return (
+                                                                        <div
+                                                                            key={slotIndex}
+                                                                            title={badgeInfo.title}
+                                                                            className={clsx(
+                                                                                "w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center transition-transform hover:scale-110 cursor-pointer",
+                                                                                badgeColorClass
+                                                                            )}
+                                                                        >
+                                                                            <IconComponent className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
                                                         <div className="min-w-0 flex-1">
                                                             {/* Name + Badges inline on the right of name */}
                                                             <div className="flex items-center flex-wrap gap-1.5">
-                                                                <h4 
-                                                                    onClick={() => handleViewProfile(post.author)}
-                                                                    className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-snug cursor-pointer hover:underline"
-                                                                >
-                                                                    {post.author.name}
-                                                                </h4>
+                                                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-snug">{post.author.name}</h4>
                                                                 
                                                                 {post.isPB && (
                                                                     <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
@@ -1832,10 +1890,7 @@ export default function CommunityHub() {
                                                             </div>
 
                                                             {/* Handle & Time block below name + badges */}
-                                                            <span 
-                                                                onClick={() => handleViewProfile(post.author)}
-                                                                className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block mt-0.5 cursor-pointer hover:underline"
-                                                            >
+                                                            <span className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block mt-0.5">
                                                                 {post.author.handle} <span className="text-slate-300 dark:text-gray-600 opacity-60">•</span> {post.timeAgo}
                                                             </span>
                                                         </div>
@@ -1849,14 +1904,14 @@ export default function CommunityHub() {
                                                                     setEditingPostId(post._id);
                                                                     setEditingPostContent(post.content);
                                                                 }}
-                                                                className="p-1.5 text-slate-400 hover:text-primary transition-colors cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                                                                className="p-1 text-slate-400 hover:text-primary dark:text-gray-500 dark:hover:text-white transition-colors cursor-pointer"
                                                                 title="Edit Post"
                                                             >
                                                                 <Edit2 className="w-3.5 h-3.5" />
                                                             </button>
                                                             <button
                                                                 onClick={() => setConfirmDeletePost(post)}
-                                                                className="p-1.5 text-slate-400 hover:text-red-400 transition-colors cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                                                                className="p-1 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors cursor-pointer"
                                                                 title="Delete Post"
                                                                 >
                                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -2124,27 +2179,12 @@ export default function CommunityHub() {
                                                                             >
                                                                                 {/* Comment Row */}
                                                                                 <div className="flex items-start gap-2.5 w-full relative">
-                                                                                    <img 
-                                                                                        src={comment.author.avatar} 
-                                                                                        alt={comment.author.name} 
-                                                                                        onClick={() => handleViewProfile(comment.author)}
-                                                                                        className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5 cursor-pointer hover:opacity-80 transition-opacity" 
-                                                                                    />
+                                                                                    <img src={comment.author.avatar} alt={comment.author.name} className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5" />
                                                                                     <div className="flex-1 min-w-0 px-1 py-0.5">
                                                                                         <div className="flex justify-between items-start gap-2 mb-0.5">
                                                                                             <div>
-                                                                                                <span 
-                                                                                                    onClick={() => handleViewProfile(comment.author)}
-                                                                                                    className="font-bold text-slate-900 dark:text-white text-xs block leading-none cursor-pointer hover:underline"
-                                                                                                >
-                                                                                                    {comment.author.name}
-                                                                                                </span>
-                                                                                                <span 
-                                                                                                    onClick={() => handleViewProfile(comment.author)}
-                                                                                                    className="text-[9px] text-slate-400 dark:text-gray-550 font-mono cursor-pointer hover:underline"
-                                                                                                >
-                                                                                                    @{comment.author.handle.replace('@', '')} • {comment.timeAgo}
-                                                                                                </span>
+                                                                                                <span className="font-bold text-slate-900 dark:text-white text-xs block leading-none">{comment.author.name}</span>
+                                                                                                <span className="text-[9px] text-slate-400 dark:text-gray-550 font-mono">@{comment.author.handle.replace('@', '')} • {comment.timeAgo}</span>
                                                                                             </div>
                                                                                             
                                                                                             <div className="flex items-center gap-1.5">
@@ -2199,7 +2239,7 @@ export default function CommunityHub() {
                                                                                             </div>
                                                                                         ) : (
                                                                                             <p className="text-slate-700 dark:text-gray-300 text-xs leading-relaxed whitespace-pre-wrap break-words">
-                                                                                                {renderContentWithMentions(comment.content, (h) => handleViewProfile({ handle: h }))}
+                                                                                                {renderContentWithMentions(comment.content)}
                                                                                             </p>
                                                                                         )}
 
@@ -2674,29 +2714,18 @@ export default function CommunityHub() {
                                                                 {item.rank}
                                                             </span>
 
-                                                            <img 
-                                                                src={item.avatar} 
-                                                                alt={item.name} 
-                                                                onClick={() => handleViewProfile({ handle: item.handle })}
-                                                                className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10 cursor-pointer hover:opacity-80 transition-opacity" 
-                                                            />
+                                                            <img src={item.avatar} alt={item.name} className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10" />
 
                                                             <div className="flex flex-col min-w-0">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <span 
-                                                                        onClick={() => handleViewProfile({ handle: item.handle })}
-                                                                        className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors cursor-pointer hover:underline"
-                                                                    >
+                                                                    <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors">
                                                                         {item.name}
                                                                     </span>
                                                                     <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider shrink-0 flex items-center gap-0.5">
                                                                         <Trophy className="w-2.5 h-2.5 text-amber-500" /> PB
                                                                     </span>
                                                                 </div>
-                                                                <span 
-                                                                    onClick={() => handleViewProfile({ handle: item.handle })}
-                                                                    className="text-[10px] text-slate-400 dark:text-gray-550 truncate mt-0.5 cursor-pointer hover:underline"
-                                                                >
+                                                                <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
                                                                     {item.handle} • {item.method}
                                                                 </span>
                                                             </div>
@@ -2739,14 +2768,14 @@ export default function CommunityHub() {
                                         <span className="text-xs font-medium">Loading challenge...</span>
                                     </div>
                                 ) : activeChallenge ? (
-                                    <>
-                                        <div className="flex items-center justify-between gap-2 mb-2">
-                                            <h4 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">
+                                    <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full relative">
+                                        <div className="flex items-center justify-between mb-1 gap-2">
+                                            <h4 className="font-bold text-secondary text-xs sm:text-sm uppercase tracking-wide truncate">
                                                 {activeChallenge.title}
                                             </h4>
-                                            {activeChallenge.userProgress >= activeChallenge.targetCount && (
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded shrink-0 flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Completed!
+                                            {activeChallenge.methodFilter && (
+                                                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary/20 text-secondary border border-secondary/30 shrink-0 font-mono">
+                                                    {activeChallenge.methodFilter}
                                                 </span>
                                             )}
                                         </div>
@@ -2765,8 +2794,7 @@ export default function CommunityHub() {
                                                             src={comp.avatar}
                                                             alt={comp.name}
                                                             title={`${comp.name} (${comp.handle}) - Completed!`}
-                                                            onClick={() => handleViewProfile(comp)}
-                                                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#181A1D] object-cover shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                                                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#181A1D] object-cover shrink-0"
                                                         />
                                                     ))}
                                                 </div>
@@ -2797,7 +2825,7 @@ export default function CommunityHub() {
                                                 </>
                                             );
                                         })()}
-                                    </>
+                                    </div>
                                 ) : (
                                     <div className="py-4 text-center text-xs text-slate-500">
                                         No active challenge available.
@@ -3678,22 +3706,15 @@ export default function CommunityHub() {
                             </div>
                         ) : (
                             likesModalPost.users.map((u) => (
-                                <div 
-                                    key={u._id} 
-                                    onClick={() => {
-                                        setLikesModalPost(null);
-                                        handleViewProfile(u);
-                                    }}
-                                    className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-                                >
+                                <div key={u._id} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
                                     <img 
                                         src={u.avatar} 
                                         alt={u.name} 
                                         className="w-8 h-8 rounded-full border border-slate-200 dark:border-white/10 object-cover shrink-0" 
                                     />
                                     <div className="flex flex-col text-left min-w-0 flex-1">
-                                        <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate hover:underline">{u.name}</span>
-                                        <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate hover:underline">{u.handle}</span>
+                                        <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate">{u.name}</span>
+                                        <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate">{u.handle}</span>
                                     </div>
                                 </div>
                             ))
@@ -3702,17 +3723,6 @@ export default function CommunityHub() {
                 </Modal>,
                 document.body
             )}
-
-            {/* Public User Profile Modal */}
-            <UserProfileModal
-                handle={publicProfileHandle}
-                onClose={() => setPublicProfileHandle(null)}
-                onNavigateSelfProfile={() => {
-                    setPublicProfileHandle(null);
-                    setActiveTab('profile');
-                }}
-                currentUserId={user?._id}
-            />
         </PageTransition>
     );
 }
