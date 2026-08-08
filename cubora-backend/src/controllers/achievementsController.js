@@ -157,7 +157,7 @@ exports.getAchievements = async (req, res) => {
     }
 
     const unlocked = await Achievement.find({ user: userId });
-    const unlockedIds = new Set(unlocked.flatMap(a => [a.badgeId, a.achievementId].filter(Boolean)));
+    const unlockedIds = new Set(unlocked.map(a => a.badgeId));
 
     // Calculate metrics strictly from non-flagged and non-manual solves
     const solves = await SolveHistory.find({
@@ -322,7 +322,7 @@ exports.getAchievements = async (req, res) => {
         progress = Math.min(userValue, progressTarget);
       }
 
-      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id || a.achievementId === badge.id);
+      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id);
 
       return {
         id: badge.id,
