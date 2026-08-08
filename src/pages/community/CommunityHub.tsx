@@ -7,7 +7,8 @@ import {
     Flame, Star, Globe, CheckCircle2, Lock, AlertCircle,
     Clock, Award, Loader2, Target, Timer, X, Check,
     Plus, Trash2, Brain, ChevronDown, ChevronUp,
-    ChevronLeft, ChevronRight, Play, Pause, RotateCcw
+    ChevronLeft, ChevronRight, Play, Pause, RotateCcw,
+    Medal
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -49,67 +50,41 @@ const ICON_MAP: Record<string, any> = {
     'Clock': Clock,
     'Star': Star,
     'Award': Award,
-    'Crown': Crown,
+    'Medal': Medal,
 };
 
-const BADGE_MAP: Record<string, { title: string; icon: any; group: string; tier: string }> = {
-    'solves-marathon-bronze': { title: 'Solves Marathon (Bronze)', icon: Target, group: 'Solves Marathon', tier: 'bronze' },
-    'solves-marathon-silver': { title: 'Solves Marathon (Silver)', icon: Target, group: 'Solves Marathon', tier: 'silver' },
-    'solves-marathon-gold': { title: 'Solves Marathon (Gold)', icon: Target, group: 'Solves Marathon', tier: 'gold' },
-    'solves-marathon-emerald': { title: 'Solves Marathon (Emerald)', icon: Target, group: 'Solves Marathon', tier: 'emerald' },
-    'solves-marathon-diamond': { title: 'Solves Marathon (Diamond)', icon: Target, group: 'Solves Marathon', tier: 'diamond' },
-    'solves-marathon-ruby': { title: 'Solves Marathon (Ruby)', icon: Target, group: 'Solves Marathon', tier: 'ruby' },
-
-    'speed-frontier-bronze': { title: 'Speed Frontier (Bronze)', icon: Trophy, group: 'Speed Frontier', tier: 'bronze' },
-    'speed-frontier-silver': { title: 'Speed Frontier (Silver)', icon: Trophy, group: 'Speed Frontier', tier: 'silver' },
-    'speed-frontier-gold': { title: 'Speed Frontier (Gold)', icon: Trophy, group: 'Speed Frontier', tier: 'gold' },
-    'speed-frontier-emerald': { title: 'Speed Frontier (Emerald)', icon: Trophy, group: 'Speed Frontier', tier: 'emerald' },
-    'speed-frontier-diamond': { title: 'Speed Frontier (Diamond)', icon: Trophy, group: 'Speed Frontier', tier: 'diamond' },
-    'speed-frontier-ruby': { title: 'Speed Frontier (Ruby)', icon: Trophy, group: 'Speed Frontier', tier: 'ruby' },
-
-    'consistency-grind-bronze': { title: 'Consistency Grind (Bronze)', icon: Flame, group: 'Consistency Grind', tier: 'bronze' },
-    'consistency-grind-silver': { title: 'Consistency Grind (Silver)', icon: Flame, group: 'Consistency Grind', tier: 'silver' },
-    'consistency-grind-gold': { title: 'Consistency Grind (Gold)', icon: Flame, group: 'Consistency Grind', tier: 'gold' },
-    'consistency-grind-emerald': { title: 'Consistency Grind (Emerald)', icon: Flame, group: 'Consistency Grind', tier: 'emerald' },
-    'consistency-grind-diamond': { title: 'Consistency Grind (Diamond)', icon: Flame, group: 'Consistency Grind', tier: 'diamond' },
-    'consistency-grind-ruby': { title: 'Consistency Grind (Ruby)', icon: Flame, group: 'Consistency Grind', tier: 'ruby' },
-
-    'fingertrick-maestro-bronze': { title: 'Fingertrick Maestro (Bronze)', icon: Timer, group: 'Fingertrick Maestro', tier: 'bronze' },
-    'fingertrick-maestro-silver': { title: 'Fingertrick Maestro (Silver)', icon: Timer, group: 'Fingertrick Maestro', tier: 'silver' },
-    'fingertrick-maestro-gold': { title: 'Fingertrick Maestro (Gold)', icon: Timer, group: 'Fingertrick Maestro', tier: 'gold' },
-    'fingertrick-maestro-emerald': { title: 'Fingertrick Maestro (Emerald)', icon: Timer, group: 'Fingertrick Maestro', tier: 'emerald' },
-    'fingertrick-maestro-diamond': { title: 'Fingertrick Maestro (Diamond)', icon: Timer, group: 'Fingertrick Maestro', tier: 'diamond' },
-    'fingertrick-maestro-ruby': { title: 'Fingertrick Maestro (Ruby)', icon: Timer, group: 'Fingertrick Maestro', tier: 'ruby' },
-
-    'session-marathoner-bronze': { title: 'Session Marathoner (Bronze)', icon: Clock, group: 'Session Marathoner', tier: 'bronze' },
-    'session-marathoner-silver': { title: 'Session Marathoner (Silver)', icon: Clock, group: 'Session Marathoner', tier: 'silver' },
-    'session-marathoner-gold': { title: 'Session Marathoner (Gold)', icon: Clock, group: 'Session Marathoner', tier: 'gold' },
-    'session-marathoner-emerald': { title: 'Session Marathoner (Emerald)', icon: Clock, group: 'Session Marathoner', tier: 'emerald' },
-    'session-marathoner-diamond': { title: 'Session Marathoner (Diamond)', icon: Clock, group: 'Session Marathoner', tier: 'diamond' },
-    'session-marathoner-ruby': { title: 'Session Marathoner (Ruby)', icon: Clock, group: 'Session Marathoner', tier: 'ruby' },
-
-    'flawless-execution-bronze': { title: 'Flawless Execution (Bronze)', icon: Star, group: 'Flawless Execution', tier: 'bronze' },
-    'flawless-execution-silver': { title: 'Flawless Execution (Silver)', icon: Star, group: 'Flawless Execution', tier: 'silver' },
-    'flawless-execution-gold': { title: 'Flawless Execution (Gold)', icon: Star, group: 'Flawless Execution', tier: 'gold' },
-    'flawless-execution-emerald': { title: 'Flawless Execution (Emerald)', icon: Star, group: 'Flawless Execution', tier: 'emerald' },
-    'flawless-execution-diamond': { title: 'Flawless Execution (Diamond)', icon: Star, group: 'Flawless Execution', tier: 'diamond' },
-    'flawless-execution-ruby': { title: 'Flawless Execution (Ruby)', icon: Star, group: 'Flawless Execution', tier: 'ruby' },
-
-    'visionary-scanner-bronze': { title: 'Visionary Scanner (Bronze)', icon: Award, group: 'Visionary Scanner', tier: 'bronze' },
-    'visionary-scanner-silver': { title: 'Visionary Scanner (Silver)', icon: Award, group: 'Visionary Scanner', tier: 'silver' },
-    'visionary-scanner-gold': { title: 'Visionary Scanner (Gold)', icon: Award, group: 'Visionary Scanner', tier: 'gold' },
-    'visionary-scanner-emerald': { title: 'Visionary Scanner (Emerald)', icon: Award, group: 'Visionary Scanner', tier: 'emerald' },
-    'visionary-scanner-diamond': { title: 'Visionary Scanner (Diamond)', icon: Award, group: 'Visionary Scanner', tier: 'diamond' },
-    'visionary-scanner-ruby': { title: 'Visionary Scanner (Ruby)', icon: Award, group: 'Visionary Scanner', tier: 'ruby' },
-
-    'gladiator-arena-bronze': { title: 'Gladiator Arena (Bronze)', icon: Crown, group: 'Gladiator Arena', tier: 'bronze' },
-    'gladiator-arena-silver': { title: 'Gladiator Arena (Silver)', icon: Crown, group: 'Gladiator Arena', tier: 'silver' },
-    'gladiator-arena-gold': { title: 'Gladiator Arena (Gold)', icon: Crown, group: 'Gladiator Arena', tier: 'gold' },
-    'gladiator-arena-emerald': { title: 'Gladiator Arena (Emerald)', icon: Crown, group: 'Gladiator Arena', tier: 'emerald' },
-    'gladiator-arena-diamond': { title: 'Gladiator Arena (Diamond)', icon: Crown, group: 'Gladiator Arena', tier: 'diamond' },
-    'gladiator-arena-ruby': { title: 'Gladiator Arena (Ruby)', icon: Crown, group: 'Gladiator Arena', tier: 'ruby' }
+const BADGE_GROUPS_MAP: Record<string, { title: string; icon: any }> = {
+    'solves-marathon': { title: 'Solves Marathon', icon: Target },
+    'speed-frontier': { title: 'Speed Frontier', icon: Trophy },
+    'consistency-grind': { title: 'Consistency Grind', icon: Flame },
+    'fingertrick-maestro': { title: 'Fingertrick Maestro', icon: Timer },
+    'session-marathoner': { title: 'Session Marathoner', icon: Clock },
+    'flawless-execution': { title: 'Flawless Execution', icon: Star },
+    'visionary-scanner': { title: 'Visionary Scanner', icon: Award },
+    'gladiator-arena': { title: 'Gladiator Arena', icon: Medal },
 };
 
+const getBadgeInfo = (badgeId: string | null) => {
+    if (!badgeId) return null;
+    const lastHyphen = badgeId.lastIndexOf('-');
+    if (lastHyphen === -1) return null;
+    const group = badgeId.substring(0, lastHyphen);
+    const rawTier = badgeId.substring(lastHyphen + 1).toLowerCase();
+    const tierName = rawTier.charAt(0).toUpperCase() + rawTier.slice(1);
+
+    const groupInfo = BADGE_GROUPS_MAP[group] || { title: group, icon: Trophy };
+    const fullTitle = `${groupInfo.title} (${tierName})`;
+    const colorClass = TierColors[rawTier] || '';
+
+    return {
+        group,
+        tier: rawTier,
+        tierName,
+        fullTitle,
+        Icon: groupInfo.icon,
+        colorClass
+    };
+};
 const mapPhaseToStandardName = (phase: string, method: string): string => {
     const p = phase.toLowerCase();
     const m = (method || 'CFOP').toUpperCase();
@@ -148,7 +123,7 @@ interface CommunityPost {
     _id: string;
     content: string;
     type: 'solve' | 'algorithm' | 'discussion';
-    author: { _id: string; name: string; handle: string; avatar: string; username?: string; equippedBadges?: (string | null)[] };
+    author: { _id: string; name: string; handle: string; avatar: string; username?: string };
     solveData?: { time?: string; method?: string; scramble?: string; alg?: string; algType?: string; phaseSplits?: Record<string, number>; verificationStatus?: 'unverified' | 'verified_phase' | 'verified_session' | 'flagged'; isManual?: boolean };
     isPB?: boolean;
     likes: number;
@@ -1811,38 +1786,33 @@ export default function CommunityHub() {
                                             <div key={post._id} id={`post-${post._id}`} className="glass-panel p-4 sm:p-6 flex flex-col bg-white/40 dark:bg-white/[0.01] w-full">
                                                 <div className="flex justify-between items-start gap-3 mb-3.5 w-full">
                                                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                                                        {/* Avatar & Equipped Badges Column */}
                                                         <div className="flex flex-col items-center shrink-0">
                                                             <img src={post.author.avatar} alt={post.author.name} loading="lazy" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 object-cover mt-0.5" />
                                                             
-                                                            {/* Equipped Trophy Badges Row (3 Slots) */}
+                                                            {/* Equipped Badges Row Under Avatar */}
                                                             <div className="flex items-center justify-center gap-1 mt-1.5">
-                                                                {[0, 1, 2].map((slotIndex) => {
-                                                                    const badgeId = post.author?.equippedBadges?.[slotIndex] || null;
-                                                                    const badgeInfo = badgeId ? BADGE_MAP[badgeId] : null;
-                                                                    const IconComponent = badgeInfo ? badgeInfo.icon : null;
-                                                                    const tier = badgeInfo ? badgeInfo.tier : null;
-                                                                    const badgeColorClass = tier ? (TierColors[tier] || '') : '';
-
-                                                                    if (!badgeId || !badgeInfo || !IconComponent) {
+                                                                {[0, 1, 2].map((slotIdx) => {
+                                                                    const badgeId = post.author?.equippedBadges?.[slotIdx] || null;
+                                                                    const info = getBadgeInfo(badgeId);
+                                                                    if (!info) {
                                                                         return (
-                                                                            <div
-                                                                                key={slotIndex}
-                                                                                className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border border-dashed border-slate-300 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02]"
+                                                                            <div 
+                                                                                key={slotIdx} 
+                                                                                className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-md border border-dashed border-slate-300/60 dark:border-white/10 bg-slate-50/40 dark:bg-white/[0.01]" 
                                                                             />
                                                                         );
                                                                     }
-
+                                                                    const { fullTitle, Icon, colorClass } = info;
                                                                     return (
                                                                         <div
-                                                                            key={slotIndex}
-                                                                            title={badgeInfo.title}
+                                                                            key={slotIdx}
+                                                                            title={fullTitle}
                                                                             className={clsx(
-                                                                                "w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border flex items-center justify-center transition-transform hover:scale-110 cursor-pointer",
-                                                                                badgeColorClass
+                                                                                "w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-md border flex items-center justify-center transition-transform hover:scale-110 cursor-pointer shadow-xs",
+                                                                                colorClass
                                                                             )}
                                                                         >
-                                                                            <IconComponent className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
+                                                                            <Icon className="w-2.5 h-2.5 shrink-0" />
                                                                         </div>
                                                                     );
                                                                 })}

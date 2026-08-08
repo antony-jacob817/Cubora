@@ -33,6 +33,7 @@ function transformPost(post, userId) {
   const authorName = p.author?.name || 'Anonymous';
   const authorUsername = p.author?.username || p.author?.email?.split('@')[0] || authorName;
   const authorAvatar = p.author?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
+  const authorEquippedBadges = p.author?.equippedBadges || [null, null, null];
   
   return {
     ...p,
@@ -41,7 +42,7 @@ function transformPost(post, userId) {
       name: authorName,
       handle: `@${authorUsername.toLowerCase().replace(/\s+/g, '_')}`,
       avatar: authorAvatar,
-      equippedBadges: p.author?.equippedBadges || [null, null, null],
+      equippedBadges: authorEquippedBadges,
     },
     isLikedByMe: p.likedBy?.some(id => id.toString() === userId) || false,
     timeAgo: getTimeAgo(p.createdAt),
@@ -54,6 +55,7 @@ function transformComment(comment, userId) {
   const authorName = c.author?.name || 'Anonymous';
   const authorUsername = c.author?.username || c.author?.email?.split('@')[0] || authorName;
   const authorAvatar = c.author?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`;
+  const authorEquippedBadges = c.author?.equippedBadges || [null, null, null];
   
   return {
     ...c,
@@ -62,7 +64,7 @@ function transformComment(comment, userId) {
       name: authorName,
       handle: `@${authorUsername.toLowerCase().replace(/\s+/g, '_')}`,
       avatar: authorAvatar,
-      equippedBadges: c.author?.equippedBadges || [null, null, null],
+      equippedBadges: authorEquippedBadges,
     },
     isLikedByMe: c.likedBy?.some(id => id.toString() === userId) || false,
     timeAgo: getTimeAgo(c.createdAt),
@@ -623,7 +625,7 @@ exports.getPBsLeaderboard = async (req, res) => {
     const posts = await CommunityPost.find({ 
       isPB: true, 
       'solveData.isManual': { $ne: true } 
-    }).populate('author', 'name username email avatar equippedBadges');
+    }).populate('author', 'name username email avatar');
 
     const communityMap = new Map();
 
