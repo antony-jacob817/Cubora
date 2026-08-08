@@ -3675,7 +3675,8 @@ export default function CommunityHub() {
                         ) : likesModalPost.users.length === 0 ? (
                             <div className="py-6 text-center text-xs text-slate-400 dark:text-gray-500">
                                 No likes yet
-                                   ) : (
+                            </div>
+                        ) : (
                             likesModalPost.users.map((u) => (
                                 <div 
                                     key={u._id} 
@@ -3713,7 +3714,5 @@ export default function CommunityHub() {
                 currentUserId={user?._id}
             />
         </PageTransition>
-    );
-}ageTransition>
     );
 }
