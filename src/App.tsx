@@ -93,7 +93,6 @@ function AnimatedRoutes() {
           <Route path="/coach" element={<Suspense fallback={<RouteLoader />}><AiCoach /></Suspense>} />
           <Route path="/multiplayer" element={<Suspense fallback={<RouteLoader />}><MultiplayerHub /></Suspense>} />
           <Route path="/community" element={<Suspense fallback={<RouteLoader />}><CommunityHub /></Suspense>} />
-          <Route path="/profile/:handle" element={<Suspense fallback={<RouteLoader />}><CommunityHub /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={<RouteLoader />}><SettingsPage /></Suspense>} />
         </Route>
 

@@ -584,62 +584,63 @@ exports.searchUsers = async (req, res) => {
   }
 };
 
-// @desc    Get public user profile & stats by handle
+// @desc    Get public user profile & stats
 // @route   GET /api/community/users/profile/:handle
 // @access  Private
-exports.getPublicUserProfile = async (req, res) => {
+exports.getUserProfile = async (req, res) => {
   try {
-    const rawHandle = req.params.handle.toLowerCase().replace(/^@/, '');
+    const rawHandle = req.params.handle.replace(/^@/, '').toLowerCase().trim();
     const User = require('../models/User');
     const SolveHistory = require('../models/SolveHistory');
     const Achievement = require('../models/Achievement');
     const CubeScan = require('../models/CubeScan');
-    const { ALL_BADGES, BADGE_GROUPS } = require('./achievementsController');
+    const mongoose = require('mongoose');
+    const { ALL_BADGES } = require('./achievementsController');
 
-    let user = await User.findOne({
+    let filter = {
       $or: [
-        { username: new RegExp(`^${rawHandle}$`, 'i') },
+        { username: rawHandle },
         { email: new RegExp(`^${rawHandle}@`, 'i') }
       ]
-    }).select('-password');
+    };
 
-    if (!user && mongoose.Types.ObjectId.isValid(rawHandle)) {
-      user = await User.findById(rawHandle).select('-password');
+    if (mongoose.Types.ObjectId.isValid(rawHandle)) {
+      filter.$or.push({ _id: rawHandle });
     }
 
+    const user = await User.findOne(filter).select('-password');
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
     const userId = user._id;
+    const userHandle = `@${(user.username || user.email.split('@')[0]).toLowerCase().replace(/\s+/g, '_')}`;
 
-    // Solves
+    // Query valid non-deleted solves
     const solves = await SolveHistory.find({
       user: userId,
       isDeleted: false,
       verificationStatus: { $ne: 'flagged' },
       isManual: { $ne: true }
     }).sort({ date: 1 });
-    const totalSolves = solves.length;
 
-    const validSolvesForAvg = solves.filter(s => s.penalty !== 'DNF');
+    const totalSolves = solves.length;
+    const nonCheatSolves = solves.filter(s => s.penalty !== 'DNF');
+
     let rollingAvg = 0;
-    if (validSolvesForAvg.length > 0) {
-      const recentSolves = validSolvesForAvg.slice(-20);
+    if (nonCheatSolves.length > 0) {
+      const recentSolves = nonCheatSolves.slice(-20);
       const sum = recentSolves.reduce((acc, s) => acc + s.timeMs + (s.penalty === '+2' ? 2000 : 0), 0);
       rollingAvg = sum / recentSolves.length;
     }
 
-    const validSolves = solves.filter(s =>
-      s.penalty !== 'DNF' && !(rollingAvg > 0 && s.timeMs < 0.20 * rollingAvg)
+    const validSpeedSolves = nonCheatSolves.filter(s =>
+      !(rollingAvg > 0 && s.timeMs < 0.20 * rollingAvg)
     );
-    const validTimes = validSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
-
+    const validTimes = validSpeedSolves.map(s => s.timeMs + (s.penalty === '+2' ? 2000 : 0));
     const bestTimeMs = validTimes.length > 0 ? Math.min(...validTimes) : null;
     const bestTimeSec = bestTimeMs ? parseFloat((bestTimeMs / 1000).toFixed(3)) : null;
     const bestTps = bestTimeMs ? parseFloat((50 / (bestTimeMs / 1000)).toFixed(2)) : 0;
-
-    const globalAvgMs = validTimes.length > 0 ? (validTimes.reduce((a, b) => a + b, 0) / validTimes.length) : null;
 
     const sessionCounts = await SolveHistory.aggregate([
       { $match: { user: new mongoose.Types.ObjectId(userId), isDeleted: false, verificationStatus: { $ne: 'flagged' }, isManual: { $ne: true } } },
@@ -652,9 +653,7 @@ exports.getPublicUserProfile = async (req, res) => {
     for (const solve of solves) {
       if (solve.penalty === 'None') {
         currentCleanStreak++;
-        if (currentCleanStreak > maxCleanStreak) {
-          maxCleanStreak = currentCleanStreak;
-        }
+        if (currentCleanStreak > maxCleanStreak) maxCleanStreak = currentCleanStreak;
       } else {
         currentCleanStreak = 0;
       }
@@ -681,20 +680,46 @@ exports.getPublicUserProfile = async (req, res) => {
 
     const achievementsList = (ALL_BADGES || []).map(badge => {
       let userValue = 0;
+      let qualifies = false;
+
       switch (badge.group) {
-        case 'solves-marathon': userValue = totalSolves; break;
-        case 'speed-frontier': userValue = bestTimeSec ? bestTimeSec : 0; break;
-        case 'consistency-grind': userValue = currentStreak; break;
-        case 'fingertrick-maestro': userValue = bestTps; break;
-        case 'session-marathoner': userValue = maxSessionSolves; break;
-        case 'flawless-execution': userValue = maxCleanStreak; break;
-        case 'visionary-scanner': userValue = totalScans; break;
-        case 'gladiator-arena': userValue = totalWins; break;
+        case 'solves-marathon':
+          userValue = totalSolves;
+          qualifies = totalSolves >= badge.target;
+          break;
+        case 'speed-frontier':
+          userValue = bestTimeSec ? bestTimeSec : 0;
+          qualifies = bestTimeSec !== null && bestTimeSec <= badge.target;
+          break;
+        case 'consistency-grind':
+          userValue = currentStreak;
+          qualifies = currentStreak >= badge.target;
+          break;
+        case 'fingertrick-maestro':
+          userValue = bestTps;
+          qualifies = bestTps >= badge.target;
+          break;
+        case 'session-marathoner':
+          userValue = maxSessionSolves;
+          qualifies = maxSessionSolves >= badge.target;
+          break;
+        case 'flawless-execution':
+          userValue = maxCleanStreak;
+          qualifies = maxCleanStreak >= badge.target;
+          break;
+        case 'visionary-scanner':
+          userValue = totalScans;
+          qualifies = totalScans >= badge.target;
+          break;
+        case 'gladiator-arena':
+          userValue = totalWins;
+          qualifies = totalWins >= badge.target;
+          break;
       }
 
-      const isUnlocked = unlockedIds.has(badge.id);
-      let progress = 0;
+      const isUnlocked = qualifies || unlockedIds.has(badge.id);
       const progressTarget = badge.target;
+      let progress = 0;
 
       if (badge.group === 'speed-frontier') {
         if (isUnlocked) {
@@ -708,7 +733,7 @@ exports.getPublicUserProfile = async (req, res) => {
         progress = Math.min(userValue, progressTarget);
       }
 
-      const unlockedRecord = unlocked.find(a => a.badgeId === badge.id || a.achievementId === badge.id);
+      const unlockedRecord = unlocked.find(a => (a.badgeId === badge.id || a.achievementId === badge.id));
 
       return {
         id: badge.id,
@@ -717,30 +742,28 @@ exports.getPublicUserProfile = async (req, res) => {
         icon: badge.icon,
         category: badge.category,
         isUnlocked,
-        unlockedAt: unlockedRecord ? unlockedRecord.unlockedAt : null,
+        unlockedAt: unlockedRecord ? unlockedRecord.unlockedAt : (qualifies ? new Date() : null),
         progress,
         progressTarget
       };
     });
-
-    const userHandle = (user.username || user.email.split('@')[0]).toLowerCase();
 
     res.status(200).json({
       success: true,
       data: {
         _id: user._id,
         name: user.name,
-        username: user.username,
+        username: user.username || user.email.split('@')[0],
         handle: userHandle,
         avatar: user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name)}`,
         about: user.about || 'Speedcuber',
-        createdAt: user.createdAt,
-        equippedBadges: user.equippedBadges || [],
+        createdAt: user.created_at || user.createdAt,
+        equippedBadges: user.equippedBadges || [null, null, null],
         metrics: {
-          pb: bestTimeSec !== null ? `${bestTimeSec}s` : '--',
+          pb: bestTimeSec ? `${bestTimeSec}s` : '--',
           totalSolves: totalSolves,
-          streak: `${currentStreak} Day${currentStreak === 1 ? '' : 's'}`,
-          globalAverage: globalAvgMs ? `${(globalAvgMs / 1000).toFixed(3)} s` : '--'
+          streak: `${currentStreak} ${currentStreak === 1 ? 'Day' : 'Days'}`,
+          globalAverage: rollingAvg > 0 ? `${(rollingAvg / 1000).toFixed(3)} s` : '--'
         },
         achievements: achievementsList
       }

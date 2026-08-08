@@ -145,9 +145,6 @@ BADGE_GROUPS.forEach(g => {
   });
 });
 
-exports.ALL_BADGES = ALL_BADGES;
-exports.BADGE_GROUPS = BADGE_GROUPS;
-
 // @desc    Get all user achievements (locked & unlocked status)
 // @route   GET /api/achievements
 // @access  Private
@@ -673,3 +670,6 @@ exports.recalculateUserAchievements = async (userId) => {
     console.error('Error recalculating achievements on solve deletion:', err);
   }
 };
+
+module.exports.ALL_BADGES = ALL_BADGES;
+module.exports.BADGE_GROUPS = BADGE_GROUPS;

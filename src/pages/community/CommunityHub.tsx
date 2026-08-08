@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { UserProfileModal } from '../../components/community/UserProfileModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Heart, Share2, Trophy, Edit2, Crown,
@@ -23,6 +22,7 @@ import * as THREE from 'three';
 import { AnimatedCube } from '@/components/3d/AnimatedCube';
 import { useSolvePlayback } from '@/hooks/useSolvePlayback';
 import { useTheme } from '@/context/ThemeContext';
+import { UserProfileModal } from '@/components/modals/UserProfileModal';
 
 const TierColors: Record<string, string> = {
     bronze: 'text-amber-800 dark:text-amber-800 bg-amber-500/10 dark:bg-amber-500/[0.05] border-amber-600/30 dark:border-amber-500/25',
@@ -216,13 +216,12 @@ const renderContentWithMentions = (content: string, onMentionClick?: (handle: st
     const parts = content.split(/(@[a-zA-Z0-9_.-]+)/g);
     return parts.map((part, index) => {
         if (part.startsWith('@')) {
-            const handle = part.replace(/^@/, '');
             return (
-                <span 
-                    key={index} 
+                <span
+                    key={index}
                     onClick={(e) => {
                         e.stopPropagation();
-                        if (onMentionClick) onMentionClick(handle);
+                        if (onMentionClick) onMentionClick(part);
                     }}
                     className="text-primary font-bold hover:underline cursor-pointer select-all"
                 >
@@ -530,39 +529,28 @@ export default function CommunityHub() {
     const [activeMentionPostId, setActiveMentionPostId] = useState<string | null>(null);
     const [activeMentionCommentId, setActiveMentionCommentId] = useState<string | null>(null);
 
+    // Public Profile Modal state & Self-Profile Guard handler
+    const [publicProfileHandle, setPublicProfileHandle] = useState<string | null>(null);
+
+    const handleViewProfile = (targetUser: { _id?: string; handle?: string; username?: string }) => {
+        if (!targetUser) return;
+        const targetHandle = (targetUser.handle || targetUser.username || '').replace(/^@/, '').toLowerCase().trim();
+        const myHandle = (user?.username || user?.email?.split('@')[0] || '').toLowerCase().trim();
+
+        const isSelf = (targetUser._id && user?._id && targetUser._id.toString() === user._id.toString()) ||
+                       (targetHandle && myHandle && targetHandle === myHandle);
+
+        if (isSelf) {
+            setPublicProfileHandle(null);
+            setActiveTab('profile');
+        } else if (targetHandle) {
+            setPublicProfileHandle(targetHandle);
+        }
+    };
+
     // Router location & navigation hooks
     const location = useLocation();
     const navigate = useNavigate();
-    const params = useParams<{ handle?: string }>();
-
-    // Public Profile Modal State & Handler
-    const [publicProfileHandle, setPublicProfileHandle] = useState<string | null>(null);
-    const [isPublicProfileOpen, setIsPublicProfileOpen] = useState<boolean>(false);
-
-    const openPublicProfile = (handle: string) => {
-        if (!handle) return;
-        const clean = handle.toLowerCase().replace(/^@/, '');
-        const myHandle = (user?.username || user?.email || '').split('@')[0].toLowerCase();
-
-        // Self-Profile Guard: if target user is self -> switch to My Profile tab
-        if (user && (clean === myHandle || clean === user._id)) {
-            setActiveTab('profile');
-            if (location.pathname.startsWith('/profile/')) {
-                navigate('/community');
-            }
-            return;
-        }
-
-        setPublicProfileHandle(clean);
-        setIsPublicProfileOpen(true);
-        navigate(`/profile/${clean}`);
-    };
-
-    useEffect(() => {
-        if (params.handle) {
-            openPublicProfile(params.handle);
-        }
-    }, [params.handle, user]);
 
     // Leaderboard Widget State & Datasets
     const [leaderboardTab, setLeaderboardTab] = useState<'wca' | 'community'>('wca');
@@ -1789,11 +1777,23 @@ export default function CommunityHub() {
                                         {posts.map((post) => (
                                             <div key={post._id} id={`post-${post._id}`} className="glass-panel p-4 sm:p-6 flex flex-col bg-white/40 dark:bg-white/[0.01] w-full">
                                                 <div className="flex justify-between items-start gap-3 mb-3.5 w-full">
-                                                    <div className="flex items-start gap-3 min-w                                                         <img src={post.author.avatar} alt={post.author.name} loading="lazy" onClick={() => openPublicProfile(post.author.handle)} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover mt-0.5 cursor-pointer hover:opacity-80 hover:scale-105 transition-all" />
+                                                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                                                        <img 
+                                                            src={post.author.avatar} 
+                                                            alt={post.author.name} 
+                                                            loading="lazy" 
+                                                            onClick={() => handleViewProfile(post.author)}
+                                                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900 shrink-0 object-cover mt-0.5 cursor-pointer hover:opacity-80 transition-opacity" 
+                                                        />
                                                         <div className="min-w-0 flex-1">
                                                             {/* Name + Badges inline on the right of name */}
                                                             <div className="flex items-center flex-wrap gap-1.5">
-                                                                <h4 onClick={() => openPublicProfile(post.author.handle)} className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-snug cursor-pointer hover:underline hover:text-primary transition-colors">{post.author.name}</h4>
+                                                                <h4 
+                                                                    onClick={() => handleViewProfile(post.author)}
+                                                                    className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-snug cursor-pointer hover:underline"
+                                                                >
+                                                                    {post.author.name}
+                                                                </h4>
                                                                 
                                                                 {post.isPB && (
                                                                     <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
@@ -1832,8 +1832,11 @@ export default function CommunityHub() {
                                                             </div>
 
                                                             {/* Handle & Time block below name + badges */}
-                                                            <span className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block mt-0.5">
-                                                                <span onClick={() => openPublicProfile(post.author.handle)} className="cursor-pointer hover:underline hover:text-primary transition-colors">{post.author.handle}</span> <span className="text-slate-300 dark:text-gray-600 opacity-60">•</span> {post.timeAgo}
+                                                            <span 
+                                                                onClick={() => handleViewProfile(post.author)}
+                                                                className="text-[11px] text-slate-400 dark:text-gray-550 font-mono block mt-0.5 cursor-pointer hover:underline"
+                                                            >
+                                                                {post.author.handle} <span className="text-slate-300 dark:text-gray-600 opacity-60">•</span> {post.timeAgo}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -1846,14 +1849,14 @@ export default function CommunityHub() {
                                                                     setEditingPostId(post._id);
                                                                     setEditingPostContent(post.content);
                                                                 }}
-                                                                className="p-1 text-slate-400 hover:text-primary dark:text-gray-500 dark:hover:text-white transition-colors cursor-pointer"
+                                                                className="p-1.5 text-slate-400 hover:text-primary transition-colors cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
                                                                 title="Edit Post"
                                                             >
                                                                 <Edit2 className="w-3.5 h-3.5" />
                                                             </button>
                                                             <button
                                                                 onClick={() => setConfirmDeletePost(post)}
-                                                                className="p-1 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                                                                className="p-1.5 text-slate-400 hover:text-red-400 transition-colors cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
                                                                 title="Delete Post"
                                                                 >
                                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1883,7 +1886,7 @@ export default function CommunityHub() {
                                                                         <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
                                                                         <div className="flex-1 min-w-0">
                                                                             <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
-                                                                            <span className="text-[10px] text-slate-550 dark:text-gray-400 block truncate">@{u.handle}</span>
+                                                                            <span className="text-[10px] text-slate-500 dark:text-gray-400 block truncate">@{u.handle}</span>
                                                                         </div>
                                                                     </button>
                                                                 ))}
@@ -1914,9 +1917,9 @@ export default function CommunityHub() {
                                                     </div>
                                                 ) : (
                                                     <p className="text-slate-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed mb-4 whitespace-pre-wrap break-words w-full">
-                                                        {renderContentWithMentions(post.content, openPublicProfile)}
+                                                        {renderContentWithMentions(post.content)}
                                                     </p>
-                                                )}             )}
+                                                )}
 
                                                 {/* Rich Data Feed Attachments Layout Row */}
                                                 {post.type === 'solve' && post.solveData?.time && (
@@ -2118,14 +2121,30 @@ export default function CommunityHub() {
                                                                                     "flex flex-col gap-2 relative w-full rounded-2xl transition-all duration-500 p-1.5",
                                                                                     highlightedCommentId === comment._id && "ring-2 ring-primary bg-primary/10 animate-pulse shadow-[0_0_15px_rgba(139,92,246,0.3)]"
                                                                                 )}
-                                                                                                                                                 {/* Comment Row */}
+                                                                            >
+                                                                                {/* Comment Row */}
                                                                                 <div className="flex items-start gap-2.5 w-full relative">
-                                                                                    <img src={comment.author.avatar} alt={comment.author.name} onClick={() => openPublicProfile(comment.author.handle)} className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5 cursor-pointer hover:opacity-80 transition-all" />
+                                                                                    <img 
+                                                                                        src={comment.author.avatar} 
+                                                                                        alt={comment.author.name} 
+                                                                                        onClick={() => handleViewProfile(comment.author)}
+                                                                                        className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/5 cursor-pointer hover:opacity-80 transition-opacity" 
+                                                                                    />
                                                                                     <div className="flex-1 min-w-0 px-1 py-0.5">
                                                                                         <div className="flex justify-between items-start gap-2 mb-0.5">
                                                                                             <div>
-                                                                                                <span onClick={() => openPublicProfile(comment.author.handle)} className="font-bold text-slate-900 dark:text-white text-xs block leading-none cursor-pointer hover:underline hover:text-primary transition-colors">{comment.author.name}</span>
-                                                                                                <span className="text-[9px] text-slate-400 dark:text-gray-550 font-mono"><span onClick={() => openPublicProfile(comment.author.handle)} className="cursor-pointer hover:underline hover:text-primary transition-colors">@{comment.author.handle.replace('@', '')}</span> • {comment.timeAgo}</span>
+                                                                                                <span 
+                                                                                                    onClick={() => handleViewProfile(comment.author)}
+                                                                                                    className="font-bold text-slate-900 dark:text-white text-xs block leading-none cursor-pointer hover:underline"
+                                                                                                >
+                                                                                                    {comment.author.name}
+                                                                                                </span>
+                                                                                                <span 
+                                                                                                    onClick={() => handleViewProfile(comment.author)}
+                                                                                                    className="text-[9px] text-slate-400 dark:text-gray-550 font-mono cursor-pointer hover:underline"
+                                                                                                >
+                                                                                                    @{comment.author.handle.replace('@', '')} • {comment.timeAgo}
+                                                                                                </span>
                                                                                             </div>
                                                                                             
                                                                                             <div className="flex items-center gap-1.5">
@@ -2180,9 +2199,9 @@ export default function CommunityHub() {
                                                                                             </div>
                                                                                         ) : (
                                                                                             <p className="text-slate-700 dark:text-gray-300 text-xs leading-relaxed whitespace-pre-wrap break-words">
-                                                                                                {renderContentWithMentions(comment.content, openPublicProfile)}
+                                                                                                {renderContentWithMentions(comment.content, (h) => handleViewProfile({ handle: h }))}
                                                                                             </p>
-                                                                                        )}               )}
+                                                                                        )}
 
                                                                                         <div className="flex items-center gap-3.5 mt-1 pt-0.5">
                                                                                             <button
@@ -2643,11 +2662,7 @@ export default function CommunityHub() {
                                                 </div>
                                             ) : (
                                                 filteredCommunityPBs.map((item) => (
-                                                    <div 
-                                                        key={item.id} 
-                                                        onClick={() => openPublicProfile(item.handle)}
-                                                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-amber-500/30 transition-all group cursor-pointer hover:bg-slate-100/70 dark:hover:bg-white/5"
-                                                    >
+                                                    <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:border-amber-500/30 transition-all group">
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             <span className={clsx(
                                                                 "w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0 shadow-sm border",
@@ -2659,18 +2674,29 @@ export default function CommunityHub() {
                                                                 {item.rank}
                                                             </span>
 
-                                                            <img src={item.avatar} alt={item.name} className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10" />
+                                                            <img 
+                                                                src={item.avatar} 
+                                                                alt={item.name} 
+                                                                onClick={() => handleViewProfile({ handle: item.handle })}
+                                                                className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10 cursor-pointer hover:opacity-80 transition-opacity" 
+                                                            />
 
                                                             <div className="flex flex-col min-w-0">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors">
+                                                                    <span 
+                                                                        onClick={() => handleViewProfile({ handle: item.handle })}
+                                                                        className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition-colors cursor-pointer hover:underline"
+                                                                    >
                                                                         {item.name}
                                                                     </span>
                                                                     <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider shrink-0 flex items-center gap-0.5">
                                                                         <Trophy className="w-2.5 h-2.5 text-amber-500" /> PB
                                                                     </span>
                                                                 </div>
-                                                                <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
+                                                                <span 
+                                                                    onClick={() => handleViewProfile({ handle: item.handle })}
+                                                                    className="text-[10px] text-slate-400 dark:text-gray-550 truncate mt-0.5 cursor-pointer hover:underline"
+                                                                >
                                                                     {item.handle} • {item.method}
                                                                 </span>
                                                             </div>
@@ -2713,14 +2739,19 @@ export default function CommunityHub() {
                                         <span className="text-xs font-medium">Loading challenge...</span>
                                     </div>
                                 ) : activeChallenge ? (
-                                    <div className="bg-secondary/5 dark:bg-secondary/10 border border-secondary/20 rounded-xl p-4 w-full relative">
-                                        <div className="flex items-center justify-between mb-1 gap-2">
-                                            <h4 className="font-bold text-secondary text-xs sm:text-sm uppercase tracking-wide truncate">
+                                    <>
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                            <h4 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">
                                                 {activeChallenge.title}
                                             </h4>
+                                            {activeChallenge.userProgress >= activeChallenge.targetCount && (
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded shrink-0 flex items-center gap-1">
+                                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Completed!
+                                                </span>
+                                            )}
                                         </div>
 
-                                        <p className="text-[11px] text-slate-600 dark:text-gray-400 mb-3 leading-relaxed">
+                                        <p className="text-xs text-slate-500 dark:text-gray-400 mb-4 leading-normal">
                                             {activeChallenge.description}
                                         </p>
 
@@ -2734,8 +2765,8 @@ export default function CommunityHub() {
                                                             src={comp.avatar}
                                                             alt={comp.name}
                                                             title={`${comp.name} (${comp.handle}) - Completed!`}
-                                                            onClick={() => openPublicProfile(comp.handle)}
-                                                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#181A1D] object-cover shrink-0 cursor-pointer hover:scale-110 hover:z-10 transition-transform"
+                                                            onClick={() => handleViewProfile(comp)}
+                                                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#181A1D] object-cover shrink-0 cursor-pointer hover:scale-110 transition-transform"
                                                         />
                                                     ))}
                                                 </div>
@@ -3644,14 +3675,13 @@ export default function CommunityHub() {
                         ) : likesModalPost.users.length === 0 ? (
                             <div className="py-6 text-center text-xs text-slate-400 dark:text-gray-500">
                                 No likes yet
-                            </div>
-                        ) : (
+                                   ) : (
                             likesModalPost.users.map((u) => (
                                 <div 
                                     key={u._id} 
                                     onClick={() => {
                                         setLikesModalPost(null);
-                                        openPublicProfile(u.handle);
+                                        handleViewProfile(u);
                                     }}
                                     className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
                                 >
@@ -3661,8 +3691,8 @@ export default function CommunityHub() {
                                         className="w-8 h-8 rounded-full border border-slate-200 dark:border-white/10 object-cover shrink-0" 
                                     />
                                     <div className="flex flex-col text-left min-w-0 flex-1">
-                                        <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate">{u.name}</span>
-                                        <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate">{u.handle}</span>
+                                        <span className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate hover:underline">{u.name}</span>
+                                        <span className="text-[10px] text-slate-400 dark:text-gray-500 truncate hover:underline">{u.handle}</span>
                                     </div>
                                 </div>
                             ))
@@ -3675,22 +3705,15 @@ export default function CommunityHub() {
             {/* Public User Profile Modal */}
             <UserProfileModal
                 handle={publicProfileHandle}
-                isOpen={isPublicProfileOpen}
-                onClose={() => {
-                    setIsPublicProfileOpen(false);
+                onClose={() => setPublicProfileHandle(null)}
+                onNavigateSelfProfile={() => {
                     setPublicProfileHandle(null);
-                    if (location.pathname.startsWith('/profile/')) {
-                        navigate('/community');
-                    }
-                }}
-                onOpenMyProfile={() => {
                     setActiveTab('profile');
-                    if (location.pathname.startsWith('/profile/')) {
-                        navigate('/community');
-                    }
                 }}
-                currentUser={user}
+                currentUserId={user?._id}
             />
         </PageTransition>
+    );
+}ageTransition>
     );
 }
