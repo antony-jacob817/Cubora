@@ -1032,7 +1032,7 @@ export default function CommunityHub() {
             }
         }
         
-        const match = text.match(/@(\w*)$/);
+        const match = text.match(/@([a-zA-Z0-9_.-]*)$/);
         if (match) {
             const query = match[1];
             setActiveMentionPostId(postId);
@@ -1046,7 +1046,8 @@ export default function CommunityHub() {
     };
 
     const handleSelectMention = (userHandle: string, currentText: string, setContent: (val: string) => void) => {
-        const newText = currentText.replace(/@\w*$/, `@${userHandle} `);
+        const cleanHandle = userHandle.replace(/^@/, '');
+        const newText = currentText.replace(/@([a-zA-Z0-9_.-]*)$/, `@${cleanHandle} `);
         setContent(newText);
         setMentionSuggestions([]);
         setActiveMentionPostId(null);
@@ -2219,6 +2220,25 @@ export default function CommunityHub() {
                                                                                                             placeholder="Reply to this comment..."
                                                                                                             className="mt-2 w-full min-w-0 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-3 text-xs text-slate-900 dark:text-white outline-none resize-none leading-normal overflow-y-auto max-h-24 hide-scrollbar"
                                                                                                         />
+                                                                                                        {/* Autocomplete mention suggest box inside active inline reply */}
+                                                                                                        {mentionSuggestions.length > 0 && activeMentionPostId === post._id && activeMentionCommentId === 'commentInput' && (
+                                                                                                            <div className="absolute z-[100] left-0 bottom-full mb-1.5 bg-white dark:bg-[#181A1C] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-1.5 w-60 max-h-48 overflow-y-auto flex flex-col gap-1">
+                                                                                                                {mentionSuggestions.map((u: any) => (
+                                                                                                                    <button
+                                                                                                                        key={u._id}
+                                                                                                                        type="button"
+                                                                                                                        onClick={() => handleSelectMention(u.handle, newCommentContent[post._id] || '', (val) => setNewCommentContent(prev => ({ ...prev, [post._id]: val })))}
+                                                                                                                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-left w-full text-xs transition-colors"
+                                                                                                                    >
+                                                                                                                        <img src={u.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                                                                                                        <div className="flex-1 min-w-0">
+                                                                                                                            <span className="font-bold text-slate-900 dark:text-white block truncate leading-none mb-0.5">{u.name}</span>
+                                                                                                                            <span className="text-[10px] text-slate-550 dark:text-gray-400 block truncate">@{u.handle}</span>
+                                                                                                                        </div>
+                                                                                                                    </button>
+                                                                                                                ))}
+                                                                                                            </div>
+                                                                                                        )}
                                                                                                         <div id={`thread-bottom-${post._id}`} />
                                                                                                     </div>
                                                                                                     <div className="flex items-center gap-1.5 shrink-0 pr-3 pb-2 pt-1">
