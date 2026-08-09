@@ -1,5 +1,6 @@
 # <img src="./public/favicon.png" width="32" height="36" align="absmiddle" /> Cubora | AI-Powered Speedcubing Ecosystem
 
+
 ![Cubora Cover](./public/cover.png)
 
 > **Cubora** is a premium, cinematic, full-stack AI SaaS platform designed for speedcubers of all skill levels. From a 3D-interactive solving engine and real-time computer vision cube scanner to personalized AI coaching, high-precision practice sessions, multiplayer racing, and community hubs, Cubora is the ultimate modern ecosystem to learn, practice, and master the Rubik's Cube.
