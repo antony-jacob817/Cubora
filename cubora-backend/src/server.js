@@ -10,6 +10,7 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const achievementsRoutes = require('./routes/achievementsRoutes');
 const communityRoutes = require('./routes/communityRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const learningRoutes = require('./routes/learningRoutes');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/achievements', achievementsRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/learning', learningRoutes);
 
 // Global Error Handler Middleware to sanitize all runtime failures
 app.use((err, req, res, next) => {
