@@ -87,7 +87,6 @@ function AnimatedRoutes() {
           <Route path="/correction" element={<Suspense fallback={<RouteLoader />}><ColorCorrection /></Suspense>} />
           <Route path="/solver" element={<Suspense fallback={<RouteLoader />}><SolverShowcase /></Suspense>} />
           <Route path="/learn" element={<Suspense fallback={<RouteLoader />}><Academy /></Suspense>} />
-          <Route path="/academy" element={<Suspense fallback={<RouteLoader />}><Academy /></Suspense>} />
           <Route path="/practice" element={<Suspense fallback={<RouteLoader />}><PracticeSession /></Suspense>} />
           <Route path="/analytics" element={<Suspense fallback={<RouteLoader />}><AnalyticsDashboard /></Suspense>} />
           <Route path="/coach" element={<Suspense fallback={<RouteLoader />}><AiCoach /></Suspense>} />
