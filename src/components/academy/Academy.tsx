@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  GraduationCap, PlayCircle, Trophy, Target, CheckCircle2, 
-  Sparkles, Clock, Compass, Award, BookOpen, Layers
+  GraduationCap, PlayCircle, Trophy, CheckCircle2, Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageTransition } from '@/components/animations/PageTransition';
@@ -99,11 +98,6 @@ export default function Academy() {
       {/* Header Context Banner */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-1 sm:mb-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
-              <Compass className="w-3 h-3" /> Interactive Curriculum
-            </span>
-          </div>
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
             <GraduationCap className="w-8 h-8 sm:w-9 sm:h-9 text-primary shrink-0" /> Cube Academy
           </h1>
