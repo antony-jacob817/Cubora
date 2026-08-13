@@ -1,0 +1,133 @@
+{
+  "method": "Roux Method",
+  "total_steps": 4,
+  "phases": [
+    {
+      "phase_number": 1,
+      "name": "First Block (FB)",
+      "type": "Intuitive Block Building",
+      "description": "Build a 1x2x3 block on the left side of the cube (typically matching the Left center, usually blue/white or green/white).",
+      "algorithms": []
+    },
+    {
+      "phase_number": 2,
+      "name": "Second Block (SB)",
+      "type": "Intuitive Block Building",
+      "description": "Build a second 1x2x3 block on the right side of the cube using M and R layer moves without disturbing the First Block.",
+      "algorithms": []
+    },
+    {
+      "phase_number": 3,
+      "name": "CMLL (Corners of the Last Layer)",
+      "description": "Orient and permute the 4 top-layer corners simultaneously using a single algorithm (42 total cases split into 8 sets).",
+      "total_cases": 42,
+      "sets": [
+        {
+          "set_name": "O (Oriented - 2 cases)",
+          "cases": [
+            { "id": "cmll_o_adjacent", "name": "O - Adjacent Swap", "algorithm": "R U R' F' R U R' U' R' F R2 U' R'", "moves": ["R", "U", "R'", "F'", "R", "U", "R'", "U'", "R'", "F", "R2", "U'", "R'"] },
+            { "id": "cmll_o_diagonal", "name": "O - Diagonal Swap", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] }
+          ]
+        },
+        {
+          "set_name": "U (Headlights - 6 cases)",
+          "cases": [
+            { "id": "cmll_u_forward", "name": "U - Forward Bar", "algorithm": "R2 D' R U2 R' D R U2 R", "moves": ["R2", "D'", "R", "U2", "R'", "D", "R", "U2", "R"] },
+            { "id": "cmll_u_back", "name": "U - Back Bar", "algorithm": "R2 D R' U2 R D' R' U2 R'", "moves": ["R2", "D", "R'", "U2", "R", "D'", "R'", "U2", "R'"] },
+            { "id": "cmll_u_slash", "name": "U - Slash", "algorithm": "F R U R' U' R U R' U' F'", "moves": ["F", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "F'"] },
+            { "id": "cmll_u_x", "name": "U - X", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] },
+            { "id": "cmll_u_rows", "name": "U - Rows", "algorithm": "R' U' R U' R' U2 R", "moves": ["R'", "U'", "R", "U'", "R'", "U2", "R"] },
+            { "id": "cmll_u_columns", "name": "U - Columns", "algorithm": "R U R' U R U2 R'", "moves": ["R", "U", "R'", "U", "R", "U2", "R'"] }
+          ]
+        },
+        {
+          "set_name": "T (Chameleon - 6 cases)",
+          "cases": [
+            { "id": "cmll_t_left_bar", "name": "T - Left Bar", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] },
+            { "id": "cmll_t_right_bar", "name": "T - Right Bar", "algorithm": "R' U' R U R' F' R U R' U' R' F R", "moves": ["R'", "U'", "R", "U", "R'", "F'", "R", "U", "R'", "U'", "R'", "F", "R"] },
+            { "id": "cmll_t_row", "name": "T - Row", "algorithm": "F R U R' U' F'", "moves": ["F", "R", "U", "R'", "U'", "F'"] },
+            { "id": "cmll_t_dots", "name": "T - Dots", "algorithm": "r' U' R U r U' R'", "moves": ["r'", "U'", "R", "U", "r", "U'", "R'"] },
+            { "id": "cmll_t_anti_slash", "name": "T - Anti-Slash", "algorithm": "R U2 R' U' R U' R2 Y L' U' L U F", "moves": ["R", "U2", "R'", "U'", "R", "U'", "R2", "Y", "L'", "U'", "L", "U", "F"] },
+            { "id": "cmll_t_slash", "name": "T - Slash", "algorithm": "r U' r2 U r2 U r' ", "moves": ["r", "U'", "r2", "U", "r2", "U", "r'"] }
+          ]
+        },
+        {
+          "set_name": "L (Bowtie - 6 cases)",
+          "cases": [
+            { "id": "cmll_l_mirror", "name": "L - Mirror", "algorithm": "F' r U R' U' r' F R", "moves": ["F'", "r", "U", "R'", "U'", "r'", "F", "R"] },
+            { "id": "cmll_l_pure", "name": "L - Pure", "algorithm": "R U2 R' U' R U R' U' R U' R'", "moves": ["R", "U2", "R'", "U'", "R", "U", "R'", "U'", "R", "U'", "R'"] },
+            { "id": "cmll_l_front_target", "name": "L - Front Target", "algorithm": "r' U2 R U R' U r", "moves": ["r'", "U2", "R", "U", "R'", "U", "r"] },
+            { "id": "cmll_l_back_target", "name": "L - Back Target", "algorithm": "r U2 R' U' R U' r'", "moves": ["r", "U2", "R'", "U'", "R", "U'", "r'"] },
+            { "id": "cmll_l_diagonals", "name": "L - Diagonals", "algorithm": "R' U2 R U R' U R", "moves": ["R'", "U2", "R", "U", "R'", "U", "R"] },
+            { "id": "cmll_l_columns", "name": "L - Columns", "algorithm": "R U R' U R U2 R'", "moves": ["R", "U", "R'", "U", "R", "U2", "R'"] }
+          ]
+        },
+        {
+          "set_name": "S (Sune - 6 cases)",
+          "cases": [
+            { "id": "cmll_s_left_bar", "name": "Sune - Left Bar", "algorithm": "R U R' U R U2 R'", "moves": ["R", "U", "R'", "U", "R", "U2", "R'"] },
+            { "id": "cmll_s_x_check", "name": "Sune - X Check", "algorithm": "R U R' U' R' F R F'", "moves": ["R", "U", "R'", "U'", "R'", "F", "R", "F'"] },
+            { "id": "cmll_s_forward_slash", "name": "Sune - Forward Slash", "algorithm": "F R U R' U' F' R U R' U R U2 R'", "moves": ["F", "R", "U", "R'", "U'", "F'", "R", "U", "R'", "U", "R", "U2", "R'"] },
+            { "id": "cmll_s_back_slash", "name": "Sune - Back Slash", "algorithm": "R U R' U R' F R F' R U2 R'", "moves": ["R", "U", "R'", "U", "R'", "F", "R", "F'", "R", "U2", "R'"] },
+            { "id": "cmll_s_columns", "name": "Sune - Columns", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] },
+            { "id": "cmll_s_rows", "name": "Sune - Rows", "algorithm": "R' U' R U' R' U2 R", "moves": ["R'", "U'", "R", "U'", "R'", "U2", "R"] }
+          ]
+        },
+        {
+          "set_name": "AS (Anti-Sune - 6 cases)",
+          "cases": [
+            { "id": "cmll_as_right_bar", "name": "Anti-Sune - Right Bar", "algorithm": "R U2 R' U' R U' R'", "moves": ["R", "U2", "R'", "U'", "R", "U'", "R'"] },
+            { "id": "cmll_as_x_check", "name": "Anti-Sune - X Check", "algorithm": "R' U' R U' R' U2 R", "moves": ["R'", "U'", "R", "U'", "R'", "U2", "R"] },
+            { "id": "cmll_as_back_slash", "name": "Anti-Sune - Back Slash", "algorithm": "F R U R' U' F'", "moves": ["F", "R", "U", "R'", "U'", "F'"] },
+            { "id": "cmll_as_forward_slash", "name": "Anti-Sune - Forward Slash", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] },
+            { "id": "cmll_as_columns", "name": "Anti-Sune - Columns", "algorithm": "R U R' U R U2 R'", "moves": ["R", "U", "R'", "U", "R", "U2", "R'"] },
+            { "id": "cmll_as_rows", "name": "Anti-Sune - Rows", "algorithm": "R2 D' R U2 R' D R U2 R", "moves": ["R2", "D'", "R", "U2", "R'", "D", "R", "U2", "R"] }
+          ]
+        },
+        {
+          "set_name": "Pi (Wheel - 6 cases)",
+          "cases": [
+            { "id": "cmll_pi_right_bar", "name": "Pi - Right Bar", "algorithm": "R U2 R2 U' R2 U' R2 U2 R", "moves": ["R", "U2", "R2", "U'", "R2", "U'", "R2", "U2", "R"] },
+            { "id": "cmll_pi_back_slash", "name": "Pi - Back Slash", "algorithm": "F R U R' U' R U R' U' F'", "moves": ["F", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "F'"] },
+            { "id": "cmll_pi_x", "name": "Pi - X", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] },
+            { "id": "cmll_pi_columns", "name": "Pi - Columns", "algorithm": "R U R' U R U2 R'", "moves": ["R", "U", "R'", "U", "R", "U2", "R'"] },
+            { "id": "cmll_pi_slash", "name": "Pi - Slash", "algorithm": "R' U' R U' R' U2 R", "moves": ["R'", "U'", "R", "U'", "R'", "U2", "R"] },
+            { "id": "cmll_pi_pure", "name": "Pi - Pure", "algorithm": "F (R U R' U')3 F'", "moves": ["F", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "F'"] }
+          ]
+        },
+        {
+          "set_name": "H (Double Headlights - 4 cases)",
+          "cases": [
+            { "id": "cmll_h_column", "name": "H - Column", "algorithm": "F R U R' U' R U R' U' R U R' F'", "moves": ["F", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "R", "U", "R'", "F'"] },
+            { "id": "cmll_h_row", "name": "H - Row", "algorithm": "R U R' U R U' R' U R U2 R'", "moves": ["R", "U", "R'", "U", "R", "U'", "R'", "U", "R", "U2", "R'"] },
+            { "id": "cmll_h_slash", "name": "H - Slash", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] },
+            { "id": "cmll_h_pure", "name": "H - Pure", "algorithm": "R U2 R' U' R U R' U' R U' R'", "moves": ["R", "U2", "R'", "U'", "R", "U", "R'", "U'", "R", "U'", "R'"] }
+          ]
+        }
+      ]
+    },
+    {
+      "phase_number": 4,
+      "name": "LSE (Last Six Edges)",
+      "type": "M and U Layer Manipulation",
+      "description": "Solve the remaining 6 edges (UL, UR, and the 4 M-slice edges) using only M and U moves in 3 substeps.",
+      "substeps": [
+        {
+          "step": "4a. Edge Orientation (EO)",
+          "description": "Orient all 6 remaining edges so white/yellow faces up or down.",
+          "sample_algorithm": "M' U M'"
+        },
+        {
+          "step": "4b. UL & UR Edges",
+          "description": "Place the Upper-Left (UL) and Upper-Right (UR) edges into their correct positions.",
+          "sample_algorithm": "M2 U2 M2"
+        },
+        {
+          "step": "4c. EP (Edge Permutation)",
+          "description": "Permute the remaining 4 M-slice edges to solve the cube.",
+          "sample_algorithm": "M2 U2 M2 U2"
+        }
+      ]
+    }
+  ]
+}

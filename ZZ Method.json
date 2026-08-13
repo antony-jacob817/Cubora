@@ -1,0 +1,113 @@
+{
+  "method": "ZZ Method (Zbigniew Zborowski)",
+  "total_steps": 3,
+  "phases": [
+    {
+      "phase_number": 1,
+      "name": "EOline (Edge Orientation + Line)",
+      "type": "Inspection & Orienting",
+      "description": "Orient all 12 edges on the cube while simultaneously placing the DF (Down-Front) and DB (Down-Back) edge pieces to form a line on the bottom layer.",
+      "properties": {
+        "rotationless": true,
+        "result": "All edges are oriented; cube can be solved using only R, U, L, and F2/B2 moves."
+      },
+      "algorithms": [
+        {
+          "case_id": "eoline_intuitive",
+          "name": "EO + Line Setup",
+          "condition": "Identify bad edges (typically 2, 4, 6, or 8 bad edges) during inspection, flip them using F/B moves, and place DF/DB edges.",
+          "algorithm": "F / B (Flips edges into oriented state) + D / L / R moves for line placement",
+          "moves": ["F", "B", "D", "L", "R"]
+        }
+      ]
+    },
+    {
+      "phase_number": 2,
+      "name": "ZZF2L (First Two Layers)",
+      "type": "Block Building (R, U, L Only)",
+      "description": "Build the left 1x2x3 block and right 1x2x3 block. Because all edges are pre-oriented, no cube rotations are required and F/D/B moves are not needed.",
+      "sample_patterns": [
+        {
+          "case_id": "zzf2l_left_block",
+          "name": "Left Block Insertion",
+          "condition": "Pairing and inserting corner-edge pairs into the left slots.",
+          "algorithm": "L U L' / L' U' L",
+          "moves": ["L", "U", "L'"]
+        },
+        {
+          "case_id": "zzf2l_right_block",
+          "name": "Right Block Insertion",
+          "condition": "Pairing and inserting corner-edge pairs into the right slots.",
+          "algorithm": "R U R' / R' U' R",
+          "moves": ["R", "U", "R'"]
+        }
+      ]
+    },
+    {
+      "phase_number": 3,
+      "name": "LL (Last Layer - COLL / EPLL Variants)",
+      "description": "Because EOline guarantees all Last Layer edges are pre-oriented, you land directly in a Yellow Cross state. Last layer is completed using COLL (42 cases) + EPLL (4 cases), or full ZBLL (472 cases).",
+      "subphases": [
+        {
+          "subphase_name": "COLL (Corners of Last Layer - 42 Cases)",
+          "description": "Solves corner orientation and corner permutation simultaneously without disturbing top edges.",
+          "sets": [
+            {
+              "set_name": "Sune Set (6 Cases)",
+              "cases": [
+                { "id": "coll_sune_1", "name": "Sune - Anti-Pure", "algorithm": "R U R' U R U2 R'", "moves": ["R", "U", "R'", "U", "R", "U2", "R'"] },
+                { "id": "coll_sune_2", "name": "Sune - Diagonal", "algorithm": "F R U R' U' F' R U R' U R U2 R'", "moves": ["F", "R", "U", "R'", "U'", "F'", "R", "U", "R'", "U", "R", "U2", "R'"] }
+              ]
+            },
+            {
+              "set_name": "Anti-Sune Set (6 Cases)",
+              "cases": [
+                { "id": "coll_antisune_1", "name": "Anti-Sune - Pure", "algorithm": "R U2 R' U' R U' R'", "moves": ["R", "U2", "R'", "U'", "R", "U'", "R'"] }
+              ]
+            },
+            {
+              "set_name": "H Set (4 Cases)",
+              "cases": [
+                { "id": "coll_h_1", "name": "H - Columns", "algorithm": "R U2 R' U' R U R' U' R U' R'", "moves": ["R", "U2", "R'", "U'", "R", "U", "R'", "U'", "R", "U'", "R'"] }
+              ]
+            },
+            {
+              "set_name": "Pi Set (6 Cases)",
+              "cases": [
+                { "id": "coll_pi_1", "name": "Pi - Pure", "algorithm": "F R U R' U' R U R' U' F'", "moves": ["F", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "F'"] }
+              ]
+            },
+            {
+              "set_name": "U Set (6 Cases)",
+              "cases": [
+                { "id": "coll_u_1", "name": "U - Forward Bar", "algorithm": "R2 D' R U2 R' D R U2 R", "moves": ["R2", "D'", "R", "U2", "R'", "D", "R", "U2", "R"] }
+              ]
+            },
+            {
+              "set_name": "T Set (6 Cases)",
+              "cases": [
+                { "id": "coll_t_1", "name": "T - Rows", "algorithm": "r U R' U' r' F R F'", "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"] }
+              ]
+            },
+            {
+              "set_name": "L Set (6 Cases)",
+              "cases": [
+                { "id": "coll_l_1", "name": "L - Pure", "algorithm": "F' r U R' U' r' F R", "moves": ["F'", "r", "U", "R'", "U'", "r'", "F", "R"] }
+              ]
+            }
+          ]
+        },
+        {
+          "subphase_name": "EPLL (Edge Permutation of Last Layer - 4 Cases)",
+          "description": "After COLL solves corners, only the top edges need to be cycled.",
+          "algorithms": [
+            { "id": "epll_ua", "name": "Ua Perm", "algorithm": "R U' R U R U R U' R' U' R2", "moves": ["R", "U'", "R", "U", "R", "U", "R", "U'", "R'", "U'", "R2"] },
+            { "id": "epll_ub", "name": "Ub Perm", "algorithm": "R2 U R U R' U' R' U' R' U R'", "moves": ["R2", "U", "R", "U", "R'", "U'", "R'", "U'", "R'", "U", "R'"] },
+            { "id": "epll_h", "name": "H Perm", "algorithm": "M2 U M2 U2 M2 U M2", "moves": ["M2", "U", "M2", "U2", "M2", "U", "M2"] },
+            { "id": "epll_z", "name": "Z Perm", "algorithm": "M' U M2 U M2 U M' U2 M2", "moves": ["M'", "U", "M2", "U", "M2", "U", "M'", "U2", "M2"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

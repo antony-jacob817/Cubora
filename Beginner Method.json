@@ -1,0 +1,118 @@
+{
+  "method": "Beginner Method",
+  "total_steps": 7,
+  "steps": [
+    {
+      "step_number": 1,
+      "name": "White Cross (Daisy Method)",
+      "type": "Intuitive",
+      "description": "Form a white cross on the bottom layer while aligning the adjacent edge colors with their matching center pieces.",
+      "algorithms": [
+        {
+          "case_id": "cross_intuitive",
+          "name": "Intuitive Edge Alignment",
+          "condition": "Position white edge pieces around yellow center (Daisy) and rotate 180° to white face once side colors match.",
+          "algorithm": "F2",
+          "moves": ["F", "F"]
+        }
+      ]
+    },
+    {
+      "step_number": 2,
+      "name": "First Layer Corners",
+      "type": "Algorithmic Trigger",
+      "description": "Position white corner pieces between their matching color centers in the top layer and insert them into the bottom layer.",
+      "algorithms": [
+        {
+          "case_id": "corner_right_trigger",
+          "name": "Sexy Move / Corner Insertion",
+          "condition": "Target corner piece is directly above its slot in the top right.",
+          "algorithm": "R U R' U'",
+          "moves": ["R", "U", "R'", "U'"]
+        }
+      ]
+    },
+    {
+      "step_number": 3,
+      "name": "Second Layer (Middle Layer Edges)",
+      "type": "Edge Insertion",
+      "description": "Insert edge pieces without yellow into the middle layer slots (F2L edge insertion).",
+      "algorithms": [
+        {
+          "case_id": "edge_insert_right",
+          "name": "Right Edge Insertion",
+          "condition": "The top-front edge piece needs to move into the Front-Right slot.",
+          "algorithm": "U R U' R' U' F' U F",
+          "moves": ["U", "R", "U'", "R'", "U'", "F'", "U", "F"]
+        },
+        {
+          "case_id": "edge_insert_left",
+          "name": "Left Edge Insertion",
+          "condition": "The top-front edge piece needs to move into the Front-Left slot.",
+          "algorithm": "U' L' U L U F U' F'",
+          "moves": ["U'", "L'", "U", "L", "U", "F", "U'", "F'"]
+        }
+      ]
+    },
+    {
+      "step_number": 4,
+      "name": "Yellow Cross (OLL Step 1)",
+      "type": "Edge Orientation",
+      "description": "Form a yellow cross on the top layer without disturbing the bottom two layers.",
+      "algorithms": [
+        {
+          "case_id": "yellow_cross_dot_l_line",
+          "name": "FURU'F' (Fur-U-Ruf)",
+          "condition": "Apply once for horizontal line case, twice for 'L' shape, or three times for a center dot.",
+          "algorithm": "F R U R' U' F'",
+          "moves": ["F", "R", "U", "R'", "U'", "F'"]
+        }
+      ]
+    },
+    {
+      "step_number": 5,
+      "name": "Permute Yellow Edges",
+      "type": "Edge Permutation",
+      "description": "Align the top edge piece colors with their corresponding side center colors.",
+      "algorithms": [
+        {
+          "case_id": "swap_adjacent_edges",
+          "name": "Sune Edge Permutation",
+          "condition": "Swaps the front and left yellow edges so all top edges match side center colors.",
+          "algorithm": "R U R' U R U2 R'",
+          "moves": ["R", "U", "R'", "U", "R", "U2", "R'"]
+        }
+      ]
+    },
+    {
+      "step_number": 6,
+      "name": "Position Yellow Corners (Permute Corners)",
+      "type": "Corner Permutation",
+      "description": "Move all yellow corner pieces to their correct physical positions (regardless of rotation).",
+      "algorithms": [
+        {
+          "case_id": "cycle_three_corners",
+          "name": "Niklas / Corner Swap",
+          "condition": "Hold the correctly placed corner on the Front-Right-Top and cycle the remaining 3 corners.",
+          "algorithm": "U R U' L' U R' U' L",
+          "moves": ["U", "R", "U'", "L'", "U", "R'", "U'", "L"]
+        }
+      ]
+    },
+    {
+      "step_number": 7,
+      "name": "Orient Yellow Corners",
+      "type": "Corner Orientation",
+      "description": "Rotate the last layer corners until the yellow faces are facing upwards.",
+      "algorithms": [
+        {
+          "case_id": "orient_corner",
+          "name": "Reverse Sexy Move",
+          "condition": "Hold unoriented corner in Front-Right-Top spot and repeat until yellow faces UP, then turn top layer (U) to load next unsolved corner.",
+          "algorithm": "R' D' R D",
+          "moves": ["R'", "D'", "R", "D"]
+        }
+      ]
+    }
+  ]
+}

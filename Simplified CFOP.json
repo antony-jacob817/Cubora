@@ -1,0 +1,178 @@
+{
+  "method": "Simplified CFOP",
+  "phases": [
+    {
+      "phase_number": 1,
+      "name": "Cross",
+      "type": "Intuitive",
+      "description": "Form a 4-edge cross on the bottom layer matching side center colors.",
+      "algorithms": []
+    },
+    {
+      "phase_number": 2,
+      "name": "Intuitive F2L (First Two Layers)",
+      "type": "Pairing and Insertion",
+      "description": "Solve the first two layers simultaneously by pairing corner and edge pieces in the top layer and inserting them together into their slot.",
+      "algorithms": [
+        {
+          "case_id": "f2l_basic_insert_right",
+          "name": "Basic Right Insertion",
+          "condition": "Corner and edge are already paired in top layer; target slot is Front-Right.",
+          "algorithm": "U R U' R'",
+          "moves": ["U", "R", "U'", "R'"]
+        },
+        {
+          "case_id": "f2l_basic_insert_left",
+          "name": "Basic Left Insertion",
+          "condition": "Corner and edge are already paired in top layer; target slot is Front-Left.",
+          "algorithm": "U' L' U L",
+          "moves": ["U'", "L'", "U", "L"]
+        }
+      ]
+    },
+    {
+      "phase_number": 3,
+      "name": "2-Look OLL (Orientation of the Last Layer)",
+      "subphases": [
+        {
+          "subphase_name": "Edge Orientation (EO) - 3 Cases",
+          "algorithms": [
+            {
+              "case_id": "oll_eo_dot",
+              "name": "Dot Case",
+              "condition": "No top edges oriented. Execute Line alg, then L-shape alg.",
+              "algorithm": "F R U R' U' F' U2 F U R U' R' F'",
+              "moves": ["F", "R", "U", "R'", "U'", "F'", "U2", "F", "U", "R", "U'", "R'", "F'"]
+            },
+            {
+              "case_id": "oll_eo_l_shape",
+              "name": "L-Shape",
+              "condition": "Two adjacent top edges oriented forming an L.",
+              "algorithm": "f R U R' U' f'",
+              "moves": ["f", "R", "U", "R'", "U'", "f'"]
+            },
+            {
+              "case_id": "oll_eo_line",
+              "name": "Bar / Line Case",
+              "condition": "Two opposite top edges oriented forming a line.",
+              "algorithm": "F R U R' U' F'",
+              "moves": ["F", "R", "U", "R'", "U'", "F'"]
+            }
+          ]
+        },
+        {
+          "subphase_name": "Corner Orientation (CO) - 7 Cases",
+          "algorithms": [
+            {
+              "case_id": "oll_27_sune",
+              "name": "Sune",
+              "condition": "1 corner oriented; top-left front corner sticker faces front.",
+              "algorithm": "R U R' U R U2 R'",
+              "moves": ["R", "U", "R'", "U", "R", "U2", "R'"]
+            },
+            {
+              "case_id": "oll_26_antisune",
+              "name": "Anti-Sune",
+              "condition": "1 corner oriented; top-right front corner sticker faces right.",
+              "algorithm": "R U2 R' U' R U' R'",
+              "moves": ["R", "U2", "R'", "U'", "R", "U'", "R'"]
+            },
+            {
+              "case_id": "oll_21_cross_h",
+              "name": "H (Double Headlight)",
+              "condition": "0 corners oriented; two pairs of headlights facing front and back.",
+              "algorithm": "F (R U R' U')3 F'",
+              "moves": ["F", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "R", "U", "R'", "U'", "F'"]
+            },
+            {
+              "case_id": "oll_22_cross_pi",
+              "name": "Pi (Wheel)",
+              "condition": "0 corners oriented; one pair of headlights on left, two corners pointing away on right.",
+              "algorithm": "R U2 R2 U' R2 U' R2 U2 R",
+              "moves": ["R", "U2", "R2", "U'", "R2", "U'", "R2", "U2", "R"]
+            },
+            {
+              "case_id": "oll_23_headlights",
+              "name": "Headlights (U)",
+              "condition": "2 corners oriented; remaining two stickers face front.",
+              "algorithm": "R2 D R' U2 R D' R' U2 R'",
+              "moves": ["R2", "D", "R'", "U2", "R", "D'", "R'", "U2", "R'"]
+            },
+            {
+              "case_id": "oll_24_chameleon",
+              "name": "Chameleon (T)",
+              "condition": "2 corners oriented; remaining stickers face left and right.",
+              "algorithm": "r U R' U' r' F R F'",
+              "moves": ["r", "U", "R'", "U'", "r'", "F", "R", "F'"]
+            },
+            {
+              "case_id": "oll_25_bow tie",
+              "name": "Bowtie (L)",
+              "condition": "2 diagonal corners oriented.",
+              "algorithm": "F' r U R' U' r' F R",
+              "moves": ["F'", "r", "U", "R'", "U'", "r'", "F", "R"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase_number": 4,
+      "name": "2-Look PLL (Permutation of the Last Layer)",
+      "subphases": [
+        {
+          "subphase_name": "Corner Permutation (CP) - 2 Cases",
+          "algorithms": [
+            {
+              "case_id": "pll_t_perm",
+              "name": "T Permutation (Headlights Case)",
+              "condition": "One side has two matching corners (headlights). Put headlights on Left.",
+              "algorithm": "R U R' U' R' F R2 U' R' U' R U R' F'",
+              "moves": ["R", "U", "R'", "U'", "R'", "F", "R2", "U'", "R'", "U'", "R", "U", "R'", "F'"]
+            },
+            {
+              "case_id": "pll_y_perm",
+              "name": "Y Permutation (No Headlights Case)",
+              "condition": "No sides have matching corners. Swaps diagonal corners.",
+              "algorithm": "F R U' R' U' R U R' F' R U R' U' R' F R F'",
+              "moves": ["F", "R", "U'", "R'", "U'", "R", "U", "R'", "F'", "R", "U", "R'", "U'", "R'", "F", "R", "F'"]
+            }
+          ]
+        },
+        {
+          "subphase_name": "Edge Permutation (EP) - 4 Cases",
+          "algorithms": [
+            {
+              "case_id": "pll_ua_perm",
+              "name": "Ua Perm (3-Edge Clockwise Cycle)",
+              "condition": "1 solved edge bar; remaining 3 edges cycle clockwise.",
+              "algorithm": "R U' R U R U R U' R' U' R2",
+              "moves": ["R", "U'", "R", "U", "R", "U", "R", "U'", "R'", "U'", "R2"]
+            },
+            {
+              "case_id": "pll_ub_perm",
+              "name": "Ub Perm (3-Edge Counter-Clockwise Cycle)",
+              "condition": "1 solved edge bar; remaining 3 edges cycle counter-clockwise.",
+              "algorithm": "R2 U R U R' U' R' U' R' U R'",
+              "moves": ["R2", "U", "R", "U", "R'", "U'", "R'", "U'", "R'", "U", "R'"]
+            },
+            {
+              "case_id": "pll_h_perm",
+              "name": "H Perm (Opposite Edge Swap)",
+              "condition": "No solved bars; opposite edges swap across center.",
+              "algorithm": "M2 U M2 U2 M2 U M2",
+              "moves": ["M2", "U", "M2", "U2", "M2", "U", "M2"]
+            },
+            {
+              "case_id": "pll_z_perm",
+              "name": "Z Perm (Adjacent Edge Swap)",
+              "condition": "No solved bars; adjacent edges swap.",
+              "algorithm": "M' U M2 U M2 U M' U2 M2",
+              "moves": ["M'", "U", "M2", "U", "M2", "U", "M'", "U2", "M2"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
