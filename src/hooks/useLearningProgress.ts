@@ -88,6 +88,38 @@ export function useLearningProgress() {
     }
   }, [token, getAuthHeaders]);
 
+  const unmarkLessonComplete = useCallback(async (lessonId: string) => {
+    if (!token) return;
+    try {
+      setError(null);
+      // Optimistic state update
+      setProgress(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          completedLessons: prev.completedLessons.filter(id => id !== lessonId)
+        };
+      });
+
+      const res = await fetch(`${API_BASE_URL}/uncomplete-lesson`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ lessonId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgress(data.data);
+      } else {
+        setError(data.error || 'Failed to uncomplete lesson');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error unmarking lesson complete');
+    }
+  }, [token, getAuthHeaders]);
+
   const toggleAlgMastered = useCallback(async (algId: string, set: string, isMastered?: boolean) => {
     if (!token) return;
     try {
@@ -144,6 +176,7 @@ export function useLearningProgress() {
     currentPath: progress?.currentPath || 'cfop',
     lastActiveLesson: progress?.lastActiveLesson || '',
     markLessonComplete,
+    unmarkLessonComplete,
     toggleAlgMastered,
     setCurrentPath,
     refetchProgress: fetchProgress

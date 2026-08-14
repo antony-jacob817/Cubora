@@ -16,6 +16,7 @@ export default function Academy() {
     currentPath, 
     masteredAlgsCount, 
     markLessonComplete, 
+    unmarkLessonComplete,
     setCurrentPath 
   } = useLearningProgress();
 
@@ -340,6 +341,9 @@ export default function Academy() {
             onComplete={async (lessonId) => {
               await markLessonComplete(lessonId);
             }} 
+            onUncomplete={async (lessonId) => {
+              await unmarkLessonComplete(lessonId);
+            }}
           />
         )}
       </AnimatePresence>

@@ -66,6 +66,32 @@ exports.completeLesson = async (req, res) => {
   }
 };
 
+// @desc    Unmark a lesson as completed
+// @route   POST /api/learning/uncomplete-lesson
+// @access  Private
+exports.uncompleteLesson = async (req, res) => {
+  try {
+    const { lessonId } = req.body;
+
+    if (!lessonId || typeof lessonId !== 'string') {
+      return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
+    }
+
+    const progress = await LearningProgress.findOneAndUpdate(
+      { user: req.user.id },
+      { $pull: { completedLessons: lessonId } },
+      { new: true, upsert: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: formatProgressResponse(progress)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // @desc    Master or toggle an algorithm
 // @route   POST /api/learning/master-algorithm
 // @access  Private
