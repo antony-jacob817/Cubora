@@ -1,47 +1,47 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  X, BookOpen, CheckCircle2, XCircle, Lightbulb, Clock, RotateCcw, 
-  ChevronRight, Box, Timer, Play, Pause, Zap, Award, Flame, RefreshCw
+  X, BookOpen, CheckCircle2, Lightbulb, Clock, RotateCcw, 
+  ChevronRight, Timer, Play, Pause, RotateCw, Sparkles, Undo2,
+  TrendingUp, Zap, Award, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
 import { CubeViewer } from '@/components/3d/CubeViewer';
 import { PlaybackControls } from '@/components/solver/PlaybackControls';
 import { useSolvePlayback } from '@/hooks/useSolvePlayback';
-import type { Lesson } from '@/data/academy';
+import type { Lesson } from '@/data/academyData';
 import { clsx } from 'clsx';
 
 interface LessonPlayerProps {
   lesson: Lesson;
   nextLesson?: Lesson | null;
   onClose: () => void;
-  onComplete: (lessonId: string) => Promise<void> | void;
-  onUncomplete: (lessonId: string) => Promise<void> | void;
+  onToggleComplete: (lessonId: string) => Promise<void> | void;
   onSelectNextLesson?: (next: Lesson) => void;
   isCompleted?: boolean;
 }
 
-interface PracticeAttempt {
-  id: string;
-  timeMs: number;
-  tps: number;
-  createdAt: string;
-}
+type TabType = 'guide' | 'timer';
+type TimerStatus = 'IDLE' | 'HOLDING' | 'READY' | 'RUNNING' | 'STOPPED';
 
 export function LessonPlayer({
   lesson,
   nextLesson,
   onClose,
-  onComplete,
-  onUncomplete,
+  onToggleComplete,
   onSelectNextLesson,
   isCompleted = false
 }: LessonPlayerProps) {
-  const [activeTab, setActiveTab] = useState<'3d' | 'timer'>('3d');
-  const [isTogglingComplete, setIsTogglingComplete] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('guide');
+  const [isToggling, setIsToggling] = useState(false);
 
-  // --- 3D PLAYBACK HOOK INTEGRATION ---
-  const lessonData = [{ phase: lesson.title, explanation: lesson.explanation, moves: lesson.algorithm }];
+  // ==========================================
+  // 3D Playback Setup
+  // ==========================================
+  const lessonData = lesson.solveSteps && lesson.solveSteps.length > 0
+    ? lesson.solveSteps
+    : [{ phase: lesson.title, explanation: lesson.explanation, moves: lesson.algorithm }];
+  
   const { 
     isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, 
     currentTimelineIndex, totalMoves, currentMove
@@ -49,311 +49,355 @@ export function LessonPlayer({
 
   const movesList = lesson.algorithm.split(' ').filter(Boolean);
 
-  const handleReset3D = () => {
+  const handleReset = () => {
     for (let i = 0; i <= currentTimelineIndex; i++) {
       prevMove();
     }
   };
 
-  // --- BIDIRECTIONAL MARK / UNMARK TOGGLE ---
   const handleToggleCompletion = async () => {
     try {
-      setIsTogglingComplete(true);
-      if (isCompleted) {
-        await onUncomplete(lesson.id);
-      } else {
-        await onComplete(lesson.id);
-        if (nextLesson && onSelectNextLesson) {
-          onSelectNextLesson(nextLesson);
-        }
-      }
+      setIsToggling(true);
+      await onToggleComplete(lesson.id);
     } catch (err) {
-      console.error('Failed to toggle completion:', err);
+      console.error('Failed to toggle lesson completion:', err);
     } finally {
-      setIsTogglingComplete(false);
+      setIsToggling(false);
     }
   };
 
-  // --- INTERACTIVE TIMER PRACTICE MODE STATE ---
-  type TimerState = 'idle' | 'holding' | 'ready' | 'running' | 'stopped';
-  const [timerState, setTimerState] = useState<TimerState>('idle');
-  const [timeMs, setTimeMs] = useState<number>(0);
-  const [attempts, setAttempts] = useState<PracticeAttempt[]>([]);
-  
-  const timerRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(0);
+  // ==========================================
+  // In-Lesson Alg Timer Mode Setup
+  // ==========================================
+  const [timerStatus, setTimerStatus] = useState<TimerStatus>('IDLE');
+  const [time, setTime] = useState(0);
+  const [sessionTimes, setSessionTimes] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem(`cubora_alg_timer_${lesson.id}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const animFrameRef = useRef<number | null>(null);
+  const isRunningRef = useRef(false);
 
-  const formatTime = (ms: number) => {
-    const totalSec = ms / 1000;
-    return totalSec.toFixed(3);
-  };
+  // Save session times to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(`cubora_alg_timer_${lesson.id}`, JSON.stringify(sessionTimes));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [sessionTimes, lesson.id]);
 
-  const calculateTps = (ms: number) => {
-    if (ms <= 0 || movesList.length === 0) return 0;
-    return parseFloat((movesList.length / (ms / 1000)).toFixed(2));
-  };
+  const bestTime = sessionTimes.length > 0 ? Math.min(...sessionTimes) : null;
+  const averageTime = sessionTimes.length > 0 
+    ? sessionTimes.reduce((a, b) => a + b, 0) / sessionTimes.length 
+    : null;
 
-  const startTimer = useCallback(() => {
-    setTimerState('running');
-    startTimeRef.current = performance.now();
-    timerRef.current = requestAnimationFrame(function update() {
-      const elapsed = performance.now() - startTimeRef.current;
-      setTimeMs(elapsed);
-      timerRef.current = requestAnimationFrame(update);
-    }) as unknown as number;
+  // Stop Timer
+  const stopTimer = useCallback(() => {
+    if (!isRunningRef.current) return;
+    isRunningRef.current = false;
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    
+    const finalElapsed = (performance.now() - startTimeRef.current) / 1000;
+    setTime(finalElapsed);
+    setTimerStatus('STOPPED');
+    setSessionTimes(prev => [finalElapsed, ...prev]);
   }, []);
 
-  const stopTimer = useCallback(() => {
-    if (timerRef.current) {
-      cancelAnimationFrame(timerRef.current);
-      timerRef.current = null;
-    }
-    const finalTime = performance.now() - startTimeRef.current;
-    setTimeMs(finalTime);
-    setTimerState('stopped');
+  // Start Timer Running
+  const startTimer = useCallback(() => {
+    isRunningRef.current = true;
+    startTimeRef.current = performance.now();
+    setTimerStatus('RUNNING');
 
-    const calculatedTps = calculateTps(finalTime);
-    const newAttempt: PracticeAttempt = {
-      id: Date.now().toString(),
-      timeMs: finalTime,
-      tps: calculatedTps,
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    const update = () => {
+      if (!isRunningRef.current) return;
+      const elapsed = (performance.now() - startTimeRef.current) / 1000;
+      setTime(elapsed);
+      animFrameRef.current = requestAnimationFrame(update);
     };
+    animFrameRef.current = requestAnimationFrame(update);
+  }, []);
 
-    setAttempts(prev => [newAttempt, ...prev]);
-  }, [movesList.length]);
-
-  // Spacebar timer event listeners when Timer tab is active
+  // Keyboard Handler for Spacebar
   useEffect(() => {
     if (activeTab !== 'timer') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || e.repeat) return;
-      e.preventDefault();
+      if (e.repeat) return;
 
-      if (timerState === 'running') {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (isRunningRef.current) {
+          stopTimer();
+        } else if (timerStatus === 'IDLE' || timerStatus === 'STOPPED') {
+          setTimerStatus('HOLDING');
+          holdTimeoutRef.current = setTimeout(() => {
+            setTimerStatus('READY');
+          }, 300);
+        }
+      } else if (isRunningRef.current) {
+        // Any other key stops the timer when running
         stopTimer();
-      } else if (timerState === 'idle' || timerState === 'stopped') {
-        setTimerState('holding');
-        holdTimeoutRef.current = setTimeout(() => {
-          setTimerState('ready');
-        }, 300);
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code !== 'Space') return;
-      e.preventDefault();
-
-      if (holdTimeoutRef.current) {
-        clearTimeout(holdTimeoutRef.current);
-        holdTimeoutRef.current = null;
-      }
-
-      if (timerState === 'ready') {
-        startTimer();
-      } else if (timerState === 'holding') {
-        setTimerState('idle');
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (holdTimeoutRef.current) {
+          clearTimeout(holdTimeoutRef.current);
+        }
+        if (timerStatus === 'READY') {
+          startTimer();
+        } else if (timerStatus === 'HOLDING') {
+          setTimerStatus('IDLE');
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
-      if (timerRef.current) cancelAnimationFrame(timerRef.current);
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [activeTab, timerState, startTimer, stopTimer]);
+  }, [activeTab, timerStatus, startTimer, stopTimer]);
 
-  // Touch handlers for mobile practice timer
+  // Touch / Pointer Handlers for Mobile & Pad Click
   const handleTouchStart = () => {
-    if (activeTab !== 'timer') return;
-    if (timerState === 'running') {
+    if (isRunningRef.current) {
       stopTimer();
-    } else if (timerState === 'idle' || timerState === 'stopped') {
-      setTimerState('holding');
+    } else if (timerStatus === 'IDLE' || timerStatus === 'STOPPED') {
+      setTimerStatus('HOLDING');
       holdTimeoutRef.current = setTimeout(() => {
-        setTimerState('ready');
+        setTimerStatus('READY');
       }, 300);
     }
   };
 
   const handleTouchEnd = () => {
-    if (activeTab !== 'timer') return;
     if (holdTimeoutRef.current) {
       clearTimeout(holdTimeoutRef.current);
-      holdTimeoutRef.current = null;
     }
-    if (timerState === 'ready') {
+    if (timerStatus === 'READY') {
       startTimer();
-    } else if (timerState === 'holding') {
-      setTimerState('idle');
+    } else if (timerStatus === 'HOLDING') {
+      setTimerStatus('IDLE');
     }
   };
 
-  const bestAttempt = attempts.length > 0
-    ? [...attempts].sort((a, b) => a.timeMs - b.timeMs)[0]
-    : null;
-
   return (
     <motion.div 
-      initial={{ opacity: 0, scale: 0.96 }} 
+      initial={{ opacity: 0, scale: 0.98 }} 
       animate={{ opacity: 1, scale: 1 }} 
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-[#0B0F19]/85 backdrop-blur-xl"
+      exit={{ opacity: 0, scale: 0.98 }}
+      transition={{ duration: 0.22 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 lg:p-8 bg-[#0B0F19]/85 backdrop-blur-2xl"
     >
-      {/* Resized Container: max-w-3xl, h-[80vh], max-h-[780px] */}
-      <div className="w-full max-w-3xl h-[80vh] max-h-[780px] glass-panel bg-slate-900/95 dark:bg-[#0B0F19]/95 border border-slate-700/60 dark:border-white/15 shadow-2xl rounded-3xl flex flex-col overflow-hidden relative">
+      <div className="glass-panel bg-background/95 dark:bg-[#12151B]/95 border border-slate-200 dark:border-white/10 w-full max-w-5xl h-full max-h-[820px] rounded-3xl overflow-hidden shadow-2xl flex flex-col relative text-left">
         
         {/* Modal Header */}
-        <div className="px-4 py-3 sm:px-6 border-b border-slate-800 dark:border-white/10 flex justify-between items-center bg-slate-900/80 dark:bg-[#111315]/80 shrink-0">
+        <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-slate-200/70 dark:border-white/10 flex justify-between items-center bg-white/70 dark:bg-[#181A1D]/80 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary shrink-0">
-              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0 text-primary">
+              <BookOpen className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-display font-bold text-base sm:text-lg text-white truncate">
+                <h2 className="font-display font-bold text-sm sm:text-lg text-slate-900 dark:text-white truncate">
                   {lesson.title}
                 </h2>
                 {lesson.difficulty && (
-                  <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/30 shrink-0">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 shrink-0">
                     {lesson.difficulty}
                   </span>
                 )}
+                {isCompleted && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
+                    <CheckCircle2 className="w-3 h-3" /> Mastered
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-gray-400 font-mono tracking-wider truncate">
-                {lesson.algorithm} ({movesList.length} Moves)
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-mono tracking-wider truncate">
+                ACADEMY 3D MASTER LAB
               </p>
             </div>
           </div>
-
-          {/* Mode Selector Tabs: [ 3D Animation ] | [ Speed Practice Timer ] */}
-          <div className="flex items-center gap-1 bg-black/40 border border-white/10 p-1 rounded-xl shrink-0 ml-2">
-            <button
-              onClick={() => setActiveTab('3d')}
-              className={clsx(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                activeTab === '3d'
-                  ? "bg-primary text-white shadow-sm"
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <Box className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">3D Animation</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('timer')}
-              className={clsx(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                activeTab === 'timer'
-                  ? "bg-primary text-white shadow-sm"
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <Timer className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Speed Timer</span>
-            </button>
-          </div>
-
-          {/* Close button */}
+          
           <button 
             onClick={onClose} 
-            className="p-1.5 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors shrink-0 ml-2 cursor-pointer"
-            title="Close"
+            className="p-2 text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full transition-colors shrink-0 ml-2"
+            title="Close Lab"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Main Body Content */}
-        <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
+        {/* Modal Main Content */}
+        <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-y-auto lg:overflow-hidden">
+          
+          {/* Left Viewport: 3D Cube Canvas & Algorithm Overlay */}
+          <div className="flex-1 min-h-[280px] sm:min-h-[360px] lg:min-h-0 relative bg-gradient-to-b from-transparent via-primary/[0.02] to-primary/[0.08] touch-none flex flex-col">
+            
+            {/* 3D Canvas with user-requested Camera position & fov */}
+            <CubeViewer 
+              className="absolute inset-0"
+              action={currentMove ? { index: currentTimelineIndex, move: currentMove } : null}
+              speed={speed}
+              currentTimelineIndex={currentTimelineIndex}
+              cameraPosition={[3.2, 2.6, 4.2]}
+              cameraFov={42}
+            />
 
-          {activeTab === '3d' ? (
-            /* --- 3D ANIMATION VIEW MODE --- */
-            <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-              
-              {/* 3D Cube Viewport */}
-              <div className="flex-1 min-h-[240px] sm:min-h-[300px] lg:min-h-0 relative bg-gradient-to-b from-transparent via-primary/[0.02] to-primary/[0.08] touch-none">
-                <CubeViewer 
-                  className="absolute inset-0"
-                  action={currentMove ? { index: currentTimelineIndex, move: currentMove } : null}
-                  speed={speed}
-                  currentTimelineIndex={currentTimelineIndex}
-                  cameraPosition={[4.8, 3.8, 6.2]}
-                  fov={38}
-                />
-
-                {/* Top Algorithm Move Visualizer Overlay */}
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#181A1D]/90 backdrop-blur-md border border-white/15 px-4 py-2 rounded-xl shadow-lg max-w-[90%] overflow-x-auto hide-scrollbar z-20">
-                  <div className="flex items-center gap-2 justify-center min-w-max">
-                    {movesList.map((move, idx) => {
-                      const isActive = idx === currentTimelineIndex;
-                      return (
-                        <span 
-                          key={idx} 
-                          className={clsx(
-                            "font-mono text-base sm:text-xl font-bold transition-all duration-200 px-1 py-0.5 rounded",
-                            isActive 
-                              ? 'text-primary scale-125 bg-primary/20 ring-1 ring-primary' 
-                              : idx < currentTimelineIndex 
-                                ? 'text-gray-500 line-through opacity-60' 
-                                : 'text-gray-300'
-                          )}
-                        >
-                          {move}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Sidebar Mechanics & Controls */}
-              <div className="w-full lg:w-[320px] border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col bg-slate-900/60 dark:bg-[#111315]/80 shrink-0">
-                
-                <div className="p-4 flex-1 overflow-y-auto space-y-3.5 text-left">
-                  {/* Algorithm Box */}
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                    <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-gray-400 block mb-1">
-                      Formula String
+            {/* Algorithm Sequence Floating Visualizer */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/85 dark:bg-[#181A1D]/90 backdrop-blur-md border border-slate-200 dark:border-white/15 px-4 py-2 sm:px-5 sm:py-3 rounded-2xl shadow-lg max-w-[92%] overflow-x-auto hide-scrollbar z-20">
+              <div className="flex items-center gap-2 sm:gap-2.5 justify-center min-w-max">
+                {movesList.map((move, idx) => {
+                  const isActive = idx === currentTimelineIndex;
+                  return (
+                    <span 
+                      key={idx} 
+                      className={`font-mono text-base sm:text-xl font-bold transition-all duration-200 px-1 py-0.5 rounded ${
+                        isActive 
+                          ? 'text-primary scale-125 bg-primary/15 ring-2 ring-primary/40' 
+                          : idx < currentTimelineIndex 
+                            ? 'text-slate-400 dark:text-slate-500 line-through opacity-70' 
+                            : 'text-slate-800 dark:text-gray-200'
+                      }`}
+                    >
+                      {move}
                     </span>
-                    <p className="font-mono text-base font-bold text-white tracking-wider select-all">
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Scramble badge if Example Solve */}
+            {lesson.scramble && (
+              <div className="absolute top-16 left-4 z-20 max-w-[85%] sm:max-w-[60%] bg-white/90 dark:bg-black/60 border border-slate-200 dark:border-white/10 px-3 py-1.5 rounded-xl backdrop-blur-md text-[11px] font-mono text-slate-700 dark:text-gray-300">
+                <span className="text-primary font-bold mr-1.5">Scramble:</span>
+                <span className="truncate">{lesson.scramble}</span>
+              </div>
+            )}
+
+            {/* Bottom 3D Hint */}
+            <div className="absolute bottom-3 left-4 z-20 hidden sm:flex items-center gap-2 text-[10px] font-mono text-slate-500 dark:text-gray-400 bg-white/60 dark:bg-black/50 border border-slate-200 dark:border-white/10 px-3 py-1 rounded-lg backdrop-blur-sm pointer-events-none">
+              <span>Rotate 3D cube with mouse • Scroll to zoom</span>
+            </div>
+          </div>
+
+          {/* Right Sidebar: Tabs [ 3D Guide | Alg Timer ] */}
+          <div className="w-full lg:w-[410px] border-t lg:border-t-0 lg:border-l border-slate-200/70 dark:border-white/10 flex flex-col bg-white/80 dark:bg-[#12151B]/95 backdrop-blur-xl shrink-0">
+            
+            {/* Sidebar Tab Switcher */}
+            <div className="p-3 border-b border-slate-200/70 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => setActiveTab('guide')}
+                className={clsx(
+                  "flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono transition-all flex items-center justify-center gap-2",
+                  activeTab === 'guide'
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5"
+                )}
+              >
+                <BookOpen className="w-3.5 h-3.5" /> 3D Guide
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('timer')}
+                className={clsx(
+                  "flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono transition-all flex items-center justify-center gap-2",
+                  activeTab === 'timer'
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5"
+                )}
+              >
+                <Timer className="w-3.5 h-3.5" /> Alg Timer
+              </button>
+            </div>
+
+            {/* Tab 1: 3D Guide View */}
+            {activeTab === 'guide' && (
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-4">
+                  
+                  {/* Algorithm Box */}
+                  <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-3.5 text-left">
+                    <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-500 dark:text-gray-400 block mb-1">
+                      Official Algorithm Sequence
+                    </span>
+                    <p className="font-mono text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-wide select-all">
                       {lesson.algorithm}
                     </p>
                   </div>
 
-                  {/* Explanation */}
-                  <div className="space-y-1">
-                    <h3 className="font-display font-bold text-xs uppercase tracking-wider text-gray-300">
-                      Mechanics
+                  {/* Mechanics Explanation */}
+                  <div className="text-left space-y-1.5">
+                    <h3 className="font-display font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-primary" /> Mechanics & Objective
                     </h3>
-                    <p className="text-gray-300 text-xs leading-relaxed">
+                    <p className="text-slate-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">
                       {lesson.explanation}
                     </p>
                   </div>
 
-                  {/* Finger Tricks */}
+                  {/* Finger Trick Pro Tips */}
                   {lesson.fingerTrickTips && (
-                    <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 space-y-1">
-                      <div className="flex items-center gap-1.5 text-primary font-bold text-[10px] uppercase tracking-wider">
-                        <Lightbulb className="w-3.5 h-3.5" />
-                        <span>Finger-Trick Tip</span>
+                    <div className="bg-primary/10 border border-primary/20 rounded-2xl p-3.5 text-left space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-primary font-bold text-xs uppercase tracking-wider">
+                        <Lightbulb className="w-3.5 h-3.5 shrink-0" />
+                        <span>Finger-Trick Pro Tip</span>
                       </div>
-                      <p className="text-xs text-gray-200 leading-relaxed">
+                      <p className="text-xs text-slate-800 dark:text-gray-200 leading-relaxed">
                         {lesson.fingerTrickTips}
                       </p>
                     </div>
                   )}
+
+                  {/* Solve Steps Breakdown if Example Solve */}
+                  {lesson.solveSteps && lesson.solveSteps.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-slate-200/70 dark:border-white/10">
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 dark:text-gray-400 block">
+                        Reconstruction Steps
+                      </span>
+                      <div className="space-y-1.5">
+                        {lesson.solveSteps.map((step, sIdx) => (
+                          <div key={sIdx} className="bg-white/60 dark:bg-white/[0.02] border border-slate-200/70 dark:border-white/5 rounded-xl p-2.5 text-xs text-left">
+                            <div className="flex justify-between items-center mb-0.5">
+                              <span className="font-bold text-primary font-mono">{step.phase}</span>
+                              <span className="font-mono text-[10px] text-slate-500 dark:text-gray-400">{step.moves}</span>
+                            </div>
+                            <p className="text-slate-600 dark:text-gray-400 text-[11px]">{step.explanation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Metadata Stats */}
+                  <div className="flex items-center justify-between text-xs font-mono text-slate-500 dark:text-gray-400 pt-2 border-t border-slate-200/70 dark:border-white/5">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Est. {lesson.estimatedTime || '5 min'}
+                    </span>
+                    <span>
+                      Move {currentTimelineIndex >= 0 ? currentTimelineIndex + 1 : 0} / {totalMoves}
+                    </span>
+                  </div>
                 </div>
 
                 {/* 3D Playback Controls Footer */}
-                <div className="p-4 border-t border-white/10 bg-black/40 space-y-3">
+                <div className="p-4 sm:p-5 border-t border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-[#181A1D]/60 space-y-3 shrink-0">
                   <PlaybackControls 
                     isPlaying={isPlaying} 
                     togglePlay={togglePlay}
@@ -364,189 +408,189 @@ export function LessonPlayer({
                     progress={totalMoves > 0 ? (currentTimelineIndex + 1) / totalMoves : 0}
                   />
 
-                  <div className="flex items-center gap-2">
+                  {/* Reset & Bidirectional Completion Toggle */}
+                  <div className="flex items-center gap-2.5 pt-1">
                     <Button
                       variant="outline"
-                      size="sm"
-                      onClick={handleReset3D}
-                      className="h-9 px-3 rounded-xl flex items-center justify-center shrink-0 border-white/10 text-gray-300 hover:text-white"
-                      title="Reset Animation"
+                      size="md"
+                      onClick={handleReset}
+                      className="h-10 px-3 rounded-xl flex items-center justify-center shrink-0 border-slate-200 dark:border-white/10"
+                      title="Reset Algorithm"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
+                      <RotateCcw className="w-4 h-4" />
                     </Button>
+
+                    <Button 
+                      variant={isCompleted ? "outline" : "glow"} 
+                      size="lg"
+                      disabled={isToggling}
+                      onClick={handleToggleCompletion}
+                      className={clsx(
+                        "flex-1 h-10 rounded-xl text-xs sm:text-sm font-bold tracking-wide gap-2 justify-center transition-all",
+                        isCompleted 
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 hover:border-red-500/40 hover:text-red-500" 
+                          : "text-white"
+                      )}
+                    >
+                      {isCompleted ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <span>Completed ✓ (Click to Undo)</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{isToggling ? 'Updating...' : 'Mark as Completed'}</span>
+                        </>
+                      )}
+                    </Button>
+
+                    {nextLesson && onSelectNextLesson && (
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        onClick={() => onSelectNextLesson(nextLesson)}
+                        className="h-10 px-3 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold"
+                        title={`Next: ${nextLesson.title}`}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
-
               </div>
+            )}
 
-            </div>
-          ) : (
-            /* --- SPEED PRACTICE TIMER MODE --- */
-            <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden bg-[#0D1017]">
-              
-              {/* Interactive Timer Interactive Touch Area */}
-              <div 
-                onMouseDown={handleTouchStart}
-                onMouseUp={handleTouchEnd}
-                onTouchStart={handleTouchStart}
-                onTouchEnd={handleTouchEnd}
-                className={clsx(
-                  "flex-1 p-6 flex flex-col items-center justify-center relative select-none cursor-pointer transition-colors duration-200 text-center",
-                  timerState === 'holding' && "bg-amber-500/10",
-                  timerState === 'ready' && "bg-emerald-500/15",
-                  timerState === 'running' && "bg-primary/10",
-                  timerState === 'stopped' && "bg-emerald-500/[0.04]",
-                  timerState === 'idle' && "hover:bg-white/[0.02]"
-                )}
-              >
-                {/* Algorithm Target Formula */}
-                <div className="mb-6 bg-black/50 border border-white/10 px-5 py-2.5 rounded-2xl max-w-md">
-                  <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest block mb-1">
-                    Execute Algorithm Formula
-                  </span>
-                  <p className="font-mono text-xl sm:text-2xl font-bold text-white tracking-wider">
-                    {lesson.algorithm}
-                  </p>
-                </div>
+            {/* Tab 2: Alg Timer Training Mode View */}
+            {activeTab === 'timer' && (
+              <div className="flex-1 flex flex-col min-h-0 p-4 sm:p-5 text-center justify-between">
+                <div className="space-y-4">
+                  {/* Alg Display Header */}
+                  <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-3 text-center">
+                    <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-500 dark:text-gray-400 block mb-1">
+                      Target Algorithm Notation
+                    </span>
+                    <p className="font-mono text-sm sm:text-base font-bold text-primary tracking-wide">
+                      {lesson.algorithm}
+                    </p>
+                  </div>
 
-                {/* Big Timer Display */}
-                <div className="my-4">
-                  <span 
+                  {/* Timer Stats Bar */}
+                  <div className="grid grid-cols-2 gap-2 text-left">
+                    <div className="bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-2.5">
+                      <div className="flex items-center gap-1.5 text-slate-500 dark:text-gray-400 text-[10px] font-mono font-bold uppercase">
+                        <Award className="w-3.5 h-3.5 text-yellow-500" /> Best Time
+                      </div>
+                      <span className="font-mono text-lg font-bold text-slate-900 dark:text-white">
+                        {bestTime ? `${bestTime.toFixed(2)}s` : '--'}
+                      </span>
+                    </div>
+
+                    <div className="bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-2.5">
+                      <div className="flex items-center gap-1.5 text-slate-500 dark:text-gray-400 text-[10px] font-mono font-bold uppercase">
+                        <TrendingUp className="w-3.5 h-3.5 text-primary" /> Session Avg
+                      </div>
+                      <span className="font-mono text-lg font-bold text-slate-900 dark:text-white">
+                        {averageTime ? `${averageTime.toFixed(2)}s` : '--'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Interactive Timer Pad */}
+                  <div 
+                    onMouseDown={handleTouchStart}
+                    onMouseUp={handleTouchEnd}
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
                     className={clsx(
-                      "font-mono text-5xl sm:text-7xl font-bold tracking-tight transition-colors duration-150",
-                      timerState === 'holding' && "text-amber-400",
-                      timerState === 'ready' && "text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]",
-                      timerState === 'running' && "text-cyan-400 animate-pulse",
-                      timerState === 'stopped' && "text-emerald-400",
-                      timerState === 'idle' && "text-white opacity-80"
+                      "w-full h-36 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-150 relative overflow-hidden shadow-inner",
+                      timerStatus === 'HOLDING' && "border-yellow-500 bg-yellow-500/10 scale-98",
+                      timerStatus === 'READY' && "border-emerald-500 bg-emerald-500/20 scale-100",
+                      timerStatus === 'RUNNING' && "border-primary bg-primary/10",
+                      (timerStatus === 'IDLE' || timerStatus === 'STOPPED') && "border-dashed border-slate-300 dark:border-white/20 bg-slate-50 dark:bg-white/[0.02] hover:border-primary/50"
                     )}
                   >
-                    {formatTime(timeMs)}s
-                  </span>
-                </div>
-
-                {/* Single-Execution Speed (TPS) Display */}
-                {timeMs > 0 && timerState === 'stopped' && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 px-4 py-1.5 rounded-xl text-emerald-400 font-mono text-sm font-bold my-2"
-                  >
-                    <Zap className="w-4 h-4 text-emerald-400" />
-                    <span>Speed: {calculateTps(timeMs)} TPS</span>
-                    <span className="text-gray-400 text-xs font-normal">({movesList.length} moves)</span>
-                  </motion.div>
-                )}
-
-                {/* Dynamic Timer Instruction Overlay */}
-                <div className="mt-4 text-xs font-mono text-gray-400">
-                  {timerState === 'idle' && "Hold [Spacebar] or Touch screen to start..."}
-                  {timerState === 'holding' && "Keep holding..."}
-                  {timerState === 'ready' && "Release to Launch Timer!"}
-                  {timerState === 'running' && "Press [Spacebar] or Touch screen to STOP"}
-                  {timerState === 'stopped' && "Hold [Spacebar] or Touch screen for next attempt"}
-                </div>
-              </div>
-
-              {/* Session Attempts Practice Log Sidebar */}
-              <div className="w-full lg:w-[280px] border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col bg-slate-900/60 dark:bg-[#111315]/80 shrink-0 p-4">
-                <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Flame className="w-4 h-4 text-amber-500" /> Practice Attempts
-                  </span>
-                  {bestAttempt && (
-                    <span className="text-[10px] font-mono text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
-                      PB: {formatTime(bestAttempt.timeMs)}s
+                    <span className={clsx(
+                      "font-mono text-4xl sm:text-5xl font-extrabold tracking-tight transition-colors",
+                      timerStatus === 'READY' ? "text-emerald-500" :
+                      timerStatus === 'HOLDING' ? "text-yellow-500" :
+                      timerStatus === 'RUNNING' ? "text-primary" :
+                      "text-slate-900 dark:text-white"
+                    )}>
+                      {time.toFixed(2)}
+                      <span className="text-lg font-normal ml-1">s</span>
                     </span>
+
+                    <span className="text-[11px] font-mono font-medium text-slate-500 dark:text-gray-400 mt-2">
+                      {timerStatus === 'READY' ? "Release Spacebar to Start!" :
+                       timerStatus === 'HOLDING' ? "Hold still..." :
+                       timerStatus === 'RUNNING' ? "Executing... Press any key to stop" :
+                       "Hold Spacebar or Click & Hold to Start"}
+                    </span>
+                  </div>
+
+                  {/* Session Solve List */}
+                  {sessionTimes.length > 0 && (
+                    <div className="text-left space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                          Recent Solves ({sessionTimes.length})
+                        </span>
+                        <button 
+                          onClick={() => setSessionTimes([])}
+                          className="text-[10px] font-mono text-red-500 hover:underline flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" /> Clear
+                        </button>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar py-1">
+                        {sessionTimes.slice(0, 10).map((t, idx) => (
+                          <span 
+                            key={idx}
+                            className="text-xs font-mono px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-gray-300 shrink-0"
+                          >
+                            {t.toFixed(2)}s
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1 hide-scrollbar">
-                  {attempts.length === 0 ? (
-                    <div className="text-center py-8 text-xs text-gray-500">
-                      No attempts yet this session. Launch timer to log speed!
-                    </div>
-                  ) : (
-                    attempts.map((att, index) => {
-                      const isBest = bestAttempt && bestAttempt.id === att.id;
-                      return (
-                        <div 
-                          key={att.id}
-                          className={clsx(
-                            "flex items-center justify-between p-2.5 rounded-xl border text-xs font-mono transition-colors",
-                            isBest 
-                              ? "bg-amber-500/10 border-amber-500/30 text-white" 
-                              : "bg-white/5 border-white/5 text-gray-300"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-gray-500 font-bold">#{attempts.length - index}</span>
-                            <span className="font-bold text-sm">{formatTime(att.timeMs)}s</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-gray-400 text-[11px]">
-                            <Zap className="w-3 h-3 text-primary" />
-                            <span>{att.tps} TPS</span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                {/* Footer Toggle Completion Button */}
+                <div className="pt-3 border-t border-slate-200/70 dark:border-white/10">
+                  <Button 
+                    variant={isCompleted ? "outline" : "glow"} 
+                    size="lg"
+                    disabled={isToggling}
+                    onClick={handleToggleCompletion}
+                    className={clsx(
+                      "w-full h-10 rounded-xl text-xs sm:text-sm font-bold tracking-wide gap-2 justify-center transition-all",
+                      isCompleted 
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20" 
+                        : "text-white"
+                    )}
+                  >
+                    {isCompleted ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        <span>Completed ✓ (Click to Undo)</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>{isToggling ? 'Updating...' : 'Mark as Completed'}</span>
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
-
-            </div>
-          )}
-
-        </div>
-
-        {/* Modal Footer: Bidirectional Completion Toggle */}
-        <div className="px-5 py-3.5 border-t border-slate-800 dark:border-white/10 bg-slate-900 dark:bg-[#111315] flex items-center justify-between shrink-0 gap-3">
-          <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-            {isCompleted ? (
-              <span className="text-emerald-400 flex items-center gap-1.5 font-bold">
-                <CheckCircle2 className="w-4 h-4" /> Lesson Mastered
-              </span>
-            ) : (
-              <span>Status: Incomplete</span>
             )}
+
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant={isCompleted ? "secondary" : "glow"}
-              size="md"
-              disabled={isTogglingComplete}
-              onClick={handleToggleCompletion}
-              className="h-10 px-4 rounded-xl text-xs font-bold gap-2 cursor-pointer"
-            >
-              {isCompleted ? (
-                <>
-                  <XCircle className="w-4 h-4 text-red-400" />
-                  <span>Completed (Click to Unmark)</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>{isTogglingComplete ? 'Saving...' : 'Mark as Completed'}</span>
-                </>
-              )}
-            </Button>
-
-            {nextLesson && (
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => onSelectNextLesson && onSelectNextLesson(nextLesson)}
-                className="h-10 px-3 rounded-xl text-xs font-bold gap-1 border-white/10 text-gray-300 hover:text-white cursor-pointer"
-                title="Next Lesson"
-              >
-                <span>Next</span>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
         </div>
-
       </div>
     </motion.div>
   );

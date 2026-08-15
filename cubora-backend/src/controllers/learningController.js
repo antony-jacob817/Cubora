@@ -37,6 +37,42 @@ exports.getLearningProgress = async (req, res) => {
   }
 };
 
+// @desc    Toggle lesson completion (bidirectional)
+// @route   POST /api/learning/toggle-lesson
+// @access  Private
+exports.toggleLesson = async (req, res) => {
+  try {
+    const { lessonId, lastActiveLesson } = req.body;
+
+    if (!lessonId || typeof lessonId !== 'string') {
+      return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
+    }
+
+    let progress = await LearningProgress.findOne({ user: req.user.id });
+    if (!progress) {
+      progress = new LearningProgress({ user: req.user.id, completedLessons: [] });
+    }
+
+    const isAlreadyCompleted = progress.completedLessons.includes(lessonId);
+
+    if (isAlreadyCompleted) {
+      progress.completedLessons = progress.completedLessons.filter(id => id !== lessonId);
+    } else {
+      progress.completedLessons.push(lessonId);
+      progress.lastActiveLesson = lastActiveLesson || lessonId;
+    }
+
+    await progress.save();
+
+    res.status(200).json({
+      success: true,
+      data: formatProgressResponse(progress)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // @desc    Mark a lesson as completed
 // @route   POST /api/learning/complete-lesson
 // @access  Private
@@ -55,32 +91,6 @@ exports.completeLesson = async (req, res) => {
         $set: { lastActiveLesson: lastActiveLesson || lessonId }
       },
       { new: true, upsert: true, runValidators: true }
-    );
-
-    res.status(200).json({
-      success: true,
-      data: formatProgressResponse(progress)
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// @desc    Unmark a lesson as completed
-// @route   POST /api/learning/uncomplete-lesson
-// @access  Private
-exports.uncompleteLesson = async (req, res) => {
-  try {
-    const { lessonId } = req.body;
-
-    if (!lessonId || typeof lessonId !== 'string') {
-      return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
-    }
-
-    const progress = await LearningProgress.findOneAndUpdate(
-      { user: req.user.id },
-      { $pull: { completedLessons: lessonId } },
-      { new: true, upsert: true }
     );
 
     res.status(200).json({
