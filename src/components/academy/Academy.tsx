@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  GraduationCap, PlayCircle, Trophy, CheckCircle2, Clock
+  GraduationCap, PlayCircle, Trophy, CheckCircle2, Clock, RotateCcw, Check, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageTransition } from '@/components/animations/PageTransition';
@@ -15,7 +15,8 @@ export default function Academy() {
     completedLessons, 
     currentPath, 
     masteredAlgsCount, 
-    toggleLessonComplete, 
+    markLessonComplete, 
+    toggleLessonComplete,
     setCurrentPath 
   } = useLearningProgress();
 
@@ -92,6 +93,15 @@ export default function Academy() {
     }
   };
 
+  const handleToggleCardCompletion = async (e: React.MouseEvent, lessonId: string, isCompleted: boolean) => {
+    e.stopPropagation();
+    if (toggleLessonComplete) {
+      await toggleLessonComplete(lessonId, !isCompleted);
+    } else {
+      await markLessonComplete(lessonId);
+    }
+  };
+
   return (
     <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0 text-left">
       
@@ -127,12 +137,12 @@ export default function Academy() {
         </div>
       </div>
 
-      {/* Main Grid: Sticky Left Sidebar Navigation + Right Scrollable Content Column */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+      {/* Main Grid: Sticky Left Navigation + Right Course Modules Content */}
+      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6 sm:gap-8 items-start relative">
         
-        {/* Sticky Left Method Selection Column */}
-        <div className="lg:col-span-1 sticky top-6 self-start space-y-2 w-full">
-          <div className="flex flex-row overflow-x-auto no-scrollbar gap-2.5 pb-2 lg:pb-0 lg:flex-col snap-x scroll-smooth whitespace-nowrap lg:whitespace-normal">
+        {/* Left Column: Sticky Method Navigation Tabs */}
+        <div className="w-full lg:col-span-1 lg:sticky lg:top-6 h-fit shrink-0 z-20">
+          <div className="flex flex-row overflow-x-auto gap-2 pb-2 lg:pb-0 lg:flex-col snap-x scrollbar-none whitespace-nowrap lg:whitespace-normal">
             {coursesWithDynamicProgress.map((course) => {
               const isActive = activeCourseId === course.id;            
 
@@ -141,7 +151,7 @@ export default function Academy() {
                   key={course.id}
                   onClick={() => handleTabChange(course.id)}
                   className={clsx(
-                    "flex-shrink-0 w-[240px] sm:w-[260px] lg:w-full text-left p-3.5 sm:p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group snap-center min-h-[44px]",
+                    "flex-shrink-0 w-[240px] sm:w-[260px] lg:w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group snap-center min-h-[44px]",
                     isActive 
                       ? "bg-primary/10 border-primary/40 shadow-md ring-1 ring-primary/20" 
                       : "bg-white/60 dark:bg-white/5 border-slate-200/80 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/10"
@@ -165,13 +175,13 @@ export default function Academy() {
                     </div>
                     
                     <h3 className={clsx(
-                      "font-display font-bold text-sm sm:text-base mb-2.5 truncate lg:whitespace-normal", 
+                      "font-display font-bold text-base sm:text-lg mb-2.5 truncate lg:whitespace-normal", 
                       isActive ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-gray-300"
                     )}>
                       {course.title}
                     </h3>
                     
-                    {/* Mini Tracking Progress Component */}
+                    {/* Mini Tracking Progress Bar */}
                     <div className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-primary transition-all duration-500 rounded-full" 
@@ -185,16 +195,16 @@ export default function Academy() {
           </div>
         </div>
 
-        {/* Right Content Column: Active Course Modules & Horizontal Lesson Rows */}
-        <div className="w-full lg:col-span-3">
+        {/* Right Column: Active Course Modules & Lesson Carousels */}
+        <div className="w-full lg:col-span-3 min-w-0">
           <motion.div 
             key={activeCourse.id}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="flex flex-col gap-5 sm:gap-6"
+            className="flex flex-col gap-5 sm:gap-6 min-w-0"
           >
-            {/* Active Course Banner Hero */}
+            {/* Active Course Hero Card */}
             <div className="glass-panel p-5 sm:p-6 md:p-8 relative overflow-hidden w-full border-slate-200/80 dark:border-white/10">
               <div className="absolute top-0 right-0 w-36 h-36 sm:w-64 sm:h-64 bg-primary/15 blur-[60px] sm:blur-[100px] rounded-full pointer-events-none" />
               
@@ -236,13 +246,13 @@ export default function Academy() {
             </div>
 
             {/* Modules List Container */}
-            <div className="space-y-5 sm:space-y-6">
+            <div className="space-y-5 sm:space-y-6 min-w-0">
               {activeCourse.modules.map((module, mIdx) => (
                 <div 
                   key={module.id} 
-                  className="glass-panel p-4 sm:p-6 border-slate-200/80 dark:border-white/10 text-left w-full overflow-hidden"
+                  className="glass-panel p-4 sm:p-6 border-slate-200/80 dark:border-white/10 text-left w-full min-w-0 overflow-hidden"
                 >
-                  <div className="mb-4">
+                  <div className="mb-4 sm:mb-5">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono font-bold text-primary uppercase tracking-widest">
                         Module {mIdx + 1}
@@ -256,16 +266,17 @@ export default function Academy() {
                     </p>
                   </div>
 
-                  {/* Horizontal Side-Scrollable Lesson Rows Container */}
-                  <div className="flex flex-row overflow-x-auto gap-4 pb-3 pt-1 snap-x no-scrollbar">
+                  {/* Horizontal Side-Scrolling Lesson Cards Carousel */}
+                  <div className="flex flex-row overflow-x-auto gap-3.5 pb-3 snap-x scrollbar-thin scrollbar-thumb-white/10 min-w-0">
                     {module.lessons.map((lesson) => {
                       const isCompleted = completedLessons.includes(lesson.id);
 
                       return (
                         <div 
                           key={lesson.id} 
+                          onClick={() => setActiveLesson(lesson)}
                           className={clsx(
-                            "w-72 sm:w-80 shrink-0 snap-start bg-white/70 dark:bg-white/5 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between group transition-all duration-200 shadow-sm min-h-[175px]",
+                            "w-[280px] sm:w-[320px] shrink-0 snap-start bg-white/70 dark:bg-white/5 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between group transition-all duration-200 shadow-sm cursor-pointer min-h-[185px]",
                             isCompleted 
                               ? "border-emerald-500/30 bg-emerald-500/[0.02]" 
                               : "border-slate-200/80 dark:border-white/10 hover:border-primary/40 hover:bg-white/90 dark:hover:bg-white/[0.08]"
@@ -274,7 +285,7 @@ export default function Academy() {
                           <div className="w-full">
                             <div className="flex justify-between items-start gap-2 mb-2">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-primary transition-colors leading-snug truncate max-w-[200px]">
+                                <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-primary transition-colors leading-snug">
                                   {lesson.title}
                                 </h4>
                                 {lesson.difficulty && (
@@ -285,20 +296,20 @@ export default function Academy() {
                               </div>
                               {isCompleted && (
                                 <div className="flex items-center gap-1 text-emerald-500 shrink-0">
-                                  <CheckCircle2 className="w-5 h-5" />
+                                  <CheckCircle2 className="w-4 h-4" />
                                 </div>
                               )}
                             </div>
                             
-                            <p className="text-xs text-slate-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
+                            <p className="text-xs text-slate-600 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">
                               {lesson.explanation}
                             </p>
                           </div>
                           
-                          {/* Bottom Algorithm Bar & Launch 3D Button */}
-                          <div className="flex items-center justify-between gap-2.5 mt-auto pt-3 border-t border-slate-200/50 dark:border-white/5 w-full">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <span className="px-2 py-1 max-w-[130px] truncate bg-slate-100 dark:bg-black/40 rounded-lg text-xs font-mono font-bold text-slate-800 dark:text-gray-200 border border-slate-200/80 dark:border-white/10 select-all shrink-0" title={lesson.algorithm}>
+                          {/* Bottom Algorithm Bar & Unified Action Button */}
+                          <div className="flex flex-col gap-2.5 mt-auto pt-3 border-t border-slate-200/50 dark:border-white/5 w-full">
+                            <div className="flex items-center justify-between gap-2 min-w-0">
+                              <span className="px-2 py-1 max-w-[170px] sm:max-w-[200px] truncate bg-slate-100 dark:bg-black/40 rounded-lg text-[11px] font-mono font-bold text-slate-800 dark:text-gray-200 border border-slate-200/80 dark:border-white/10 select-all" title={lesson.algorithm}>
                                 {lesson.algorithm}
                               </span>
                               {lesson.estimatedTime && (
@@ -308,15 +319,35 @@ export default function Academy() {
                               )}
                             </div>
 
-                            <Button 
-                              variant={isCompleted ? "secondary" : "glow"}
-                              size="sm" 
-                              className="gap-1.5 h-8 min-h-[34px] px-3 text-xs font-bold shrink-0 justify-center"
-                              onClick={() => setActiveLesson(lesson)}
-                            >
-                              <PlayCircle className="w-3.5 h-3.5" /> 
-                              {isCompleted ? 'Review' : 'Practice'}
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              {/* Clean Unified Mastered / Revert Toggle Button */}
+                              <button 
+                                type="button"
+                                onClick={(e) => handleToggleCardCompletion(e, lesson.id, isCompleted)}
+                                className={clsx(
+                                  "flex-1 justify-center",
+                                  isCompleted
+                                    ? "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 group"
+                                    : "bg-primary hover:bg-primary/90 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95"
+                                )}
+                              >
+                                {isCompleted ? (
+                                  <>
+                                    <span className="group-hover:hidden flex items-center gap-1.5">
+                                      Mastered <Check className="w-3.5 h-3.5" />
+                                    </span>
+                                    <span className="hidden group-hover:flex items-center gap-1.5 text-amber-400">
+                                      Revert <RotateCcw className="w-3.5 h-3.5" />
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <PlayCircle className="w-3.5 h-3.5" /> 
+                                    <span>Practice 3D</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -330,7 +361,7 @@ export default function Academy() {
         </div>
       </div>
 
-      {/* 3D Interactive Lesson Player Modal View (Portal-rendered) */}
+      {/* 3D Interactive Lesson Player Modal View */}
       <AnimatePresence>
         {activeLesson && (
           <LessonPlayer 
@@ -339,9 +370,16 @@ export default function Academy() {
             isCompleted={completedLessons.includes(activeLesson.id)}
             onClose={() => setActiveLesson(null)} 
             onSelectNextLesson={(next) => setActiveLesson(next)}
-            onToggleComplete={async (lessonId, isCompletedState) => {
-              await toggleLessonComplete(lessonId, isCompletedState);
+            onComplete={async (lessonId) => {
+              await markLessonComplete(lessonId);
             }} 
+            onToggleComplete={async (lessonId, shouldBeCompleted) => {
+              if (toggleLessonComplete) {
+                await toggleLessonComplete(lessonId, shouldBeCompleted);
+              } else {
+                await markLessonComplete(lessonId);
+              }
+            }}
           />
         )}
       </AnimatePresence>
