@@ -1,12 +1,11 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  GraduationCap, PlayCircle, Trophy, Target, CheckCircle2, 
-  Sparkles, Clock, Compass, Search, Zap, Layers
+  GraduationCap, PlayCircle, Trophy, CheckCircle2, Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageTransition } from '@/components/animations/PageTransition';
-import { ACADEMY_COURSES, type Course, type Lesson } from '@/data/academyData';
+import { ACADEMY_COURSES, type Course, type Lesson } from '@/data/academy';
 import { LessonPlayer } from '@/components/academy/LessonPlayer';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { clsx } from 'clsx';
@@ -16,7 +15,7 @@ export default function Academy() {
     completedLessons, 
     currentPath, 
     masteredAlgsCount, 
-    toggleLessonComplete, 
+    markLessonComplete, 
     setCurrentPath 
   } = useLearningProgress();
 
@@ -27,7 +26,6 @@ export default function Academy() {
   });
 
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Compute dynamic progress per course from completedLessons
   const coursesWithDynamicProgress = useMemo(() => {
@@ -61,23 +59,6 @@ export default function Academy() {
     return coursesWithDynamicProgress.find(c => c.id === activeCourseId) || coursesWithDynamicProgress[0];
   }, [coursesWithDynamicProgress, activeCourseId]);
 
-  // Filter modules/lessons based on search query
-  const filteredModules = useMemo(() => {
-    if (!searchQuery.trim()) return activeCourse.modules;
-    const q = searchQuery.toLowerCase().trim();
-    return activeCourse.modules
-      .map(mod => ({
-        ...mod,
-        lessons: mod.lessons.filter(l => 
-          l.title.toLowerCase().includes(q) ||
-          l.algorithm.toLowerCase().includes(q) ||
-          l.explanation.toLowerCase().includes(q) ||
-          (l.group && l.group.toLowerCase().includes(q))
-        )
-      }))
-      .filter(mod => mod.lessons.length > 0);
-  }, [activeCourse, searchQuery]);
-
   // Compute overall total completed lessons across all courses
   const totalCompletedLessons = useMemo(() => {
     let count = 0;
@@ -106,7 +87,6 @@ export default function Academy() {
 
   const handleTabChange = (courseId: string) => {
     setActiveCourseId(courseId);
-    setSearchQuery('');
     if (['beginner', 'cfop', 'roux', 'zz'].includes(courseId)) {
       setCurrentPath(courseId as any);
     }
@@ -118,16 +98,11 @@ export default function Academy() {
       {/* Header Context Banner */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-1 sm:mb-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
-              <Compass className="w-3 h-3" /> Interactive Curriculum
-            </span>
-          </div>
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
             <GraduationCap className="w-8 h-8 sm:w-9 sm:h-9 text-primary shrink-0" /> Cube Academy
           </h1>
           <p className="text-slate-600 dark:text-gray-400 text-xs sm:text-sm mt-1.5 max-w-2xl leading-relaxed">
-            Step-by-step 3D algorithm interactive lessons across all major speedcubing methodologies with in-depth walkthrough solves.
+            Step-by-step 3D algorithm interactive lessons across all major speedcubing methodologies. Master every layer.
           </p>
         </div>
         
@@ -222,12 +197,9 @@ export default function Academy() {
               <div className="absolute top-0 right-0 w-36 h-36 sm:w-64 sm:h-64 bg-primary/15 blur-[60px] sm:blur-[100px] rounded-full pointer-events-none" />
               
               <div className="relative z-10 max-w-3xl text-left">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <div className="flex items-center gap-2 mb-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-md">
                     Method Track: {activeCourse.badge}
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-500 dark:text-gray-400 bg-white/40 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 px-2.5 py-0.5 rounded-md">
-                    {activeCourse.totalLessons} Algorithms / Steps
                   </span>
                   {activeCourse.progress === 100 && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-md">
@@ -243,11 +215,11 @@ export default function Academy() {
                   {activeCourse.description}
                 </p>
                 
-                {/* Method Progress Detail & Search Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-                  <div className="flex-1 max-w-sm">
+                {/* Method Progress Detail */}
+                <div className="flex flex-wrap items-center gap-4 pt-1">
+                  <div className="flex-1 min-w-[200px] max-w-sm">
                     <div className="flex justify-between text-xs font-mono text-slate-600 dark:text-gray-400 mb-1.5">
-                      <span>Method Completion</span>
+                      <span>Method Progress</span>
                       <span className="font-bold text-slate-900 dark:text-white">{activeCourse.progress}%</span>
                     </div>
                     <div className="w-full h-2 bg-slate-200/80 dark:bg-white/10 rounded-full overflow-hidden">
@@ -257,25 +229,13 @@ export default function Academy() {
                       />
                     </div>
                   </div>
-
-                  {/* Filter / Search Input */}
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search algorithm or case..."
-                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
 
             {/* Modules List Container */}
             <div className="space-y-5 sm:space-y-6">
-              {filteredModules.map((module, mIdx) => (
+              {activeCourse.modules.map((module, mIdx) => (
                 <div 
                   key={module.id} 
                   className="glass-panel p-4 sm:p-6 border-slate-200/80 dark:border-white/10 text-left w-full"
@@ -283,13 +243,11 @@ export default function Academy() {
                   <div className="mb-5 sm:mb-6">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono font-bold text-primary uppercase tracking-widest">
-                        {module.title.startsWith('Step') || module.title.startsWith('Phase') || module.title.startsWith('Module')
-                          ? module.title.split(':')[0]
-                          : `Module ${mIdx + 1}`}
+                        Module {mIdx + 1}
                       </span>
                     </div>
                     <h3 className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white tracking-tight mt-0.5">
-                      {module.title.includes(':') ? module.title.split(':')[1].trim() : module.title}
+                      {module.title}
                     </h3>
                     <p className="text-slate-600 dark:text-gray-400 text-xs sm:text-sm mt-1 leading-relaxed">
                       {module.description}
@@ -322,14 +280,9 @@ export default function Academy() {
                                     {lesson.difficulty}
                                   </span>
                                 )}
-                                {lesson.isExampleSolve && (
-                                  <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 shrink-0">
-                                    Walkthrough Solve
-                                  </span>
-                                )}
                               </div>
                               {isCompleted && (
-                                <div className="flex items-center gap-1 text-emerald-500 shrink-0" title="Completed">
+                                <div className="flex items-center gap-1 text-emerald-500 shrink-0">
                                   <CheckCircle2 className="w-5 h-5" />
                                 </div>
                               )}
@@ -342,8 +295,8 @@ export default function Academy() {
                           
                           {/* Bottom Algorithm Bar & Launch 3D Button */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-auto pt-3 border-t border-slate-200/50 dark:border-white/5 w-full">
-                            <div className="flex items-center gap-2 min-w-0 max-w-full">
-                              <span className="px-2.5 py-1.5 max-w-[200px] truncate bg-slate-100 dark:bg-black/40 rounded-lg text-xs font-mono font-bold text-slate-800 dark:text-gray-200 border border-slate-200/80 dark:border-white/10 select-all" title={lesson.algorithm}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="px-2.5 py-1.5 max-w-full truncate bg-slate-100 dark:bg-black/40 rounded-lg text-xs font-mono font-bold text-slate-800 dark:text-gray-200 border border-slate-200/80 dark:border-white/10 select-all" title={lesson.algorithm}>
                                 {lesson.algorithm}
                               </span>
                               {lesson.estimatedTime && (
@@ -384,8 +337,8 @@ export default function Academy() {
             isCompleted={completedLessons.includes(activeLesson.id)}
             onClose={() => setActiveLesson(null)} 
             onSelectNextLesson={(next) => setActiveLesson(next)}
-            onToggleComplete={async (lessonId) => {
-              await toggleLessonComplete(lessonId);
+            onComplete={async (lessonId) => {
+              await markLessonComplete(lessonId);
             }} 
           />
         )}

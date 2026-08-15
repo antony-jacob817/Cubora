@@ -3,7 +3,6 @@ const router = express.Router();
 const {
   getLearningProgress,
   completeLesson,
-  toggleLesson,
   masterAlgorithm,
   updateCurrentPath
 } = require('../controllers/learningController');
@@ -13,7 +12,6 @@ router.use(protect);
 
 router.get('/progress', getLearningProgress);
 router.post('/complete-lesson', completeLesson);
-router.post('/toggle-lesson', toggleLesson);
 router.post('/master-algorithm', masterAlgorithm);
 router.post('/path', updateCurrentPath);
 
