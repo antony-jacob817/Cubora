@@ -36,9 +36,10 @@ export function LessonPlayer({
 
   // --- 3D PLAYBACK HOOK ---
   const lessonData = [{ phase: lesson.title, explanation: lesson.explanation, moves: lesson.algorithm }];
+  
   const { 
     isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, 
-    currentTimelineIndex, totalMoves, currentMove
+    currentTimelineIndex, totalMoves, currentMove 
   } = useSolvePlayback(lessonData);
 
   const movesList = lesson.algorithm.split(' ').filter(Boolean);
@@ -445,7 +446,7 @@ export function LessonPlayer({
               </div>
 
               {/* Bottom Hint */}
-              <div className="absolute bottom-6 text-[11px] font-mono text-slate-400 dark:text-gray-550">
+              <div className="absolute bottom-6 text-[11px] font-mono text-slate-400 dark:text-gray-500">
                 Execute the algorithm cleanly on your physical cube while timing
               </div>
             </div>

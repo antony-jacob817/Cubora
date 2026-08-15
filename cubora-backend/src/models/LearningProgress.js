@@ -24,8 +24,8 @@ const learningProgressSchema = new mongoose.Schema({
   },
   currentPath: {
     type: String,
-    enum: ['beginner', 'simplified-cfop', 'cfop', 'roux', 'zz'],
-    default: 'beginner'
+    enum: ['beginner', 'cfop', 'roux', 'zz'],
+    default: 'cfop'
   },
   lastActiveLesson: {
     type: String,

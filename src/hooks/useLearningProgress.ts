@@ -88,23 +88,22 @@ export function useLearningProgress() {
     }
   }, [token, getAuthHeaders]);
 
-  const toggleLessonComplete = useCallback(async (lessonId: string, isCompleted?: boolean) => {
+  const toggleLessonComplete = useCallback(async (lessonId: string, isCompleted?: boolean, lastActive?: string) => {
     if (!token) return;
     try {
       setError(null);
-      const currentlyCompleted = progress?.completedLessons.includes(lessonId) || false;
-      const targetState = isCompleted !== undefined ? isCompleted : !currentlyCompleted;
-
       // Optimistic state update
       setProgress(prev => {
         if (!prev) return prev;
-        const updatedLessons = targetState
+        const alreadyCompleted = prev.completedLessons.includes(lessonId);
+        const willBeCompleted = typeof isCompleted === 'boolean' ? isCompleted : !alreadyCompleted;
+        const updatedLessons = willBeCompleted
           ? Array.from(new Set([...prev.completedLessons, lessonId]))
           : prev.completedLessons.filter(id => id !== lessonId);
         return {
           ...prev,
           completedLessons: updatedLessons,
-          lastActiveLesson: targetState ? lessonId : prev.lastActiveLesson
+          lastActiveLesson: lastActive || lessonId
         };
       });
 
@@ -114,18 +113,18 @@ export function useLearningProgress() {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ lessonId, isCompleted: targetState, lastActiveLesson: lessonId })
+        body: JSON.stringify({ lessonId, isCompleted, lastActiveLesson: lastActive || lessonId })
       });
       const data = await res.json();
       if (data.success) {
         setProgress(data.data);
       } else {
-        setError(data.error || 'Failed to toggle lesson');
+        setError(data.error || 'Failed to update lesson status');
       }
     } catch (err: any) {
       setError(err.message || 'Error toggling lesson completion');
     }
-  }, [token, getAuthHeaders, progress]);
+  }, [token, getAuthHeaders]);
 
   const toggleAlgMastered = useCallback(async (algId: string, set: string, isMastered?: boolean) => {
     if (!token) return;
@@ -180,7 +179,7 @@ export function useLearningProgress() {
     completedLessons: progress?.completedLessons || [],
     masteredAlgorithms: progress?.masteredAlgorithms || [],
     masteredAlgsCount: progress?.masteredAlgsCount || 0,
-    currentPath: progress?.currentPath || 'beginner',
+    currentPath: progress?.currentPath || 'cfop',
     lastActiveLesson: progress?.lastActiveLesson || '',
     markLessonComplete,
     toggleLessonComplete,

@@ -6,7 +6,7 @@ const formatProgressResponse = (progress) => {
     completedLessons: progress.completedLessons || [],
     masteredAlgorithms: progress.masteredAlgorithms || [],
     masteredAlgsCount: (progress.masteredAlgorithms || []).length,
-    currentPath: progress.currentPath || 'beginner',
+    currentPath: progress.currentPath || 'cfop',
     lastActiveLesson: progress.lastActiveLesson || ''
   };
 };
@@ -23,7 +23,7 @@ exports.getLearningProgress = async (req, res) => {
         user: req.user.id,
         completedLessons: [],
         masteredAlgorithms: [],
-        currentPath: 'beginner',
+        currentPath: 'cfop',
         lastActiveLesson: ''
       });
     }
@@ -37,35 +37,43 @@ exports.getLearningProgress = async (req, res) => {
   }
 };
 
-// @desc    Mark or toggle a lesson as completed / uncompleted
+// @desc    Mark or toggle a lesson as completed
 // @route   POST /api/learning/complete-lesson
 // @access  Private
 exports.completeLesson = async (req, res) => {
   try {
-    const { lessonId, isCompleted, lastActiveLesson } = req.body;
+    const { lessonId, lastActiveLesson, isCompleted } = req.body;
 
     if (!lessonId || typeof lessonId !== 'string') {
       return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
     }
 
-    let updateQuery;
-    if (isCompleted === false) {
-      updateQuery = {
-        $pull: { completedLessons: lessonId },
-        ...(lastActiveLesson ? { $set: { lastActiveLesson } } : {})
-      };
-    } else {
-      updateQuery = {
-        $addToSet: { completedLessons: lessonId },
-        $set: { lastActiveLesson: lastActiveLesson || lessonId }
-      };
+    let progress = await LearningProgress.findOne({ user: req.user.id });
+    if (!progress) {
+      progress = new LearningProgress({ user: req.user.id });
     }
 
-    const progress = await LearningProgress.findOneAndUpdate(
-      { user: req.user.id },
-      updateQuery,
-      { new: true, upsert: true, runValidators: true }
-    );
+    const alreadyCompleted = (progress.completedLessons || []).includes(lessonId);
+
+    if (typeof isCompleted === 'boolean') {
+      if (isCompleted) {
+        if (!alreadyCompleted) progress.completedLessons.push(lessonId);
+      } else {
+        progress.completedLessons = progress.completedLessons.filter(id => id !== lessonId);
+      }
+    } else {
+      if (alreadyCompleted) {
+        progress.completedLessons = progress.completedLessons.filter(id => id !== lessonId);
+      } else {
+        progress.completedLessons.push(lessonId);
+      }
+    }
+
+    if (lastActiveLesson || lessonId) {
+      progress.lastActiveLesson = lastActiveLesson || lessonId;
+    }
+
+    await progress.save();
 
     res.status(200).json({
       success: true,
@@ -135,7 +143,7 @@ exports.masterAlgorithm = async (req, res) => {
 exports.updateCurrentPath = async (req, res) => {
   try {
     const { currentPath } = req.body;
-    const validPaths = ['beginner', 'simplified-cfop', 'cfop', 'roux', 'zz'];
+    const validPaths = ['beginner', 'cfop', 'roux', 'zz'];
 
     if (!currentPath || !validPaths.includes(currentPath)) {
       return res.status(400).json({ success: false, error: 'Invalid learning path.' });
