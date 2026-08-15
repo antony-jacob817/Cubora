@@ -54,43 +54,6 @@ export function useLearningProgress() {
     fetchProgress();
   }, [fetchProgress]);
 
-  const toggleLessonComplete = useCallback(async (lessonId: string, lastActive?: string) => {
-    if (!token) return;
-    try {
-      setError(null);
-      // Optimistic toggle update
-      setProgress(prev => {
-        if (!prev) return prev;
-        const exists = prev.completedLessons.includes(lessonId);
-        const updatedLessons = exists 
-          ? prev.completedLessons.filter(id => id !== lessonId)
-          : [...prev.completedLessons, lessonId];
-        return {
-          ...prev,
-          completedLessons: updatedLessons,
-          lastActiveLesson: exists ? prev.lastActiveLesson : (lastActive || lessonId)
-        };
-      });
-
-      const res = await fetch(`${API_BASE_URL}/toggle-lesson`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setProgress(data.data);
-      } else {
-        setError(data.error || 'Failed to toggle lesson completion');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error toggling lesson completion');
-    }
-  }, [token, getAuthHeaders]);
-
   const markLessonComplete = useCallback(async (lessonId: string, lastActive?: string) => {
     if (!token) return;
     try {
@@ -122,6 +85,43 @@ export function useLearningProgress() {
       }
     } catch (err: any) {
       setError(err.message || 'Error marking lesson complete');
+    }
+  }, [token, getAuthHeaders]);
+
+  const toggleLessonComplete = useCallback(async (lessonId: string, lastActive?: string) => {
+    if (!token) return;
+    try {
+      setError(null);
+      // Optimistic state toggle
+      setProgress(prev => {
+        if (!prev) return prev;
+        const exists = prev.completedLessons.includes(lessonId);
+        const updatedLessons = exists 
+          ? prev.completedLessons.filter(id => id !== lessonId)
+          : [...prev.completedLessons, lessonId];
+        return {
+          ...prev,
+          completedLessons: updatedLessons,
+          lastActiveLesson: lastActive || lessonId
+        };
+      });
+
+      const res = await fetch(`${API_BASE_URL}/toggle-lesson`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgress(data.data);
+      } else {
+        setError(data.error || 'Failed to toggle lesson');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error toggling lesson completion');
     }
   }, [token, getAuthHeaders]);
 

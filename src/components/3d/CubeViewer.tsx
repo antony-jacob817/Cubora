@@ -12,8 +12,6 @@ interface CubeViewerProps {
   action?: PlaybackAction | null;
   speed: number;
   currentTimelineIndex?: number;
-  cameraPosition?: [number, number, number];
-  cameraFov?: number;
 }
 
 function AmbientParticles() {
@@ -51,14 +49,7 @@ function AmbientParticles() {
   );
 }
 
-export function CubeViewer({ 
-  className, 
-  action, 
-  speed, 
-  currentTimelineIndex,
-  cameraPosition = [3.2, 2.6, 4.2],
-  cameraFov = 42
-}: CubeViewerProps) {
+export function CubeViewer({ className, action, speed, currentTimelineIndex }: CubeViewerProps) {
   const { accent } = useTheme();
   const { solution } = useSolver();
   const [controlsEnabled, setControlsEnabled] = useState(true);
@@ -89,7 +80,7 @@ export function CubeViewer({
   return (
     <div className={`w-full h-full relative cursor-grab active:cursor-grabbing touch-none ${className}`}>
       <Canvas 
-        camera={{ position: cameraPosition, fov: isMobile ? Math.min(cameraFov + 4, 48) : cameraFov }} 
+        camera={{ position: [3.2, 2.6, 4.2], fov: isMobile ? 40 : 42 }} 
         gl={{ antialias: true, alpha: true, stencil: false }} 
         dpr={[1, 1.5]} 
         shadows
