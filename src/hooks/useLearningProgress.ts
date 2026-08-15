@@ -8,7 +8,7 @@ export interface MasteredAlgorithm {
   reviewCount: number;
 }
 
-export type LearningPath = 'beginner' | 'simplified-cfop' | 'cfop' | 'roux' | 'zz';
+export type LearningPath = 'beginner' | 'cfop' | 'roux' | 'zz';
 
 export interface LearningProgressData {
   completedLessons: string[];
@@ -54,56 +54,24 @@ export function useLearningProgress() {
     fetchProgress();
   }, [fetchProgress]);
 
-  const markLessonComplete = useCallback(async (lessonId: string, lastActive?: string) => {
+  const toggleLessonComplete = useCallback(async (lessonId: string, isCompletedState?: boolean, lastActive?: string) => {
     if (!token) return;
     try {
       setError(null);
+      const willBeCompleted = isCompletedState !== undefined 
+        ? isCompletedState 
+        : !progress?.completedLessons.includes(lessonId);
+
       // Optimistic state update
       setProgress(prev => {
         if (!prev) return prev;
-        const updatedLessons = Array.from(new Set([...prev.completedLessons, lessonId]));
-        return {
-          ...prev,
-          completedLessons: updatedLessons,
-          lastActiveLesson: lastActive || lessonId
-        };
-      });
-
-      const res = await fetch(`${API_BASE_URL}/complete-lesson`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ lessonId, isCompleted: true, lastActiveLesson: lastActive || lessonId })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setProgress(data.data);
-      } else {
-        setError(data.error || 'Failed to complete lesson');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error marking lesson complete');
-    }
-  }, [token, getAuthHeaders]);
-
-  const toggleLessonComplete = useCallback(async (lessonId: string, isCompleted?: boolean, lastActive?: string) => {
-    if (!token) return;
-    try {
-      setError(null);
-      // Optimistic state update
-      setProgress(prev => {
-        if (!prev) return prev;
-        const alreadyCompleted = prev.completedLessons.includes(lessonId);
-        const willBeCompleted = typeof isCompleted === 'boolean' ? isCompleted : !alreadyCompleted;
         const updatedLessons = willBeCompleted
           ? Array.from(new Set([...prev.completedLessons, lessonId]))
           : prev.completedLessons.filter(id => id !== lessonId);
         return {
           ...prev,
           completedLessons: updatedLessons,
-          lastActiveLesson: lastActive || lessonId
+          lastActiveLesson: willBeCompleted ? (lastActive || lessonId) : prev.lastActiveLesson
         };
       });
 
@@ -113,7 +81,11 @@ export function useLearningProgress() {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ lessonId, isCompleted, lastActiveLesson: lastActive || lessonId })
+        body: JSON.stringify({ 
+          lessonId, 
+          isCompleted: willBeCompleted, 
+          lastActiveLesson: willBeCompleted ? (lastActive || lessonId) : undefined 
+        })
       });
       const data = await res.json();
       if (data.success) {
@@ -122,9 +94,13 @@ export function useLearningProgress() {
         setError(data.error || 'Failed to update lesson status');
       }
     } catch (err: any) {
-      setError(err.message || 'Error toggling lesson completion');
+      setError(err.message || 'Error updating lesson status');
     }
-  }, [token, getAuthHeaders]);
+  }, [token, getAuthHeaders, progress]);
+
+  const markLessonComplete = useCallback(async (lessonId: string, lastActive?: string) => {
+    return toggleLessonComplete(lessonId, true, lastActive);
+  }, [toggleLessonComplete]);
 
   const toggleAlgMastered = useCallback(async (algId: string, set: string, isMastered?: boolean) => {
     if (!token) return;

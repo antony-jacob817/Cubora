@@ -37,7 +37,7 @@ exports.getLearningProgress = async (req, res) => {
   }
 };
 
-// @desc    Mark or toggle a lesson as completed
+// @desc    Mark or unmark a lesson as completed
 // @route   POST /api/learning/complete-lesson
 // @access  Private
 exports.completeLesson = async (req, res) => {
@@ -48,32 +48,18 @@ exports.completeLesson = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
     }
 
-    let progress = await LearningProgress.findOne({ user: req.user.id });
-    if (!progress) {
-      progress = new LearningProgress({ user: req.user.id });
-    }
+    const updateQuery = isCompleted === false
+      ? { $pull: { completedLessons: lessonId } }
+      : {
+          $addToSet: { completedLessons: lessonId },
+          $set: { lastActiveLesson: lastActiveLesson || lessonId }
+        };
 
-    const alreadyCompleted = (progress.completedLessons || []).includes(lessonId);
-
-    if (typeof isCompleted === 'boolean') {
-      if (isCompleted) {
-        if (!alreadyCompleted) progress.completedLessons.push(lessonId);
-      } else {
-        progress.completedLessons = progress.completedLessons.filter(id => id !== lessonId);
-      }
-    } else {
-      if (alreadyCompleted) {
-        progress.completedLessons = progress.completedLessons.filter(id => id !== lessonId);
-      } else {
-        progress.completedLessons.push(lessonId);
-      }
-    }
-
-    if (lastActiveLesson || lessonId) {
-      progress.lastActiveLesson = lastActiveLesson || lessonId;
-    }
-
-    await progress.save();
+    const progress = await LearningProgress.findOneAndUpdate(
+      { user: req.user.id },
+      updateQuery,
+      { new: true, upsert: true, runValidators: true }
+    );
 
     res.status(200).json({
       success: true,
