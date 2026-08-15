@@ -8,7 +8,7 @@ export interface MasteredAlgorithm {
   reviewCount: number;
 }
 
-export type LearningPath = 'beginner' | 'cfop' | 'roux' | 'zz';
+export type LearningPath = 'beginner' | 'simplified-cfop' | 'cfop' | 'roux' | 'zz';
 
 export interface LearningProgressData {
   completedLessons: string[];
@@ -75,7 +75,7 @@ export function useLearningProgress() {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId })
+        body: JSON.stringify({ lessonId, isCompleted: true, lastActiveLesson: lastActive || lessonId })
       });
       const data = await res.json();
       if (data.success) {
@@ -87,6 +87,45 @@ export function useLearningProgress() {
       setError(err.message || 'Error marking lesson complete');
     }
   }, [token, getAuthHeaders]);
+
+  const toggleLessonComplete = useCallback(async (lessonId: string, isCompleted?: boolean) => {
+    if (!token) return;
+    try {
+      setError(null);
+      const currentlyCompleted = progress?.completedLessons.includes(lessonId) || false;
+      const targetState = isCompleted !== undefined ? isCompleted : !currentlyCompleted;
+
+      // Optimistic state update
+      setProgress(prev => {
+        if (!prev) return prev;
+        const updatedLessons = targetState
+          ? Array.from(new Set([...prev.completedLessons, lessonId]))
+          : prev.completedLessons.filter(id => id !== lessonId);
+        return {
+          ...prev,
+          completedLessons: updatedLessons,
+          lastActiveLesson: targetState ? lessonId : prev.lastActiveLesson
+        };
+      });
+
+      const res = await fetch(`${API_BASE_URL}/complete-lesson`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ lessonId, isCompleted: targetState, lastActiveLesson: lessonId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgress(data.data);
+      } else {
+        setError(data.error || 'Failed to toggle lesson');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error toggling lesson completion');
+    }
+  }, [token, getAuthHeaders, progress]);
 
   const toggleAlgMastered = useCallback(async (algId: string, set: string, isMastered?: boolean) => {
     if (!token) return;
@@ -141,9 +180,10 @@ export function useLearningProgress() {
     completedLessons: progress?.completedLessons || [],
     masteredAlgorithms: progress?.masteredAlgorithms || [],
     masteredAlgsCount: progress?.masteredAlgsCount || 0,
-    currentPath: progress?.currentPath || 'cfop',
+    currentPath: progress?.currentPath || 'beginner',
     lastActiveLesson: progress?.lastActiveLesson || '',
     markLessonComplete,
+    toggleLessonComplete,
     toggleAlgMastered,
     setCurrentPath,
     refetchProgress: fetchProgress

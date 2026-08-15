@@ -6,7 +6,7 @@ const formatProgressResponse = (progress) => {
     completedLessons: progress.completedLessons || [],
     masteredAlgorithms: progress.masteredAlgorithms || [],
     masteredAlgsCount: (progress.masteredAlgorithms || []).length,
-    currentPath: progress.currentPath || 'cfop',
+    currentPath: progress.currentPath || 'beginner',
     lastActiveLesson: progress.lastActiveLesson || ''
   };
 };
@@ -23,7 +23,7 @@ exports.getLearningProgress = async (req, res) => {
         user: req.user.id,
         completedLessons: [],
         masteredAlgorithms: [],
-        currentPath: 'cfop',
+        currentPath: 'beginner',
         lastActiveLesson: ''
       });
     }
@@ -37,23 +37,33 @@ exports.getLearningProgress = async (req, res) => {
   }
 };
 
-// @desc    Mark a lesson as completed
+// @desc    Mark or toggle a lesson as completed / uncompleted
 // @route   POST /api/learning/complete-lesson
 // @access  Private
 exports.completeLesson = async (req, res) => {
   try {
-    const { lessonId, lastActiveLesson } = req.body;
+    const { lessonId, isCompleted, lastActiveLesson } = req.body;
 
     if (!lessonId || typeof lessonId !== 'string') {
       return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
     }
 
-    const progress = await LearningProgress.findOneAndUpdate(
-      { user: req.user.id },
-      {
+    let updateQuery;
+    if (isCompleted === false) {
+      updateQuery = {
+        $pull: { completedLessons: lessonId },
+        ...(lastActiveLesson ? { $set: { lastActiveLesson } } : {})
+      };
+    } else {
+      updateQuery = {
         $addToSet: { completedLessons: lessonId },
         $set: { lastActiveLesson: lastActiveLesson || lessonId }
-      },
+      };
+    }
+
+    const progress = await LearningProgress.findOneAndUpdate(
+      { user: req.user.id },
+      updateQuery,
       { new: true, upsert: true, runValidators: true }
     );
 
@@ -125,7 +135,7 @@ exports.masterAlgorithm = async (req, res) => {
 exports.updateCurrentPath = async (req, res) => {
   try {
     const { currentPath } = req.body;
-    const validPaths = ['beginner', 'cfop', 'roux', 'zz'];
+    const validPaths = ['beginner', 'simplified-cfop', 'cfop', 'roux', 'zz'];
 
     if (!currentPath || !validPaths.includes(currentPath)) {
       return res.status(400).json({ success: false, error: 'Invalid learning path.' });
