@@ -75,7 +75,7 @@ export function useLearningProgress() {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId, isCompleted: true })
+        body: JSON.stringify({ lessonId, isCompleted: true, lastActiveLesson: lastActive || lessonId })
       });
       const data = await res.json();
       if (data.success) {
@@ -88,20 +88,20 @@ export function useLearningProgress() {
     }
   }, [token, getAuthHeaders]);
 
-  const toggleLessonComplete = useCallback(async (lessonId: string, shouldBeCompleted: boolean, lastActive?: string) => {
+  const toggleLessonComplete = useCallback(async (lessonId: string, isCompleted: boolean, lastActive?: string) => {
     if (!token) return;
     try {
       setError(null);
       // Optimistic state update
       setProgress(prev => {
         if (!prev) return prev;
-        const updatedLessons = shouldBeCompleted
+        const updatedLessons = isCompleted
           ? Array.from(new Set([...prev.completedLessons, lessonId]))
           : prev.completedLessons.filter(id => id !== lessonId);
         return {
           ...prev,
           completedLessons: updatedLessons,
-          lastActiveLesson: lastActive || (shouldBeCompleted ? lessonId : prev.lastActiveLesson)
+          lastActiveLesson: isCompleted ? (lastActive || lessonId) : prev.lastActiveLesson
         };
       });
 
@@ -111,16 +111,16 @@ export function useLearningProgress() {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId, isCompleted: shouldBeCompleted })
+        body: JSON.stringify({ lessonId, isCompleted, lastActiveLesson: lastActive || lessonId })
       });
       const data = await res.json();
       if (data.success) {
         setProgress(data.data);
       } else {
-        setError(data.error || 'Failed to update lesson status');
+        setError(data.error || 'Failed to update lesson completion');
       }
     } catch (err: any) {
-      setError(err.message || 'Error toggling lesson complete status');
+      setError(err.message || 'Error updating lesson completion');
     }
   }, [token, getAuthHeaders]);
 

@@ -48,17 +48,12 @@ exports.completeLesson = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
     }
 
-    let updateQuery;
-    if (isCompleted === false) {
-      updateQuery = {
-        $pull: { completedLessons: lessonId }
-      };
-    } else {
-      updateQuery = {
-        $addToSet: { completedLessons: lessonId },
-        $set: { lastActiveLesson: lastActiveLesson || lessonId }
-      };
-    }
+    const updateQuery = (isCompleted === false)
+      ? { $pull: { completedLessons: lessonId } }
+      : {
+          $addToSet: { completedLessons: lessonId },
+          $set: { lastActiveLesson: lastActiveLesson || lessonId }
+        };
 
     const progress = await LearningProgress.findOneAndUpdate(
       { user: req.user.id },

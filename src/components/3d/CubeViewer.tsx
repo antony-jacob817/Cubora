@@ -82,10 +82,7 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
   return (
     <div className={`w-full h-full relative cursor-grab active:cursor-grabbing touch-none ${className}`}>
       <Canvas 
-        camera={{ 
-          position: cameraPosition || [3.8, 3.15, 5.0], 
-          fov: fov !== undefined ? fov : (isMobile ? 38 : 36) 
-        }} 
+        camera={{ position: cameraPosition || [3.4, 2.7, 4.4], fov: fov || (isMobile ? 38 : 36) }} 
         gl={{ antialias: true, alpha: true, stencil: false }} 
         dpr={[1, 1.5]} 
         shadows
