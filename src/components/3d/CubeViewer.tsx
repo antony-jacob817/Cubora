@@ -63,22 +63,22 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
     }
   }, [accent]);
 
-  const effectiveScramble = useMemo(() => {
-    if (initialScramble !== undefined) return initialScramble;
+  const solverScramble = useMemo(() => {
     if (!solution?.steps) return [];
     const allMoves = solution.steps.flatMap(s => s.moves.split(' ')).filter(Boolean);
     const invert = (m: string) => m.includes("'") ? m.replace("'", "") : m.includes("2") ? m : m + "'";
     return allMoves.reverse().map(invert);
-  }, [initialScramble, solution]);
+  }, [solution]);
+
+  const activeScramble = initialScramble !== undefined ? initialScramble : solverScramble;
 
   return (
     <div className={`w-full h-full relative cursor-grab active:cursor-grabbing touch-none ${className}`}>
       <Canvas 
-        camera={{ position: cameraPosition || [5.2, 4.0, 5.8], fov: cameraFov || 42 }} 
+        camera={{ position: cameraPosition || [4.8, 3.8, 6.2], fov: cameraFov || 32 }} 
         gl={{ antialias: true, alpha: true, stencil: false }} 
         dpr={[1, 1.5]} 
         shadows
-        className="w-full h-full"
       >
         {/* Core Lighting */}
         <directionalLight position={[10, 15, 10]} intensity={3.2} color="#FFF6E9" castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} shadow-bias={-0.0001} />
@@ -96,7 +96,7 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
             currentTimelineIndex={currentTimelineIndex}
             setControlsEnabled={setControlsEnabled}
             isLocked={true} 
-            initialScramble={effectiveScramble} 
+            initialScramble={activeScramble} 
           />
         </Suspense>
         
@@ -105,11 +105,10 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
         
         <OrbitControls 
           makeDefault
+          enableZoom={false} 
           enablePan={false} 
-          enableZoom={true} 
-          minDistance={4} 
-          maxDistance={12} 
-          dampingFactor={0.06} 
+          enableRotate={true}
+          dampingFactor={0.08} 
           autoRotate={!action && controlsEnabled} 
           autoRotateSpeed={0.4} 
           enabled={controlsEnabled} 

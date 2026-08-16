@@ -71,8 +71,14 @@ export function useSolvePlayback(steps: SolveStep[]) {
 
   const togglePlay = () => setIsPlaying(!isPlaying);
 
+  const reset = useCallback(() => {
+    setIsPlaying(false);
+    setCurrentTimelineIndex(-1);
+    setAction(null);
+  }, []);
+
   return {
-    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove,
+    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, reset,
     currentTimelineIndex, activeStepIndex, action,
     totalMoves: moveTimeline.length,
     currentMove: action ? action.move : null
