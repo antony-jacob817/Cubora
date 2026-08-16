@@ -14,6 +14,7 @@ interface CubeViewerProps {
   currentTimelineIndex?: number;
   cameraPosition?: [number, number, number];
   cameraFov?: number;
+  initialScramble?: string[];
 }
 
 function AmbientParticles() {
@@ -51,20 +52,10 @@ function AmbientParticles() {
   );
 }
 
-export function CubeViewer({ className, action, speed, currentTimelineIndex, cameraPosition, cameraFov }: CubeViewerProps) {
+export function CubeViewer({ className, action, speed, currentTimelineIndex, cameraPosition, cameraFov, initialScramble }: CubeViewerProps) {
   const { accent } = useTheme();
   const { solution } = useSolver();
   const [controlsEnabled, setControlsEnabled] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 640);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const rimColor = useMemo(() => {
     switch (accent) {
@@ -72,20 +63,22 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
     }
   }, [accent]);
 
-  const initialScramble = useMemo(() => {
+  const effectiveScramble = useMemo(() => {
+    if (initialScramble !== undefined) return initialScramble;
     if (!solution?.steps) return [];
     const allMoves = solution.steps.flatMap(s => s.moves.split(' ')).filter(Boolean);
     const invert = (m: string) => m.includes("'") ? m.replace("'", "") : m.includes("2") ? m : m + "'";
     return allMoves.reverse().map(invert);
-  }, [solution]);
+  }, [initialScramble, solution]);
 
   return (
     <div className={`w-full h-full relative cursor-grab active:cursor-grabbing touch-none ${className}`}>
       <Canvas 
-        camera={{ position: cameraPosition || [3.8, 3.15, 5.0], fov: cameraFov || (isMobile ? 40 : 45) }} 
+        camera={{ position: cameraPosition || [5.2, 4.0, 5.8], fov: cameraFov || 42 }} 
         gl={{ antialias: true, alpha: true, stencil: false }} 
         dpr={[1, 1.5]} 
         shadows
+        className="w-full h-full"
       >
         {/* Core Lighting */}
         <directionalLight position={[10, 15, 10]} intensity={3.2} color="#FFF6E9" castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} shadow-bias={-0.0001} />
@@ -103,7 +96,7 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
             currentTimelineIndex={currentTimelineIndex}
             setControlsEnabled={setControlsEnabled}
             isLocked={true} 
-            initialScramble={initialScramble} 
+            initialScramble={effectiveScramble} 
           />
         </Suspense>
         
@@ -114,8 +107,8 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
           makeDefault
           enablePan={false} 
           enableZoom={true} 
-          minDistance={3} 
-          maxDistance={8} 
+          minDistance={4} 
+          maxDistance={12} 
           dampingFactor={0.06} 
           autoRotate={!action && controlsEnabled} 
           autoRotateSpeed={0.4} 

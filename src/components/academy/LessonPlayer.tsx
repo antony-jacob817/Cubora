@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, PlayCircle, BookOpen, CheckCircle2, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -16,6 +16,18 @@ interface LessonPlayerProps {
   onComplete?: () => void;
 }
 
+const invertMove = (move: string): string => {
+  if (move.includes("'")) return move.replace("'", "");
+  if (move.includes("2")) return move;
+  return move + "'";
+};
+
+const getInverseAlgorithm = (algorithm: string): string[] => {
+  if (!algorithm) return [];
+  const moves = algorithm.split(' ').filter(Boolean);
+  return moves.map(invertMove).reverse();
+};
+
 export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleComplete, onComplete }: LessonPlayerProps) {
   // Prevent background body scrolling when modal is active
   useEffect(() => {
@@ -27,12 +39,26 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
   }, []);
 
   // Wrap the single algorithm into the format expected by useSolvePlayback
-  const lessonData = [{ phase: lesson.title, explanation: lesson.explanation, moves: lesson.algorithm }];
+  const steps = useMemo(() => [
+    { phase: 'Algorithm', explanation: lesson.explanation || '', moves: lesson.algorithm || '' }
+  ], [lesson.algorithm, lesson.explanation]);
   
   const { 
-    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, 
-    currentTimelineIndex, totalMoves, currentMove 
-  } = useSolvePlayback(lessonData);
+    isPlaying, 
+    togglePlay, 
+    speed, 
+    setSpeed, 
+    nextMove, 
+    prevMove, 
+    currentTimelineIndex, 
+    action, 
+    totalMoves 
+  } = useSolvePlayback(steps);
+
+  // Compute inverse algorithm to set up scramble before playback begins
+  const initialScramble = useMemo(() => {
+    return getInverseAlgorithm(lesson.algorithm || '');
+  }, [lesson.algorithm]);
 
   const handleActionClick = () => {
     if (onToggleComplete) {
@@ -96,12 +122,14 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
           {/* Left: 3D Interaction Area */}
           <div className="flex-1 min-h-[260px] sm:min-h-[340px] lg:min-h-0 relative bg-gradient-to-b from-transparent to-primary/5 touch-none flex flex-col justify-center items-center overflow-hidden">
             <CubeViewer 
+              key={lesson.id}
               className="absolute inset-0"
-              action={currentMove}
+              action={action}
               speed={speed}
               currentTimelineIndex={currentTimelineIndex}
-              cameraPosition={[3.4, 2.7, 4.4]}
-              cameraFov={36}
+              cameraPosition={[5.2, 4.0, 5.8]}
+              cameraFov={42}
+              initialScramble={initialScramble}
             />
             
             {/* Algorithm Step-by-Step Overlay */}
