@@ -37,7 +37,7 @@ exports.getLearningProgress = async (req, res) => {
   }
 };
 
-// @desc    Mark or toggle a lesson as completed
+// @desc    Mark a lesson as completed
 // @route   POST /api/learning/complete-lesson
 // @access  Private
 exports.completeLesson = async (req, res) => {

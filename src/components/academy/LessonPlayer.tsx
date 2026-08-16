@@ -1,302 +1,189 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, BookOpen, CheckCircle2, Lightbulb, Clock, RotateCcw, ChevronRight, Undo2 } from 'lucide-react';
+import { X, PlayCircle, BookOpen, CheckCircle2, Check, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/Button';
 import { CubeViewer } from '@/components/3d/CubeViewer';
 import { PlaybackControls } from '@/components/solver/PlaybackControls';
 import { useSolvePlayback } from '@/hooks/useSolvePlayback';
 import type { Lesson } from '@/data/academy';
+import { clsx } from 'clsx';
 
 interface LessonPlayerProps {
   lesson: Lesson;
-  nextLesson?: Lesson | null;
   onClose: () => void;
-  onToggleComplete?: (lessonId: string, isCompleted: boolean) => Promise<void> | void;
-  onComplete?: (lessonId: string) => Promise<void> | void;
-  onSelectNextLesson?: (next: Lesson) => void;
+  onComplete?: () => void;
   isCompleted?: boolean;
+  onToggleComplete?: (lessonId: string) => void;
 }
 
-export function LessonPlayer({
-  lesson,
-  nextLesson,
-  onClose,
-  onToggleComplete,
-  onComplete,
-  onSelectNextLesson,
-  isCompleted = false
-}: LessonPlayerProps) {
-  const [isMarking, setIsMarking] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+export function LessonPlayer({ lesson, onClose, onComplete, isCompleted = false, onToggleComplete }: LessonPlayerProps) {
+  const [completedState, setCompletedState] = useState<boolean>(isCompleted);
+  const [isButtonHovered, setIsButtonHovered] = useState<boolean>(false);
 
-  // Prevent background body scrolling when modal is open
+  // Sync prop changes
   useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
+    setCompletedState(isCompleted);
+  }, [isCompleted]);
+
+  // Lock background body scrolling when modal is open
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = originalOverflow;
+      document.body.style.overflow = prevOverflow;
     };
   }, []);
 
-  // Format algorithm step for useSolvePlayback
+  // Wrap the single algorithm into the format expected by our playback hook
   const lessonData = [{ phase: lesson.title, explanation: lesson.explanation, moves: lesson.algorithm }];
   
   const { 
     isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, 
-    currentTimelineIndex, totalMoves, currentMove
+    currentTimelineIndex, totalMoves, currentMove 
   } = useSolvePlayback(lessonData);
 
-  const movesList = lesson.algorithm.split(' ').filter(Boolean);
-
-  const handleReset = () => {
-    // Step back to start
-    for (let i = 0; i <= currentTimelineIndex; i++) {
-      prevMove();
+  const handleToggleCompletion = () => {
+    const newState = !completedState;
+    setCompletedState(newState);
+    if (onToggleComplete) {
+      onToggleComplete(lesson.id);
+    } else if (onComplete && newState) {
+      onComplete();
     }
   };
 
-  const handleToggleState = async (targetCompletedState: boolean) => {
-    try {
-      setIsMarking(true);
-      if (onToggleComplete) {
-        await onToggleComplete(lesson.id, targetCompletedState);
-      } else if (onComplete) {
-        await onComplete(lesson.id);
-      }
-      
-      if (targetCompletedState && nextLesson && onSelectNextLesson) {
-        onSelectNextLesson(nextLesson);
-      }
-    } catch (err) {
-      console.error('Failed to update lesson completion:', err);
-    } finally {
-      setIsMarking(false);
-    }
-  };
-
-  return createPortal(
+  const modalContent = (
     <motion.div 
-      initial={{ opacity: 0, scale: 0.98 }} 
-      animate={{ opacity: 1, scale: 1 }} 
-      exit={{ opacity: 0, scale: 0.98 }}
-      transition={{ duration: 0.25 }}
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 overflow-hidden"
     >
-      <div className="w-full max-w-5xl h-[85vh] max-h-[750px] glass-panel border border-slate-200/80 dark:border-white/15 flex flex-col overflow-hidden relative shadow-[0_0_80px_rgba(0,0,0,0.6)] rounded-3xl bg-white/95 dark:bg-[#111315]/95 text-slate-900 dark:text-white">
-        
-        {/* Header Bar */}
-        <div className="px-5 py-4 sm:px-6 border-b border-slate-200/60 dark:border-white/10 flex justify-between items-center bg-slate-50/80 dark:bg-white/[0.02] shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
-              <BookOpen className="w-5 h-5 text-primary" />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.96, y: 15 }} 
+        animate={{ opacity: 1, scale: 1, y: 0 }} 
+        exit={{ opacity: 0, scale: 0.96, y: 15 }}
+        transition={{ duration: 0.2 }}
+        className="w-full max-w-5xl h-full max-h-[92vh] lg:h-[85vh] lg:max-h-[750px] glass-panel border-slate-200/80 dark:border-white/15 rounded-2xl sm:rounded-3xl flex flex-col overflow-hidden relative shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-white/95 dark:bg-[#121417]/95"
+      >
+        {/* Header */}
+        <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200/60 dark:border-white/10 flex justify-between items-center bg-slate-50/70 dark:bg-white/[0.02] shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(139,92,246,0.15)]">
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-display font-bold text-base sm:text-xl text-slate-900 dark:text-white truncate">
-                  {lesson.title}
-                </h2>
-                {lesson.difficulty && (
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 shrink-0">
-                    {lesson.difficulty}
-                  </span>
-                )}
-                {isCompleted && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
-                    <CheckCircle2 className="w-3 h-3" /> Mastered
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 dark:text-gray-400 font-mono tracking-wider truncate mt-0.5">
-                INTERACTIVE 3D LESSON PLAYER
-              </p>
+              <h2 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white truncate">{lesson.title}</h2>
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-gray-400 font-mono tracking-wider">ACADEMY MODULE</p>
             </div>
           </div>
-          
           <button 
             onClick={onClose} 
-            className="p-2 text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full transition-colors shrink-0 ml-2 cursor-pointer"
-            title="Close Lesson"
+            className="p-2 text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer focus:outline-none"
+            title="Close Lesson (Esc)"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
-        {/* Layout Split: Desktop 2-Column (3D Left, Details Right) / Mobile Stacked */}
+        {/* Layout Split: Mobile/Tablet Stacked (scrollable) -> Desktop 2-Column (Left: 3D Viewport, Right: Control/Details Panel) */}
         <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-y-auto lg:overflow-hidden">
           
-          {/* 3D Interactive Canvas Viewport */}
-          <div className="flex-1 min-h-[280px] sm:min-h-[360px] lg:min-h-0 relative bg-gradient-to-b from-transparent via-primary/[0.02] to-primary/[0.08] touch-none flex flex-col">
-            
-            {/* 3D Canvas */}
+          {/* 3D Interaction Viewport (Left) */}
+          <div className="w-full lg:flex-1 h-[280px] sm:h-[340px] lg:h-full relative bg-gradient-to-b from-transparent via-primary/[0.02] to-primary/5 touch-none shrink-0 lg:shrink">
             <CubeViewer 
               className="absolute inset-0"
-              action={currentMove ? { index: currentTimelineIndex, move: currentMove } : null}
+              currentMove={currentMove}
               speed={speed}
               currentTimelineIndex={currentTimelineIndex}
               cameraPosition={[3.4, 2.7, 4.4]}
               fov={36}
             />
-
-            {/* Floating Top Algorithm Sequence Visualizer */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/85 dark:bg-[#181A1D]/90 backdrop-blur-md border border-slate-200/80 dark:border-white/15 px-4 py-2 sm:px-6 sm:py-3 rounded-2xl shadow-lg max-w-[92%] overflow-x-auto hide-scrollbar z-20">
-              <div className="flex items-center gap-2 sm:gap-3 justify-center min-w-max">
-                {movesList.map((move, idx) => {
-                  const isActive = idx === currentTimelineIndex;
-                  return (
-                    <span 
-                      key={idx} 
-                      className={`font-mono text-base sm:text-2xl font-bold transition-all duration-200 px-1 py-0.5 rounded ${
-                        isActive 
-                          ? 'text-primary scale-125 bg-primary/10 ring-2 ring-primary/40' 
-                          : idx < currentTimelineIndex 
-                            ? 'text-slate-400 dark:text-slate-500 line-through opacity-70' 
-                            : 'text-slate-800 dark:text-gray-300'
-                      }`}
-                    >
-                      {move}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Bottom Overlay Hint */}
-            <div className="absolute bottom-4 left-4 z-20 hidden sm:flex items-center gap-2 text-[11px] font-mono text-slate-500 dark:text-gray-400 bg-white/60 dark:bg-black/50 border border-slate-200/50 dark:border-white/10 px-3 py-1.5 rounded-xl backdrop-blur-sm pointer-events-none">
-              <span>Drag to rotate 3D cube • Scroll to zoom</span>
+            
+            {/* Algorithm Overlay HUD */}
+            <div className="absolute top-4 sm:top-5 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#111315]/90 backdrop-blur-md border border-slate-200/80 dark:border-white/15 px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl shadow-lg max-w-[90%] overflow-x-auto hide-scrollbar z-10">
+               <div className="flex gap-1.5 sm:gap-2 items-center justify-center whitespace-nowrap">
+                 {lesson.algorithm.split(' ').map((move, idx) => (
+                   <span 
+                     key={idx} 
+                     className={clsx(
+                       "font-mono text-base sm:text-lg font-bold transition-all duration-200 px-1 py-0.5 rounded",
+                       idx === currentTimelineIndex 
+                         ? "text-primary scale-110 bg-primary/10 shadow-[0_0_10px_var(--btn-glow-shadow)]" 
+                         : "text-slate-600 dark:text-slate-400"
+                     )}
+                   >
+                     {move}
+                   </span>
+                 ))}
+               </div>
             </div>
           </div>
 
-          {/* Sidebar Instructions & Controls Panel */}
-          <div className="w-full lg:w-[400px] border-t lg:border-t-0 lg:border-l border-slate-200/60 dark:border-white/10 flex flex-col bg-white/70 dark:bg-[#111315]/90 backdrop-blur-lg shrink-0">
-            
-            {/* Scrollable Instruction Details */}
-            <div className="p-5 sm:p-6 flex-1 overflow-y-auto space-y-4 text-left">
+          {/* Control & Details Panel (Right on Desktop, Bottom on Mobile) */}
+          <div className="w-full lg:w-[380px] xl:w-[420px] lg:border-l border-t lg:border-t-0 border-slate-200/60 dark:border-white/10 flex flex-col bg-white/50 dark:bg-white/[0.02] shrink-0">
+            <div className="p-5 sm:p-6 lg:p-7 flex-1 overflow-y-auto space-y-4">
+              <div>
+                <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white mb-2">Mechanics</h3>
+                <p className="text-slate-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">{lesson.explanation}</p>
+              </div>
               
-              {/* Algorithm Box */}
-              <div className="bg-slate-100 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 text-left">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 dark:text-gray-400 block mb-1">
-                  Algorithm Sequence
-                </span>
-                <p className="font-mono text-base sm:text-xl font-bold text-slate-900 dark:text-white tracking-wider select-all">
-                  {lesson.algorithm}
+              <div className="bg-primary/10 border border-primary/20 rounded-xl p-3.5 sm:p-4 flex gap-3">
+                <PlayCircle className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm text-slate-800 dark:text-gray-200 font-medium leading-normal">
+                  Use the playback controls below to step through each turn. Click and drag the 3D viewport to inspect the cube from any angle.
                 </p>
-              </div>
-
-              {/* Lesson Explanation */}
-              <div className="text-left space-y-1.5">
-                <h3 className="font-display font-bold text-base text-slate-900 dark:text-white">
-                  Lesson Mechanics
-                </h3>
-                <p className="text-slate-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">
-                  {lesson.explanation}
-                </p>
-              </div>
-
-              {/* Finger Tricks & Execution Tip Card */}
-              {lesson.fingerTrickTips && (
-                <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 text-left space-y-1.5">
-                  <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-                    <Lightbulb className="w-4 h-4 shrink-0" />
-                    <span>Finger-Trick Pro Tip</span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-slate-800 dark:text-gray-200 leading-relaxed">
-                    {lesson.fingerTrickTips}
-                  </p>
-                </div>
-              )}
-
-              {/* Estimated Time & Progress Stats */}
-              <div className="flex items-center justify-between text-xs font-mono text-slate-500 dark:text-gray-400 pt-2 border-t border-slate-200/60 dark:border-white/5">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  Est. {lesson.estimatedTime || '5 min'}
-                </span>
-                <span>
-                  Move {currentTimelineIndex >= 0 ? currentTimelineIndex + 1 : 0} of {totalMoves}
-                </span>
               </div>
             </div>
 
-            {/* Playback Controls & Action Footer */}
-            <div className="p-4 sm:p-5 border-t border-slate-200/60 dark:border-white/10 bg-slate-50/90 dark:bg-[#141618] space-y-3.5">
-              
-              {/* Timeline Media Controls */}
+            {/* Bottom Controls Area */}
+            <div className="p-4 sm:p-5 lg:p-6 border-t border-slate-200/60 dark:border-white/10 bg-slate-50/80 dark:bg-[#111315]/80 flex flex-col gap-4">
               <PlaybackControls 
-                isPlaying={isPlaying} 
-                togglePlay={togglePlay}
-                nextMove={nextMove} 
-                prevMove={prevMove}
-                speed={speed} 
-                setSpeed={setSpeed}
+                isPlaying={isPlaying} togglePlay={togglePlay}
+                nextMove={nextMove} prevMove={prevMove}
+                speed={speed} setSpeed={setSpeed}
                 progress={totalMoves > 0 ? (currentTimelineIndex + 1) / totalMoves : 0}
               />
-
-              {/* Reset & Mark Complete Action Buttons */}
-              <div className="flex items-center gap-2.5 pt-1 w-full justify-between">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleReset}
-                  className="h-10 px-3 rounded-xl flex items-center justify-center shrink-0"
-                  title="Reset to Start"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </Button>
-
-                {/* Primary Action Button (Fixed dimensions & hover toggle) */}
-                {isCompleted ? (
-                  <button
-                    type="button"
-                    disabled={isMarking}
-                    onMouseEnter={() => setIsHovered(true)}
-                    onMouseLeave={() => setIsHovered(false)}
-                    onClick={() => handleToggleState(false)}
-                    className="flex-1 h-10 px-5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 select-none border border-emerald-500/40 text-emerald-500 hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10 active:scale-[0.98] cursor-pointer"
-                  >
-                    {isHovered ? (
-                      <>
-                        <Undo2 className="w-3.5 h-3.5 shrink-0" />
-                        <span>Undo Completion</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span>Completed</span>
-                      </>
-                    )}
-                  </button>
+              
+              {/* Standardized Primary Action Button */}
+              <button 
+                type="button"
+                onClick={handleToggleCompletion}
+                onMouseEnter={() => setIsButtonHovered(true)}
+                onMouseLeave={() => setIsButtonHovered(false)}
+                className={clsx(
+                  "w-full h-10 px-5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 select-none cursor-pointer focus:outline-none",
+                  completedState
+                    ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-600 dark:hover:text-rose-400 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                    : "bg-gradient-to-r from-primary to-secondary text-white btn-glow shadow-[0_2.5px_8px_var(--btn-glow-shadow)] hover:shadow-[0_4px_12px_var(--btn-glow-shadow)] hover:-translate-y-0.5 active:translate-y-0"
+                )}
+              >
+                {completedState ? (
+                  isButtonHovered ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                      <span>Undo Completion</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Completed</span>
+                    </>
+                  )
                 ) : (
-                  <Button 
-                    variant="glow"
-                    disabled={isMarking}
-                    onClick={() => handleToggleState(true)}
-                    className="flex-1 h-10 px-5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 select-none"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>{isMarking ? 'Saving...' : 'Mark as Completed'}</span>
-                  </Button>
+                  <>
+                    <Check className="w-3.5 h-3.5 shrink-0" />
+                    <span>Mark as Completed</span>
+                  </>
                 )}
-
-                {nextLesson && onSelectNextLesson && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => onSelectNextLesson(nextLesson)}
-                    className="h-10 px-3.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1"
-                    title={`Next: ${nextLesson.title}`}
-                  >
-                    <span>Next</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Button>
-                )}
-              </div>
+              </button>
             </div>
-
           </div>
 
         </div>
-      </div>
-    </motion.div>,
-    document.body
+      </motion.div>
+    </motion.div>
   );
+
+  return createPortal(modalContent, document.body);
 }

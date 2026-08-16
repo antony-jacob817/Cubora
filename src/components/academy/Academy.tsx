@@ -1,182 +1,105 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  GraduationCap, PlayCircle, Trophy, CheckCircle2, Clock
-} from 'lucide-react';
+import { GraduationCap, PlayCircle, Trophy, Target, CheckCircle2, Check, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageTransition } from '@/components/animations/PageTransition';
-import { ACADEMY_COURSES, type Lesson } from '@/data/academy';
+import { ACADEMY_COURSES, type Course, type Lesson } from '@/data/academy';
 import { LessonPlayer } from '@/components/academy/LessonPlayer';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { clsx } from 'clsx';
 
 export default function Academy() {
-  const { 
-    completedLessons, 
-    currentPath, 
-    masteredAlgsCount, 
-    markLessonComplete,
-    toggleLessonComplete, 
-    setCurrentPath 
-  } = useLearningProgress();
-
-  // Active course state initialized from currentPath or default
-  const [activeCourseId, setActiveCourseId] = useState<string>(() => {
-    const matched = ACADEMY_COURSES.find(c => c.id === currentPath);
-    return matched ? matched.id : 'beginner';
-  });
-
+  const [activeCourseId, setActiveCourseId] = useState<string>(ACADEMY_COURSES[1].id);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [hoveredButtonLessonId, setHoveredButtonLessonId] = useState<string | null>(null);
 
-  // Compute dynamic progress per course from completedLessons
-  const coursesWithDynamicProgress = useMemo(() => {
-    return ACADEMY_COURSES.map(course => {
-      let totalLessons = 0;
-      let completedInCourse = 0;
+  const { completedLessons, toggleLessonComplete, isLessonCompleted } = useLearningProgress();
 
-      course.modules.forEach(module => {
-        module.lessons.forEach(lesson => {
-          totalLessons++;
-          if (completedLessons.includes(lesson.id)) {
-            completedInCourse++;
-          }
-        });
-      });
+  const activeCourse = (ACADEMY_COURSES.find(c => c.id === activeCourseId) || ACADEMY_COURSES[0]) as Course;
 
-      const calculatedProgress = totalLessons > 0 
-        ? Math.round((completedInCourse / totalLessons) * 100) 
-        : 0;
+  // Calculate dynamic overall progress and course progress
+  const allLessons = useMemo(() => {
+    return ACADEMY_COURSES.flatMap(c => c.modules.flatMap(m => m.lessons));
+  }, []);
 
-      return {
-        ...course,
-        totalLessons,
-        completedInCourse,
-        progress: calculatedProgress
-      };
-    });
-  }, [completedLessons]);
+  const totalMasteredCount = useMemo(() => {
+    return allLessons.filter(l => completedLessons.includes(l.id) || l.isCompleted).length;
+  }, [allLessons, completedLessons]);
 
-  const activeCourse = useMemo(() => {
-    return coursesWithDynamicProgress.find(c => c.id === activeCourseId) || coursesWithDynamicProgress[0];
-  }, [coursesWithDynamicProgress, activeCourseId]);
-
-  // Compute overall total completed lessons across all courses
-  const totalCompletedLessons = useMemo(() => {
-    let count = 0;
-    ACADEMY_COURSES.forEach(c => {
-      c.modules.forEach(m => {
-        m.lessons.forEach(l => {
-          if (completedLessons.includes(l.id)) count++;
-        });
-      });
-    });
-    return count;
-  }, [completedLessons]);
-
-  // Compute next lesson in sequence for LessonPlayer modal
-  const nextLessonInTrack = useMemo(() => {
-    if (!activeLesson) return null;
-    let foundCurrent = false;
-    for (const mod of activeCourse.modules) {
-      for (const les of mod.lessons) {
-        if (foundCurrent) return les;
-        if (les.id === activeLesson.id) foundCurrent = true;
-      }
-    }
-    return null;
-  }, [activeCourse, activeLesson]);
-
-  const handleTabChange = (courseId: string) => {
-    setActiveCourseId(courseId);
-    if (['beginner', 'cfop', 'roux', 'zz'].includes(courseId)) {
-      setCurrentPath(courseId as any);
-    }
-  };
+  const courseProgressPercent = useMemo(() => {
+    const courseLessons = activeCourse.modules.flatMap(m => m.lessons);
+    if (courseLessons.length === 0) return 0;
+    const completedInCourse = courseLessons.filter(l => completedLessons.includes(l.id) || l.isCompleted).length;
+    return Math.round((completedInCourse / courseLessons.length) * 100);
+  }, [activeCourse, completedLessons]);
 
   return (
-    <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0 text-left">
+    <PageTransition className="w-full flex flex-col gap-5 sm:gap-6 pb-12 min-h-screen px-1 sm:px-0">
       
-      {/* Header Context Banner */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-1 sm:mb-3">
+      {/* Header Context */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2 sm:mb-4">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
-            <GraduationCap className="w-8 h-8 sm:w-9 sm:h-9 text-primary shrink-0" /> Cube Academy
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
+            <GraduationCap className="w-7 h-7 sm:w-8 sm:h-8 text-primary" /> Cube Academy
           </h1>
-          <p className="text-slate-600 dark:text-gray-400 text-xs sm:text-sm mt-1.5 max-w-2xl leading-relaxed">
-            Step-by-step 3D algorithm interactive lessons across all major speedcubing methodologies. Master every layer.
+          <p className="text-slate-600 dark:text-gray-400 text-xs sm:text-sm mt-1.5 max-w-xl leading-relaxed">
+            Interactive algorithms and methodologies powered by the 3D tracking engine. Master every layer.
           </p>
         </div>
         
         {/* Top Mini Stats Dashboard Frame */}
-        <div className="flex items-center gap-4 bg-white/60 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 px-4 sm:px-5 py-3 rounded-2xl shadow-sm self-start md:self-auto shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-yellow-500/15 border border-yellow-500/20 flex items-center justify-center text-yellow-500 shrink-0">
-            <Trophy className="w-5 h-5" />
-          </div>
+        <div className="flex items-center gap-3.5 bg-white/40 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 px-4 py-2.5 rounded-2xl shadow-sm self-start md:self-auto min-h-[44px]">
+          <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 flex-shrink-0" />
           <div className="flex flex-col">
-            <span className="text-[10px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider leading-none mb-1">
-              Curriculum Mastery
+            <span className="text-[10px] text-slate-700 dark:text-gray-400 font-bold uppercase tracking-wider leading-none mb-1">Overall Mastery</span>
+            <span className="text-sm sm:text-base text-slate-900 dark:text-white font-mono font-bold leading-none">
+              {totalMasteredCount} / {allLessons.length} Algs
             </span>
-            <div className="flex items-center gap-3">
-              <span className="text-sm sm:text-base text-slate-900 dark:text-white font-mono font-bold leading-none">
-                {totalCompletedLessons} Lessons Done
-              </span>
-              <span className="text-xs text-primary font-mono font-bold border-l border-slate-200 dark:border-white/10 pl-3">
-                {masteredAlgsCount} Algs Mastered
-              </span>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Grid: Sticky Method Selector Sidebar + Active Track Modules */}
-      <div className="flex flex-col xl:grid xl:grid-cols-4 gap-6 sm:gap-8 items-start">
+      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6 sm:gap-8 items-start relative">
         
-        {/* Sticky Method Navigation Column (Requirement 2) */}
-        <div className="w-full xl:col-span-1 flex flex-row overflow-x-auto hide-scrollbar gap-3 pb-2 xl:pb-0 xl:flex-col snap-x scroll-smooth whitespace-nowrap xl:whitespace-normal xl:sticky xl:top-6 xl:self-start xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
-          {coursesWithDynamicProgress.map((course) => {
-            const isActive = activeCourseId === course.id;            
+        {/* Left Column: Sticky Course Selection Menu */}
+        <div className="w-full lg:col-span-1 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] flex flex-row overflow-x-auto hide-scrollbar gap-3 pb-2 lg:pb-0 lg:flex-col snap-x scroll-smooth whitespace-nowrap lg:whitespace-normal lg:overflow-y-auto">
+          {ACADEMY_COURSES.map((course) => {
+            const isActive = activeCourseId === course.id;
+            const courseLessons = course.modules.flatMap(m => m.lessons);
+            const completedCount = courseLessons.filter(l => completedLessons.includes(l.id) || l.isCompleted).length;
+            const progressPct = courseLessons.length > 0 ? Math.round((completedCount / courseLessons.length) * 100) : course.progress;
 
             return (
               <button
                 key={course.id}
-                onClick={() => handleTabChange(course.id)}
+                onClick={() => setActiveCourseId(course.id)}
                 className={clsx(
-                  "flex-shrink-0 w-[240px] sm:w-[260px] xl:w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group snap-center min-h-[44px]",
-                  isActive 
-                    ? "bg-primary/10 border-primary/40 shadow-md ring-1 ring-primary/20" 
-                    : "bg-white/60 dark:bg-white/5 border-slate-200/80 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/10"
+                  "flex-shrink-0 w-[260px] sm:w-[280px] lg:w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group snap-center min-h-[44px] cursor-pointer",
+                  isActive ? "bg-primary/10 border-primary/30 shadow-md" : "bg-white/40 dark:bg-white/5 border-slate-200/80 dark:border-white/10 hover:bg-white/70 dark:hover:bg-white/10"
                 )}
               >
                 {isActive && (
                   <motion.div 
                     layoutId="activeCourseBg" 
-                    className="absolute inset-0 bg-gradient-to-r from-primary/15 to-transparent border-b-2 xl:border-b-0 xl:border-l-4 border-primary" 
+                    className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent border-b-2 lg:border-b-0 lg:border-l-4 border-primary" 
                   />
                 )}
                 
                 <div className="relative z-10 w-full">
                   <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-[10px] font-bold font-mono tracking-widest text-primary uppercase">
-                      {course.badge}
-                    </span>
-                    <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500 dark:text-gray-400">
-                      <span>{course.completedInCourse}/{course.totalLessons}</span>
-                    </div>
+                    <span className="text-[10px] font-bold font-mono tracking-widest text-primary uppercase">{course.badge}</span>
+                    <Target className="w-3.5 h-3.5 text-slate-600 dark:text-gray-400" />
                   </div>
-                  
                   <h3 className={clsx(
-                    "font-display font-bold text-base sm:text-lg mb-2.5 truncate xl:whitespace-normal", 
+                    "font-display font-bold text-base sm:text-lg mb-3 truncate lg:whitespace-normal", 
                     isActive ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-gray-300"
                   )}>
                     {course.title}
                   </h3>
                   
                   {/* Mini Tracking Progress Component */}
-                  <div className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-primary transition-all duration-500 rounded-full" 
-                      style={{ width: `${course.progress}%` }} 
-                    />
+                  <div className="w-full h-1.5 bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progressPct}%` }} />
                   </div>
                 </div>
               </button>
@@ -184,138 +107,139 @@ export default function Academy() {
           })}
         </div>
 
-        {/* Active Course Modules & Lesson Sheet */}
-        <div className="w-full xl:col-span-3">
+        {/* Right Column: Active Course Track & Horizontal Carousels */}
+        <div className="w-full lg:col-span-3 min-w-0">
           <motion.div 
             key={activeCourse.id}
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col gap-5 sm:gap-6"
+            transition={{ duration: 0.4 }}
+            className="flex flex-col gap-5 sm:gap-6 min-w-0"
           >
-            {/* Active Course Banner Hero */}
-            <div className="glass-panel p-5 sm:p-6 md:p-8 relative overflow-hidden w-full border-slate-200/80 dark:border-white/10">
-              <div className="absolute top-0 right-0 w-36 h-36 sm:w-64 sm:h-64 bg-primary/15 blur-[60px] sm:blur-[100px] rounded-full pointer-events-none" />
+            {/* Course Header Hero Card */}
+            <div className="glass-panel p-5 sm:p-6 md:p-8 relative overflow-hidden w-full">
+              <div className="absolute top-0 right-0 w-32 h-32 sm:w-64 sm:h-64 bg-primary/10 sm:bg-primary/20 blur-[60px] sm:blur-[100px] rounded-full pointer-events-none" />
               
-              <div className="relative z-10 max-w-3xl text-left">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-md">
-                    Method Track: {activeCourse.badge}
-                  </span>
-                  {activeCourse.progress === 100 && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-md">
-                      <CheckCircle2 className="w-3 h-3" /> Track Completed
-                    </span>
-                  )}
-                </div>
-                
-                <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2.5 tracking-tight">
+              <div className="relative z-10 max-w-2xl text-left">
+                <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-3 sm:mb-4 tracking-tight">
                   {activeCourse.title}
                 </h2>
-                <p className="text-slate-700 dark:text-gray-300 text-sm sm:text-base leading-relaxed mb-5">
+                <p className="text-slate-700 dark:text-gray-300 text-sm sm:text-base md:text-lg leading-relaxed mb-5 sm:mb-6">
                   {activeCourse.description}
                 </p>
-                
-                {/* Method Progress Detail */}
-                <div className="flex flex-wrap items-center gap-4 pt-1">
-                  <div className="flex-1 min-w-[200px] max-w-sm">
-                    <div className="flex justify-between text-xs font-mono text-slate-600 dark:text-gray-400 mb-1.5">
-                      <span>Method Progress</span>
-                      <span className="font-bold text-slate-900 dark:text-white">{activeCourse.progress}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-200/80 dark:bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 rounded-full" 
-                        style={{ width: `${activeCourse.progress}%` }} 
-                      />
-                    </div>
-                  </div>
+                <div className="flex flex-wrap items-center gap-4">
+                   <Button 
+                    variant="glow" 
+                    className="h-10 px-5 rounded-xl text-xs font-bold tracking-wide"
+                    onClick={() => {
+                      const firstIncomplete = activeCourse.modules.flatMap(m => m.lessons).find(l => !completedLessons.includes(l.id) && !l.isCompleted);
+                      if (firstIncomplete) {
+                        setActiveLesson(firstIncomplete);
+                      } else if (activeCourse.modules[0]?.lessons[0]) {
+                        setActiveLesson(activeCourse.modules[0].lessons[0]);
+                      }
+                    }}
+                   >
+                     Continue Track
+                   </Button>
+                   <span className="text-slate-500 dark:text-gray-400 font-mono text-xs sm:text-sm">
+                     {courseProgressPercent}% Completed
+                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Modules List Container */}
-            <div className="space-y-5 sm:space-y-6">
+            {/* Modules List Sheet with Horizontal Side-Scrollable Carousels */}
+            <div className="space-y-5 sm:space-y-6 min-w-0">
               {activeCourse.modules.map((module, mIdx) => (
-                <div 
-                  key={module.id} 
-                  className="glass-panel p-4 sm:p-6 border-slate-200/80 dark:border-white/10 text-left w-full overflow-hidden"
-                >
+                <div key={module.id} className="glass-panel p-4 sm:p-6 border-slate-200/80 dark:border-white/5 text-left w-full overflow-hidden">
                   <div className="mb-4 sm:mb-5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-primary uppercase tracking-widest">
-                        Module {mIdx + 1}
-                      </span>
-                    </div>
-                    <h3 className="font-display font-bold text-xl sm:text-2xl text-slate-900 dark:text-white tracking-tight mt-0.5">
-                      {module.title}
+                    <h3 className="font-display font-bold text-lg sm:text-xl md:text-2xl text-slate-900 dark:text-white tracking-tight">
+                      Module {mIdx + 1}: {module.title}
                     </h3>
                     <p className="text-slate-600 dark:text-gray-400 text-xs sm:text-sm mt-1 leading-relaxed">
                       {module.description}
                     </p>
                   </div>
 
-                  {/* Horizontal Side-Scrollable Carousel for Module Cases (Requirement 3) */}
-                  <div className="flex flex-row flex-nowrap gap-3.5 overflow-x-auto pb-3 pt-1 snap-x scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hide-scrollbar-mobile">
+                  {/* Horizontal Side-Scrollable Carousel for Module Cases */}
+                  <div className="flex flex-row flex-nowrap gap-3.5 overflow-x-auto pb-3 pt-1 snap-x scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                     {module.lessons.map((lesson) => {
-                      const isCompleted = completedLessons.includes(lesson.id);
+                      const isCompleted = isLessonCompleted(lesson.id) || lesson.isCompleted;
+                      const isHovered = hoveredButtonLessonId === lesson.id;
 
                       return (
                         <div 
                           key={lesson.id} 
-                          className={clsx(
-                            "w-[280px] sm:w-[320px] shrink-0 snap-start bg-white/70 dark:bg-white/5 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between group transition-all duration-200 shadow-sm min-h-[175px]",
-                            isCompleted 
-                              ? "border-emerald-500/30 bg-emerald-500/[0.02]" 
-                              : "border-slate-200/80 dark:border-white/10 hover:border-primary/40 hover:bg-white/90 dark:hover:bg-white/[0.08]"
-                          )}
+                          className="w-[280px] sm:w-[320px] shrink-0 snap-start bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between group hover:border-primary/30 transition-all shadow-sm min-h-[220px]"
                         >
                           <div className="w-full">
-                            <div className="flex justify-between items-start gap-2 mb-2">
-                              <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-primary transition-colors leading-snug truncate">
-                                  {lesson.title}
-                                </h4>
-                                {lesson.difficulty && (
-                                  <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-gray-400 shrink-0">
-                                    {lesson.difficulty}
-                                  </span>
-                                )}
-                              </div>
-                              {isCompleted && (
-                                <div className="flex items-center gap-1 text-emerald-500 shrink-0">
-                                  <CheckCircle2 className="w-5 h-5" />
-                                </div>
-                              )}
+                            <div className="flex justify-between items-start gap-2 mb-1.5">
+                               <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-primary transition-colors leading-snug truncate" title={lesson.title}>
+                                 {lesson.title}
+                               </h4>
+                               {isCompleted && (
+                                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 shrink-0 mt-0.5" />
+                               )}
                             </div>
-                            
-                            <p className="text-xs text-slate-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
+                            <p className="text-xs text-slate-600 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">
                               {lesson.explanation}
                             </p>
                           </div>
-                          
-                          {/* Bottom Algorithm Bar & Launch 3D Button (Requirement 4) */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mt-auto pt-3 border-t border-slate-200/50 dark:border-white/5 w-full">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="px-2.5 py-1.5 max-w-[150px] truncate bg-slate-100 dark:bg-black/40 rounded-lg text-xs font-mono font-bold text-slate-800 dark:text-gray-200 border border-slate-200/80 dark:border-white/10 select-all" title={lesson.algorithm}>
-                                {lesson.algorithm}
-                              </span>
-                              {lesson.estimatedTime && (
-                                <span className="text-[10px] font-mono text-slate-400 dark:text-gray-500 flex items-center gap-1 shrink-0">
-                                  <Clock className="w-3 h-3" /> {lesson.estimatedTime}
-                                </span>
-                              )}
-                            </div>
 
-                            <Button 
-                              variant={isCompleted ? "secondary" : "glow"}
-                              size="sm" 
-                              className="h-9 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 select-none"
-                              onClick={() => setActiveLesson(lesson)}
-                            >
-                              <PlayCircle className="w-3.5 h-3.5" /> 
-                              {isCompleted ? 'Review 3D' : 'Practice 3D'}
-                            </Button>
+                          {/* Algorithm Badge */}
+                          <div className="w-full mb-3">
+                            <span className="block px-2.5 py-1.5 w-full truncate bg-slate-200/40 dark:bg-black/30 rounded-lg text-[11px] font-mono font-bold text-slate-800 dark:text-gray-300 border border-slate-200/80 dark:border-white/5 select-all text-center" title={lesson.algorithm}>
+                              {lesson.algorithm}
+                            </span>
+                          </div>
+                          
+                          {/* Controls Row: Practice & Standardized Completion Toggle Button */}
+                          <div className="flex flex-col gap-2 mt-auto pt-2 w-full">
+                            <div className="flex items-center gap-2 w-full">
+                              <Button 
+                                variant="secondary" 
+                                size="sm" 
+                                className="h-10 flex-1 px-3 text-xs font-bold hover:bg-primary hover:text-white hover:border-primary flex items-center justify-center gap-1.5 rounded-xl"
+                                onClick={() => setActiveLesson(lesson)}
+                              >
+                                <PlayCircle className="w-3.5 h-3.5 shrink-0" /> Practice
+                              </Button>
+
+                              {/* Standardized Completion Toggle Button */}
+                              <button
+                                type="button"
+                                onClick={() => toggleLessonComplete(lesson.id)}
+                                onMouseEnter={() => setHoveredButtonLessonId(lesson.id)}
+                                onMouseLeave={() => setHoveredButtonLessonId(null)}
+                                className={clsx(
+                                  "h-10 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none shrink-0 cursor-pointer focus:outline-none",
+                                  isCompleted
+                                    ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-600 dark:hover:text-rose-400"
+                                    : "border border-slate-300 dark:border-white/15 bg-slate-100/70 dark:bg-white/5 text-slate-700 dark:text-gray-300 hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                )}
+                                title={isCompleted ? "Click to undo completion" : "Click to mark complete"}
+                              >
+                                {isCompleted ? (
+                                  isHovered ? (
+                                    <>
+                                      <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                                      <span className="hidden sm:inline">Undo</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                      <span className="hidden sm:inline">Done</span>
+                                    </>
+                                  )
+                                ) : (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="hidden sm:inline">Done</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -329,20 +253,16 @@ export default function Academy() {
         </div>
       </div>
 
-      {/* 3D Interactive Lesson Player Modal View (Portal-Rendered) */}
+      {/* Interactive Modal Tracking Sheets */}
       <AnimatePresence>
         {activeLesson && (
           <LessonPlayer 
             lesson={activeLesson} 
-            nextLesson={nextLessonInTrack}
-            isCompleted={completedLessons.includes(activeLesson.id)}
+            isCompleted={isLessonCompleted(activeLesson.id) || activeLesson.isCompleted}
+            onToggleComplete={(lessonId) => toggleLessonComplete(lessonId)}
             onClose={() => setActiveLesson(null)} 
-            onSelectNextLesson={(next) => setActiveLesson(next)}
-            onToggleComplete={async (lessonId, isCompletedState) => {
-              await toggleLessonComplete(lessonId, isCompletedState);
-            }}
-            onComplete={async (lessonId) => {
-              await markLessonComplete(lessonId);
+            onComplete={() => {
+              toggleLessonComplete(activeLesson.id, true);
             }} 
           />
         )}
