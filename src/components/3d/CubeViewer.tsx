@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useRef, useState, useEffect } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, ContactShadows } from '@react-three/drei';
 import { AnimatedCube } from './AnimatedCube';

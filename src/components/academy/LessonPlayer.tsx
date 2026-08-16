@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, PlayCircle, BookOpen, CheckCircle2, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -17,6 +17,16 @@ interface LessonPlayerProps {
 }
 
 export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleComplete, onComplete }: LessonPlayerProps) {
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Prevent background body scrolling when modal is active
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -111,7 +121,7 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
               speed={speed}
               currentTimelineIndex={currentTimelineIndex}
               initialScramble={initialScramble}
-              cameraPosition={[4.8, 3.8, 6.2]}
+              cameraPosition={isDesktop ? [5.65, 4.45, 7.3] : [4.8, 3.8, 6.2]}
               cameraFov={32}
             />
             
