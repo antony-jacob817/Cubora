@@ -79,7 +79,9 @@ export function useSolvePlayback(steps: SolveStep[]) {
 
   return {
     isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, reset,
-    currentTimelineIndex, activeStepIndex, action,
+    currentTimelineIndex, activeStepIndex, 
+    localMoveIndex: currentTimelineIndex >= 0 ? moveTimeline[currentTimelineIndex]?.moveIndex : -1,
+    action,
     totalMoves: moveTimeline.length,
     currentMove: action ? action.move : null
   };
