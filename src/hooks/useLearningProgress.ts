@@ -75,7 +75,7 @@ export function useLearningProgress() {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId })
+        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId, isCompleted: true })
       });
       const data = await res.json();
       if (data.success) {
@@ -87,6 +87,48 @@ export function useLearningProgress() {
       setError(err.message || 'Error marking lesson complete');
     }
   }, [token, getAuthHeaders]);
+
+  const unmarkLessonComplete = useCallback(async (lessonId: string) => {
+    if (!token) return;
+    try {
+      setError(null);
+      // Optimistic state update
+      setProgress(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          completedLessons: prev.completedLessons.filter(id => id !== lessonId)
+        };
+      });
+
+      const res = await fetch(`${API_BASE_URL}/complete-lesson`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ lessonId, isCompleted: false })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgress(data.data);
+      } else {
+        setError(data.error || 'Failed to unmark lesson');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error unmarking lesson');
+    }
+  }, [token, getAuthHeaders]);
+
+  const toggleLessonComplete = useCallback(async (lessonId: string, lastActive?: string) => {
+    if (!token) return;
+    const isCurrentlyCompleted = progress?.completedLessons.includes(lessonId) || false;
+    if (isCurrentlyCompleted) {
+      await unmarkLessonComplete(lessonId);
+    } else {
+      await markLessonComplete(lessonId, lastActive);
+    }
+  }, [token, progress, unmarkLessonComplete, markLessonComplete]);
 
   const toggleAlgMastered = useCallback(async (algId: string, set: string, isMastered?: boolean) => {
     if (!token) return;
@@ -144,6 +186,8 @@ export function useLearningProgress() {
     currentPath: progress?.currentPath || 'cfop',
     lastActiveLesson: progress?.lastActiveLesson || '',
     markLessonComplete,
+    unmarkLessonComplete,
+    toggleLessonComplete,
     toggleAlgMastered,
     setCurrentPath,
     refetchProgress: fetchProgress

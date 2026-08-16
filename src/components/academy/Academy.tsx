@@ -12,16 +12,16 @@ export default function Academy() {
   const [activeCourseId, setActiveCourseId] = useState<string>(ACADEMY_COURSES[1].id);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
 
-  const { completedLessons, markLessonComplete, toggleAlgMastered } = useLearningProgress();
+  const { completedLessons, toggleLessonComplete, toggleAlgMastered } = useLearningProgress();
 
   const activeCourse = (ACADEMY_COURSES.find(c => c.id === activeCourseId) || ACADEMY_COURSES[0]) as Course;
 
-  // Calculate dynamic overall progress metrics across all academy courses
+  // Calculate dynamic overall progress metrics
   const allLessons = useMemo(() => ACADEMY_COURSES.flatMap(c => c.modules.flatMap(m => m.lessons)), []);
   const totalAlgsCount = allLessons.length;
   const masteredAlgsCount = allLessons.filter(l => completedLessons.includes(l.id)).length;
 
-  // Active course dynamic progress calculations
+  // Active course dynamic progress calculation
   const activeCourseLessons = useMemo(() => activeCourse.modules.flatMap(m => m.lessons), [activeCourse]);
   const activeCourseCompletedCount = useMemo(
     () => activeCourseLessons.filter(l => completedLessons.includes(l.id)).length,
@@ -33,12 +33,9 @@ export default function Academy() {
 
   const handleToggleLessonComplete = async (lessonId: string) => {
     const isCurrentlyCompleted = completedLessons.includes(lessonId);
-    await markLessonComplete(lessonId);
-    // Also record algorithm mastery in learning state
-    const currentLessonObj = allLessons.find(l => l.id === lessonId);
-    if (currentLessonObj) {
-      await toggleAlgMastered(lessonId, activeCourse.id, !isCurrentlyCompleted);
-    }
+    await toggleLessonComplete(lessonId);
+    // Also sync algorithm mastery in learning state
+    await toggleAlgMastered(lessonId, activeCourse.id, !isCurrentlyCompleted);
   };
 
   return (
@@ -69,7 +66,7 @@ export default function Academy() {
       </div>
 
       <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6 sm:gap-8 items-start">
-        {/* Left Column: Sticky Method Navigation Column */}
+        {/* Left Column: Course Selection Menu (Sticky on Desktop, Horizontal Scroll on Mobile/Tablet) */}
         <div className="w-full lg:col-span-1 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] flex flex-row overflow-x-auto hide-scrollbar gap-3 pb-2 lg:pb-0 lg:flex-col snap-x scroll-smooth whitespace-nowrap lg:whitespace-normal lg:overflow-y-auto">
           {ACADEMY_COURSES.map((course) => {
             const isActive = activeCourseId === course.id;
@@ -82,6 +79,7 @@ export default function Academy() {
             return (
               <button
                 key={course.id}
+                type="button"
                 onClick={() => setActiveCourseId(course.id)}
                 className={clsx(
                   "flex-shrink-0 w-[260px] sm:w-[280px] lg:w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group snap-center min-h-[44px] cursor-pointer",
@@ -166,7 +164,7 @@ export default function Academy() {
               </div>
             </div>
 
-            {/* Modules List with Side-Scrollable Horizontal Carousels */}
+            {/* Modules List with Side-Scrollable Carousels */}
             <div className="space-y-5 sm:space-y-6">
               {activeCourse.modules.map((module, mIdx) => (
                 <div
@@ -206,7 +204,7 @@ export default function Academy() {
                             </p>
                           </div>
 
-                          {/* Control Box Area with Standardized Dimensions */}
+                          {/* Control Box Area with Standardized Fixed Dimensions */}
                           <div className="flex flex-col gap-2.5 mt-auto pt-2 w-full">
                             <span
                               className="px-2.5 py-1.5 w-full truncate bg-slate-200/40 dark:bg-background rounded-xl text-[11px] font-mono font-bold text-slate-800 dark:text-gray-300 border border-slate-200/80 dark:border-white/5 select-all text-center"
@@ -215,7 +213,7 @@ export default function Academy() {
                               {lesson.algorithm}
                             </span>
 
-                            {/* Standardized Primary Action Button */}
+                            {/* Standardized Action Button */}
                             <button
                               type="button"
                               onClick={() => setActiveLesson(lesson)}
