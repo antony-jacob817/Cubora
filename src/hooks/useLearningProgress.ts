@@ -75,7 +75,7 @@ export function useLearningProgress() {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId, isCompleted: true })
+        body: JSON.stringify({ lessonId, lastActiveLesson: lastActive || lessonId })
       });
       const data = await res.json();
       if (data.success) {
@@ -87,46 +87,6 @@ export function useLearningProgress() {
       setError(err.message || 'Error marking lesson complete');
     }
   }, [token, getAuthHeaders]);
-
-  const toggleLessonComplete = useCallback(async (lessonId: string, isCompleted?: boolean, lastActive?: string) => {
-    if (!token) return;
-    try {
-      setError(null);
-      // Determine new completed status if omitted
-      const currentCompleted = progress?.completedLessons.includes(lessonId) || false;
-      const targetCompleted = (typeof isCompleted === 'boolean') ? isCompleted : !currentCompleted;
-
-      // Optimistic update
-      setProgress(prev => {
-        if (!prev) return prev;
-        const updatedLessons = targetCompleted
-          ? Array.from(new Set([...prev.completedLessons, lessonId]))
-          : prev.completedLessons.filter(id => id !== lessonId);
-        return {
-          ...prev,
-          completedLessons: updatedLessons,
-          lastActiveLesson: targetCompleted ? (lastActive || lessonId) : prev.lastActiveLesson
-        };
-      });
-
-      const res = await fetch(`${API_BASE_URL}/complete-lesson`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ lessonId, isCompleted: targetCompleted, lastActiveLesson: lastActive || lessonId })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setProgress(data.data);
-      } else {
-        setError(data.error || 'Failed to toggle lesson completion');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error toggling lesson completion');
-    }
-  }, [token, getAuthHeaders, progress]);
 
   const toggleAlgMastered = useCallback(async (algId: string, set: string, isMastered?: boolean) => {
     if (!token) return;
@@ -174,10 +134,6 @@ export function useLearningProgress() {
     }
   }, [token, getAuthHeaders]);
 
-  const isLessonCompleted = useCallback((lessonId: string) => {
-    return progress?.completedLessons.includes(lessonId) || false;
-  }, [progress]);
-
   return {
     progress,
     isLoading,
@@ -188,8 +144,6 @@ export function useLearningProgress() {
     currentPath: progress?.currentPath || 'cfop',
     lastActiveLesson: progress?.lastActiveLesson || '',
     markLessonComplete,
-    toggleLessonComplete,
-    isLessonCompleted,
     toggleAlgMastered,
     setCurrentPath,
     refetchProgress: fetchProgress

@@ -42,22 +42,18 @@ exports.getLearningProgress = async (req, res) => {
 // @access  Private
 exports.completeLesson = async (req, res) => {
   try {
-    const { lessonId, lastActiveLesson, isCompleted } = req.body;
+    const { lessonId, lastActiveLesson } = req.body;
 
     if (!lessonId || typeof lessonId !== 'string') {
       return res.status(400).json({ success: false, error: 'Valid lessonId is required.' });
     }
 
-    const updateQuery = (isCompleted === false)
-      ? { $pull: { completedLessons: lessonId } }
-      : {
-          $addToSet: { completedLessons: lessonId },
-          $set: { lastActiveLesson: lastActiveLesson || lessonId }
-        };
-
     const progress = await LearningProgress.findOneAndUpdate(
       { user: req.user.id },
-      updateQuery,
+      {
+        $addToSet: { completedLessons: lessonId },
+        $set: { lastActiveLesson: lastActiveLesson || lessonId }
+      },
       { new: true, upsert: true, runValidators: true }
     );
 
