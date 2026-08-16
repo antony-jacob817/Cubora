@@ -84,7 +84,7 @@ export function CubeViewer({ className, action, speed, currentTimelineIndex, cam
       <Canvas 
         camera={{ 
           position: cameraPosition || [3.8, 3.15, 5.0], 
-          fov: cameraFov !== undefined ? cameraFov : (isMobile ? 40 : 45) 
+          fov: cameraFov || (isMobile ? 40 : 45) 
         }} 
         gl={{ antialias: true, alpha: true, stencil: false }} 
         dpr={[1, 1.5]} 
