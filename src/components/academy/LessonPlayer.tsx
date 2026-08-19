@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, PlayCircle, BookOpen, CheckCircle2, RotateCcw, Compass } from 'lucide-react';
+import { X, PlayCircle, BookOpen, CheckCircle2, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CubeViewer } from '@/components/3d/CubeViewer';
 import { PlaybackControls } from '@/components/solver/PlaybackControls';
-import { useSolvePlayback, type SolveStep } from '@/hooks/useSolvePlayback';
+import { useSolvePlayback } from '@/hooks/useSolvePlayback';
 import type { Lesson } from '@/data/academy';
 import { clsx } from 'clsx';
 
@@ -36,39 +36,23 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
     };
   }, []);
 
-  const isExampleSolve = Boolean(lesson.exampleSolve && lesson.exampleSolve.steps?.length > 0);
+  // Wrap the single algorithm into the format expected by useSolvePlayback
+  const steps = useMemo(() => [{
+    phase: lesson.title,
+    explanation: lesson.explanation,
+    moves: lesson.algorithm
+  }], [lesson]);
 
-  // Wrap either multi-phase example solve steps or single algorithm into the format expected by useSolvePlayback
-  const steps: SolveStep[] = useMemo(() => {
-    if (isExampleSolve && lesson.exampleSolve?.steps) {
-      return lesson.exampleSolve.steps;
-    }
-    return [{
-      phase: lesson.title,
-      explanation: lesson.explanation,
-      moves: lesson.algorithm
-    }];
-  }, [lesson, isExampleSolve]);
-
-  // Initial scramble: if example solve, use the full scramble string; otherwise inverse of algorithm
   const initialScramble = useMemo(() => {
-    if (isExampleSolve && lesson.exampleSolve?.scramble) {
-      return lesson.exampleSolve.scramble.split(' ').filter(Boolean);
-    }
     const allMoves = lesson.algorithm.split(' ').filter(Boolean);
     const invert = (m: string) => m.includes("'") ? m.replace("'", "") : m.includes("2") ? m : m + "'";
     return allMoves.reverse().map(invert);
-  }, [lesson, isExampleSolve]);
+  }, [lesson.algorithm]);
   
   const { 
     isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, 
-    currentTimelineIndex, activeStepIndex, localMoveIndex, totalMoves, action 
+    currentTimelineIndex, totalMoves, action 
   } = useSolvePlayback(steps);
-
-  const activeStep = steps[activeStepIndex] || steps[0];
-  const activePhaseMoves = useMemo(() => {
-    return (activeStep?.moves || '').split(' ').filter(Boolean);
-  }, [activeStep]);
 
   const handleActionClick = () => {
     if (onToggleComplete) {
@@ -99,11 +83,7 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
         <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-200/80 dark:border-white/10 flex justify-between items-center bg-white/80 dark:bg-white/[0.02] shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-              {isExampleSolve ? (
-                <Compass className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-              ) : (
-                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-              )}
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -116,9 +96,7 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-gray-400 font-mono tracking-wider">
-                {isExampleSolve ? `EXAMPLE SOLVE • PHASE ${activeStepIndex + 1}/${steps.length}` : 'ACADEMY LESSON MODULE'}
-              </p>
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 font-mono tracking-wider">ACADEMY LESSON MODULE</p>
             </div>
           </div>
 
@@ -147,29 +125,22 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
               cameraFov={32}
             />
             
-            {/* Algorithm / Multi-Phase Step Overlay */}
-            <div className="absolute top-3 sm:top-5 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-10 max-w-[95%]">
-              {isExampleSolve && (
-                <div className="bg-primary/20 backdrop-blur-md border border-primary/30 text-primary text-[10px] sm:text-xs font-mono font-bold px-3 py-0.5 rounded-full shadow-sm">
-                  {activeStep?.phase}
-                </div>
-              )}
-              <div className="bg-white/90 dark:bg-[#111315]/90 backdrop-blur-md border border-slate-200/80 dark:border-white/10 px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl shadow-lg max-w-full overflow-x-auto hide-scrollbar">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  {activePhaseMoves.map((move, idx) => (
-                    <span 
-                      key={idx} 
-                      className={clsx(
-                        "font-mono text-sm sm:text-base md:text-lg font-bold transition-all duration-200 px-1.5 py-0.5 rounded-md",
-                        idx === localMoveIndex 
-                          ? 'text-primary bg-primary/10 border border-primary/30 scale-110 shadow-[0_0_12px_var(--btn-glow-shadow)]' 
-                          : 'text-slate-700 dark:text-slate-400'
-                      )}
-                    >
-                      {move}
-                    </span>
-                  ))}
-                </div>
+            {/* Algorithm Step-by-Step Overlay */}
+            <div className="absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#111315]/90 backdrop-blur-md border border-slate-200/80 dark:border-white/10 px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl shadow-lg max-w-[90%] overflow-x-auto hide-scrollbar z-10">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {lesson.algorithm.split(' ').map((move, idx) => (
+                  <span 
+                    key={idx} 
+                    className={clsx(
+                      "font-mono text-sm sm:text-base md:text-lg font-bold transition-all duration-200 px-1.5 py-0.5 rounded-md",
+                      idx === currentTimelineIndex 
+                        ? 'text-primary bg-primary/10 border border-primary/30 scale-110 shadow-[0_0_12px_var(--btn-glow-shadow)]' 
+                        : 'text-slate-700 dark:text-slate-400'
+                    )}
+                  >
+                    {move}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -177,66 +148,21 @@ export function LessonPlayer({ lesson, isCompleted = false, onClose, onToggleCom
           {/* Right: Sidebar Instructions & Controls */}
           <div className="w-full lg:w-[380px] xl:w-[400px] border-t lg:border-t-0 lg:border-l border-slate-200/80 dark:border-white/10 flex flex-col bg-white/50 dark:bg-white/[0.01] shrink-0">
             <div className="p-5 sm:p-6 flex-1 overflow-y-auto space-y-4 text-left">
-              {isExampleSolve ? (
-                <>
-                  <div>
-                    <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white mb-2 tracking-tight">
-                      {activeStep?.phase}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-relaxed">
-                      {activeStep?.explanation}
-                    </p>
-                  </div>
-
-                  {/* Multi-Phase Progress Tracker */}
-                  <div className="space-y-2 pt-2">
-                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 dark:text-gray-400">
-                      Solve Roadmap ({steps.length} Phases)
-                    </span>
-                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                      {steps.map((step, sIdx) => {
-                        const isActive = sIdx === activeStepIndex;
-                        const isPast = sIdx < activeStepIndex;
-                        return (
-                          <div 
-                            key={sIdx}
-                            className={clsx(
-                              "px-3 py-2 rounded-xl text-xs flex items-center justify-between border transition-all",
-                              isActive
-                                ? "bg-primary/10 border-primary/40 text-primary font-bold shadow-sm"
-                                : isPast
-                                ? "bg-emerald-500/5 border-emerald-500/20 text-slate-700 dark:text-gray-300"
-                                : "bg-white/40 dark:bg-white/5 border-slate-200/60 dark:border-white/5 text-slate-500 dark:text-gray-500"
-                            )}
-                          >
-                            <span className="truncate mr-2">{step.phase}</span>
-                            {isPast && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                            {isActive && <div className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white mb-2 tracking-tight">
-                      Mechanics & Logic
-                    </h3>
-                    <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-relaxed">
-                      {lesson.explanation}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-xl p-3.5 flex items-start gap-2.5">
-                    <PlayCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-700 dark:text-gray-300 leading-relaxed font-medium">
-                      Step through each turn using the playback bar below. Rotate the 3D cube with your mouse or touch to analyze all face orientations.
-                    </p>
-                  </div>
-                </>
-              )}
+              <div>
+                <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white mb-2 tracking-tight">
+                  Mechanics & Logic
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-relaxed">
+                  {lesson.explanation}
+                </p>
+              </div>
+              
+              <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-xl p-3.5 flex items-start gap-2.5">
+                <PlayCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-700 dark:text-gray-300 leading-relaxed font-medium">
+                  Step through each turn using the playback bar below. Rotate the 3D cube with your mouse or touch to analyze all face orientations.
+                </p>
+              </div>
             </div>
 
             {/* Bottom Controls Bar */}
