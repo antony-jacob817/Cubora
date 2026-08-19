@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Timer as TimerIcon, Trophy, Activity, Target, ChevronDown, ChevronLeft, Timeline, ChevronRight, TimerOff,  Trash2, Check, MessageSquare, Volume2, VolumeX, Plus, Maximize2, Minimize2, Zap, Award, Crown, Edit2, Pencil, PencilOff, X } from 'lucide-react';
@@ -526,10 +527,22 @@ export default function PracticeSession() {
         }
     };
 
+    const location = useLocation();
+
     useEffect(() => {
-        const first = generateScramble();
-        setScrambleQueue([first]);
-        setScrambleIndex(0); 
+        if (location.state && (location.state as any).preloadScramble) {
+            const stateScramble = (location.state as any).preloadScramble;
+            const stateMethod = (location.state as any).preloadMethod;
+            setScrambleQueue([stateScramble]);
+            setScrambleIndex(0);
+            if (stateMethod) {
+                setMethod(stateMethod);
+            }
+        } else {
+            const first = generateScramble();
+            setScrambleQueue([first]);
+            setScrambleIndex(0);
+        }
 
         const fetchSolves = async () => {
             try {
