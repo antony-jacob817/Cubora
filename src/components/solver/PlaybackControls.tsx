@@ -11,24 +11,10 @@ interface PlaybackControlsProps {
   speed: number;
   setSpeed: (s: number) => void;
   progress: number; // 0 to 1
-  method?: string;
 }
 
-export function PlaybackControls({ isPlaying, togglePlay, nextMove, prevMove, speed, setSpeed, progress, method }: PlaybackControlsProps) {
+export function PlaybackControls({ isPlaying, togglePlay, nextMove, prevMove, speed, setSpeed, progress }: PlaybackControlsProps) {
   const [showSpeed, setShowSpeed] = useState(false);
-
-  const isBeginner = (method || '').toLowerCase().includes('beginner');
-
-  const speedOptions = isBeginner ? [
-    { value: 0.5, label: '0.5x', badge: 'SLOW' },
-    { value: 0.75, label: '0.75x', badge: 'EASY' },
-    { value: 1.0, label: '1.0x', badge: 'INTUITIVE' }
-  ] : [
-    { value: 1.0, label: '1.0x', badge: 'NORMAL' },
-    { value: 1.5, label: '1.5x', badge: 'FAST' },
-    { value: 2.5, label: '2.5x', badge: 'PRO' },
-    { value: 4.0, label: 'Burst TPS', badge: 'BURST' }
-  ];
 
   return (
     <div className="w-full flex flex-col items-center gap-3 sm:gap-4 mt-2 sm:mt-6">
@@ -46,10 +32,9 @@ export function PlaybackControls({ isPlaying, togglePlay, nextMove, prevMove, sp
         {/* Left: Playback Speed Selector Dropdown */}
         <div className="absolute left-0 z-20">
           <button 
-            type="button"
             onClick={() => setShowSpeed(!showSpeed)}
             className={clsx(
-              "w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors relative shadow-sm cursor-pointer",
+              "w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors relative shadow-sm",
               showSpeed && "text-primary dark:text-white border-primary/30 dark:border-white/20 bg-primary/10 dark:bg-white/10"
             )}
             title="Playback Speed"
@@ -64,27 +49,26 @@ export function PlaybackControls({ isPlaying, togglePlay, nextMove, prevMove, sp
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                className="absolute bottom-12 left-0 bg-white dark:bg-[#181A1D] border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl w-44 p-2.5 flex flex-col gap-0.5 z-30 origin-bottom-left"
+                className="absolute bottom-12 left-0 bg-white dark:bg-[#181A1D] border border-slate-200 dark:border-white/10 shadow-2xl rounded-2xl w-40 p-2.5 flex flex-col gap-0.5 z-30 origin-bottom-left"
               >
                 {/* Small indicator bubble arrow pointing at the button */}
                 <div className="absolute -bottom-1 w-2.5 h-2.5 bg-white dark:bg-[#181A1D] border-r border-b border-slate-200 dark:border-white/10 rotate-45 left-4 z-10" />
                 
                 <span className="text-[9px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1.5 px-2 block select-none">
-                  {isBeginner ? 'Beginner Pacing' : 'Speedcubing TPS'}
+                  Playback Speed
                 </span>
 
-                {speedOptions.map(opt => {
-                  const isSelected = speed === opt.value;
+                {[0.5, 0.75, 1.0, 1.25, 1.5].map(s => {
+                  const isSelected = speed === s;
                   return (
                     <button
-                      key={opt.value}
-                      type="button"
+                      key={s}
                       onClick={() => {
-                        setSpeed(opt.value);
+                        setSpeed(s);
                         setShowSpeed(false);
                       }}
                       className={clsx(
-                        "w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs font-bold transition-colors text-left relative z-25 min-h-[32px] sm:min-h-0 cursor-pointer",
+                        "w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs font-bold transition-colors text-left relative z-25 min-h-[32px] sm:min-h-0",
                         isSelected 
                           ? "bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white" 
                           : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.02]"
@@ -93,17 +77,10 @@ export function PlaybackControls({ isPlaying, togglePlay, nextMove, prevMove, sp
                       <span className="w-3.5 flex items-center justify-center shrink-0">
                         {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
                       </span>
-                      <span>{opt.label}</span>
-                      {opt.badge && (
-                        <span className={clsx(
-                          "text-[7.5px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md ml-auto",
-                          opt.badge === 'BURST'
-                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                            : opt.badge === 'INTUITIVE' || opt.badge === 'NORMAL'
-                            ? "bg-primary/10 text-primary border border-primary/20"
-                            : "bg-slate-200/50 dark:bg-white/10 text-slate-400 dark:text-gray-500"
-                        )}>
-                          {opt.badge}
+                      <span>{s === 1.0 ? "1x" : `${s}x`}</span>
+                      {s === 1.0 && (
+                        <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-gray-500 bg-slate-200/50 dark:bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">
+                          DEFAULT
                         </span>
                       )}
                     </button>

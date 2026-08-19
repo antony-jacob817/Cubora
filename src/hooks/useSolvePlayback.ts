@@ -77,31 +77,9 @@ export function useSolvePlayback(steps: SolveStep[]) {
     setAction(null);
   }, []);
 
-  const goToTimelineIndex = useCallback((targetIndex: number) => {
-    if (targetIndex >= -1 && targetIndex < moveTimeline.length) {
-      setCurrentTimelineIndex(targetIndex);
-      if (targetIndex >= 0) {
-        setAction({ index: targetIndex, move: moveTimeline[targetIndex].move });
-      } else {
-        setAction(null);
-      }
-    }
-  }, [moveTimeline]);
-
-  const goToStep = useCallback((stepIdx: number) => {
-    const firstMoveIdx = moveTimeline.findIndex(m => m.stepIndex === stepIdx);
-    if (firstMoveIdx !== -1) {
-      goToTimelineIndex(firstMoveIdx > 0 ? firstMoveIdx - 1 : -1);
-    } else if (stepIdx === 0) {
-      goToTimelineIndex(-1);
-    }
-  }, [moveTimeline, goToTimelineIndex]);
-
   return {
     isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, reset,
-    goToStep, goToTimelineIndex,
     currentTimelineIndex, activeStepIndex, action,
-    moveTimeline,
     totalMoves: moveTimeline.length,
     currentMove: action ? action.move : null
   };

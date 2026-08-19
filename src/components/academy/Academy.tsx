@@ -188,25 +188,13 @@ export default function Academy() {
                       return (
                         <div
                           key={lesson.id}
-                          className={clsx(
-                            "w-[280px] sm:w-[320px] shrink-0 snap-start rounded-2xl p-4 sm:p-5 flex flex-col justify-between group transition-all shadow-sm min-h-[190px]",
-                            lesson.isExampleSolve
-                              ? "bg-amber-500/5 dark:bg-amber-500/[0.03] border-2 border-amber-500/30 hover:border-amber-500/60"
-                              : "bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 hover:border-primary/30"
-                          )}
+                          className="w-[280px] sm:w-[320px] shrink-0 snap-start bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col justify-between group hover:border-primary/30 transition-all shadow-sm min-h-[190px]"
                         >
                           <div>
                             <div className="flex justify-between items-start gap-2 mb-1.5">
-                              <div className="flex flex-col gap-0.5 truncate">
-                                {lesson.isExampleSolve && (
-                                  <span className="text-[9px] font-extrabold uppercase tracking-widest text-amber-500 font-mono">
-                                    ★ MASTERCLASS SOLVE
-                                  </span>
-                                )}
-                                <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-primary transition-colors leading-snug truncate">
-                                  {lesson.title}
-                                </h4>
-                              </div>
+                              <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-primary transition-colors leading-snug truncate">
+                                {lesson.title}
+                              </h4>
                               {isCompleted && (
                                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                               )}
@@ -233,8 +221,6 @@ export default function Academy() {
                                 "h-10 px-5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 select-none group/btn cursor-pointer w-full",
                                 isCompleted
                                   ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 hover:bg-primary/20 hover:border-primary/40 hover:text-primary"
-                                  : lesson.isExampleSolve
-                                  ? "bg-gradient-to-r from-amber-500 to-primary text-white btn-glow border border-white/20 hover:opacity-95 shadow-sm"
                                   : "bg-gradient-to-r from-primary to-secondary text-white btn-glow border border-white/20 hover:opacity-95 shadow-sm"
                               )}
                             >
@@ -248,7 +234,7 @@ export default function Academy() {
                               ) : (
                                 <>
                                   <PlayCircle className="w-3.5 h-3.5 shrink-0" />
-                                  <span>{lesson.isExampleSolve ? 'Watch Masterclass' : 'Practice'}</span>
+                                  <span>Practice</span>
                                 </>
                               )}
                             </button>
@@ -269,7 +255,6 @@ export default function Academy() {
         {activeLesson && (
           <LessonPlayer
             lesson={activeLesson}
-            methodName={activeCourse.title}
             isCompleted={completedLessons.includes(activeLesson.id)}
             onClose={() => setActiveLesson(null)}
             onToggleComplete={() => handleToggleLessonComplete(activeLesson.id)}
