@@ -255,6 +255,7 @@ export default function Academy() {
         {activeLesson && (
           <LessonPlayer
             lesson={activeLesson}
+            courseId={activeCourse.id}
             isCompleted={completedLessons.includes(activeLesson.id)}
             onClose={() => setActiveLesson(null)}
             onToggleComplete={() => handleToggleLessonComplete(activeLesson.id)}
