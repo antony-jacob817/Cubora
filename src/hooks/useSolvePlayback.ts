@@ -77,8 +77,17 @@ export function useSolvePlayback(steps: SolveStep[]) {
     setAction(null);
   }, []);
 
+  const jumpToStep = useCallback((stepIdx: number) => {
+    setIsPlaying(false);
+    const targetMoveIndex = moveTimeline.findIndex(m => m.stepIndex === stepIdx);
+    if (targetMoveIndex >= 0) {
+      setCurrentTimelineIndex(targetMoveIndex);
+      setAction({ index: targetMoveIndex, move: moveTimeline[targetMoveIndex].move });
+    }
+  }, [moveTimeline]);
+
   return {
-    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, reset,
+    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, reset, jumpToStep,
     currentTimelineIndex, activeStepIndex, action,
     totalMoves: moveTimeline.length,
     currentMove: action ? action.move : null
