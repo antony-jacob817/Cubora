@@ -58,7 +58,7 @@ export function PlaybackControls({ isPlaying, togglePlay, nextMove, prevMove, sp
                   Playback Speed
                 </span>
 
-                {[0.5, 0.75, 1.0, 1.25, 1.5].map(s => {
+                {[0.5, 1.0, 1.5, 2.0].map(s => {
                   const isSelected = speed === s;
                   return (
                     <button
