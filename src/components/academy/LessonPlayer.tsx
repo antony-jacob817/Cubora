@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, PlayCircle, BookOpen, CheckCircle2, RotateCcw, Box, Timer, Zap, Trophy, RefreshCw } from 'lucide-react';
+import { 
+  X, PlayCircle, BookOpen, CheckCircle2, RotateCcw, 
+  Timer as TimerIcon, Layers, Sparkles, Trophy, History, 
+  RefreshCw, Check, ArrowRight, Lightbulb
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CubeViewer } from '@/components/3d/CubeViewer';
 import { PlaybackControls } from '@/components/solver/PlaybackControls';
@@ -17,26 +21,32 @@ interface LessonPlayerProps {
   onComplete?: () => void;
 }
 
-type TimerState = 'idle' | 'arming' | 'ready' | 'running' | 'stopped';
+type TabMode = '3d-walkthrough' | 'practice-timer' | 'conceptual-guide';
+type TimerStatus = 'idle' | 'ready' | 'running' | 'stopped';
 
-export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, onToggleComplete, onComplete }: LessonPlayerProps) {
-  const isAlgorithmic = useMemo(() => {
-    if (courseId) {
-      return courseId !== 'beginner';
-    }
-    return !lesson.id.startsWith('b_') && lesson.id !== 'beginner_master_solve';
-  }, [courseId, lesson.id]);
+export function LessonPlayer({ 
+  lesson, 
+  courseId = 'simplified-cfop', 
+  isCompleted = false, 
+  onClose, 
+  onToggleComplete, 
+  onComplete 
+}: LessonPlayerProps) {
+  const isBeginner = courseId === 'beginner';
+  const isMultiPhase = Boolean(lesson.phases && lesson.phases.length > 0);
 
-  const [activeTab, setActiveTab] = useState<'visualizer' | 'timer'>('visualizer');
+  const [activeTab, setActiveTab] = useState<TabMode>('3d-walkthrough');
   const [isDesktop, setIsDesktop] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
 
-  // Practice Timer State
-  const [timerState, setTimerState] = useState<TimerState>('idle');
-  const [elapsedTime, setElapsedTime] = useState<number>(0);
-  const [sessionTimes, setSessionTimes] = useState<number[]>([]);
+  // Practice Timer States
+  const [timerStatus, setTimerStatus] = useState<TimerStatus>('idle');
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [attempts, setAttempts] = useState<number[]>([]);
+  const [bestTime, setBestTime] = useState<number | null>(null);
+
+  const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
-  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const armingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -55,14 +65,10 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
     };
   }, []);
 
-  // Compute Multi-Phase Steps or Single Algorithm Step
+  // Wrap algorithms into steps format expected by useSolvePlayback
   const steps = useMemo(() => {
-    if (lesson.exampleSolve && lesson.exampleSolve.phases.length > 0) {
-      return lesson.exampleSolve.phases.map(p => ({
-        phase: p.phase,
-        explanation: p.explanation,
-        moves: p.moves
-      }));
+    if (lesson.phases && lesson.phases.length > 0) {
+      return lesson.phases;
     }
     return [{
       phase: lesson.title,
@@ -71,60 +77,84 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
     }];
   }, [lesson]);
 
-  // Compute Initial Scramble (from Example Solve Scramble or Inverted Algorithm)
   const initialScramble = useMemo(() => {
-    if (lesson.exampleSolve?.scramble) {
-      return lesson.exampleSolve.scramble.split(' ').filter(Boolean);
+    if (lesson.initialScramble) {
+      return lesson.initialScramble.split(' ').filter(Boolean);
     }
     const allMoves = lesson.algorithm.split(' ').filter(Boolean);
     const invert = (m: string) => m.includes("'") ? m.replace("'", "") : m.includes("2") ? m : m + "'";
     return allMoves.reverse().map(invert);
-  }, [lesson]);
+  }, [lesson.algorithm, lesson.initialScramble]);
   
   const { 
     isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, 
     currentTimelineIndex, totalMoves, action, activeStepIndex 
   } = useSolvePlayback(steps);
 
-  const activePhase = steps[activeStepIndex] || steps[0];
+  const currentPhase = steps[activeStepIndex] || steps[0];
+  const isSolveFullyCompleted = totalMoves > 0 && currentTimelineIndex === totalMoves - 1;
 
-  // Stop Timer Routine
-  const stopTimer = useCallback(() => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-    const finalElapsed = (performance.now() - startTimeRef.current) / 1000;
-    setElapsedTime(finalElapsed);
-    setTimerState('stopped');
-    setSessionTimes(prev => [finalElapsed, ...prev]);
-  }, []);
-
-  // Start Timer Routine
-  const startTimer = useCallback(() => {
+  // --- PRACTICE TIMER LOGIC ---
+  const startStopwatch = useCallback(() => {
     startTimeRef.current = performance.now();
-    setTimerState('running');
-    setElapsedTime(0);
-    timerIntervalRef.current = setInterval(() => {
-      setElapsedTime((performance.now() - startTimeRef.current) / 1000);
-    }, 16);
+    setTimerStatus('running');
+    const update = () => {
+      const now = performance.now();
+      setElapsedMs(now - startTimeRef.current);
+      timerRef.current = requestAnimationFrame(update);
+    };
+    timerRef.current = requestAnimationFrame(update);
   }, []);
 
-  // Keyboard Spacebar Handlers for Timer
+  const stopStopwatch = useCallback(() => {
+    if (timerRef.current) cancelAnimationFrame(timerRef.current);
+    const finalMs = performance.now() - startTimeRef.current;
+    setElapsedMs(finalMs);
+    setTimerStatus('stopped');
+    setAttempts(prev => [finalMs, ...prev.slice(0, 7)]);
+    setBestTime(prev => (prev === null || finalMs < prev ? finalMs : prev));
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) cancelAnimationFrame(timerRef.current);
+    setTimerStatus('idle');
+    setElapsedMs(0);
+  }, []);
+
+  const handlePointerDownTimer = useCallback(() => {
+    if (timerStatus === 'running') {
+      stopStopwatch();
+    } else if (timerStatus === 'idle' || timerStatus === 'stopped') {
+      readyTimeoutRef.current = setTimeout(() => {
+        setTimerStatus('ready');
+      }, 300);
+    }
+  }, [timerStatus, stopStopwatch]);
+
+  const handlePointerUpTimer = useCallback(() => {
+    if (readyTimeoutRef.current) clearTimeout(readyTimeoutRef.current);
+    if (timerStatus === 'ready') {
+      startStopwatch();
+    } else if (timerStatus === 'idle') {
+      // Released too quickly
+      setTimerStatus('idle');
+    }
+  }, [timerStatus, startStopwatch]);
+
+  // Spacebar hotkey for Practice Timer
   useEffect(() => {
-    if (activeTab !== 'timer') return;
+    if (activeTab !== 'practice-timer') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        if (timerState === 'running') {
-          stopTimer();
-        } else if (timerState === 'idle' || timerState === 'stopped') {
-          if (!armingTimeoutRef.current) {
-            setTimerState('arming');
-            armingTimeoutRef.current = setTimeout(() => {
-              setTimerState('ready');
-            }, 350);
+        if (timerStatus === 'running') {
+          stopStopwatch();
+        } else if (timerStatus === 'idle' || timerStatus === 'stopped') {
+          if (!readyTimeoutRef.current) {
+            readyTimeoutRef.current = setTimeout(() => {
+              setTimerStatus('ready');
+            }, 250);
           }
         }
       }
@@ -133,14 +163,14 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        if (armingTimeoutRef.current) {
-          clearTimeout(armingTimeoutRef.current);
-          armingTimeoutRef.current = null;
+        if (readyTimeoutRef.current) {
+          clearTimeout(readyTimeoutRef.current);
+          readyTimeoutRef.current = null;
         }
-        if (timerState === 'ready') {
-          startTimer();
-        } else if (timerState === 'arming') {
-          setTimerState('idle');
+        if (timerStatus === 'ready') {
+          startStopwatch();
+        } else if (timerStatus === 'idle') {
+          setTimerStatus('idle');
         }
       }
     };
@@ -150,35 +180,8 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      if (armingTimeoutRef.current) clearTimeout(armingTimeoutRef.current);
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [activeTab, timerState, startTimer, stopTimer]);
-
-  const handlePointerDown = () => {
-    if (activeTab !== 'timer') return;
-    if (timerState === 'running') {
-      stopTimer();
-    } else if (timerState === 'idle' || timerState === 'stopped') {
-      setTimerState('arming');
-      armingTimeoutRef.current = setTimeout(() => {
-        setTimerState('ready');
-      }, 350);
-    }
-  };
-
-  const handlePointerUp = () => {
-    if (activeTab !== 'timer') return;
-    if (armingTimeoutRef.current) {
-      clearTimeout(armingTimeoutRef.current);
-      armingTimeoutRef.current = null;
-    }
-    if (timerState === 'ready') {
-      startTimer();
-    } else if (timerState === 'arming') {
-      setTimerState('idle');
-    }
-  };
+  }, [activeTab, timerStatus, startStopwatch, stopStopwatch]);
 
   const handleActionClick = () => {
     if (onToggleComplete) {
@@ -187,8 +190,6 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
       onComplete();
     }
   };
-
-  const bestTime = sessionTimes.length > 0 ? Math.min(...sessionTimes) : null;
 
   const modalContent = (
     <motion.div 
@@ -208,7 +209,7 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
         className="w-full max-w-5xl max-h-[92vh] lg:h-[85vh] lg:max-h-[750px] glass-panel border-slate-200/80 dark:border-white/10 flex flex-col overflow-hidden relative shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-2xl bg-white/95 dark:bg-[#111315]/95"
       >
         {/* Modal Header */}
-        <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-200/80 dark:border-white/10 flex justify-between items-center bg-white/80 dark:bg-white/[0.02] shrink-0">
+        <div className="px-5 py-3 sm:px-6 sm:py-3.5 border-b border-slate-200/80 dark:border-white/10 flex flex-wrap justify-between items-center bg-white/80 dark:bg-white/[0.02] gap-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
               <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
@@ -223,42 +224,72 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
                     <CheckCircle2 className="w-3 h-3" /> Mastered
                   </span>
                 )}
+                {isMultiPhase && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+                    <Sparkles className="w-3 h-3" /> Full Solve
+                  </span>
+                )}
               </div>
               <p className="text-[10px] text-slate-500 dark:text-gray-400 font-mono tracking-wider">
-                {lesson.exampleSolve ? `EXAMPLE SOLVE (${steps.length} PHASES)` : (lesson.group ? `${lesson.group.toUpperCase()} CASE` : 'ACADEMY MODULE')}
+                {courseId.toUpperCase()} ACADEMY MODULE
               </p>
             </div>
           </div>
 
+          {/* Mode Switcher Tabs */}
           <div className="flex items-center gap-2">
-            {/* Adaptive Mode Switcher (For Algorithmic Lessons) */}
-            {isAlgorithmic && (
-              <div className="flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200/80 dark:border-white/10 mr-1 sm:mr-2">
+            {!isBeginner ? (
+              <div className="flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200/80 dark:border-white/10">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('visualizer')}
+                  onClick={() => setActiveTab('3d-walkthrough')}
                   className={clsx(
-                    "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    activeTab === 'visualizer'
-                      ? "bg-white dark:bg-white/15 text-primary dark:text-white shadow-sm"
-                      : "text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white"
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                    activeTab === '3d-walkthrough'
+                      ? "bg-white dark:bg-primary text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
-                  <Box className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">3D View</span>
+                  <PlayCircle className="w-3.5 h-3.5" /> 3D Walkthrough
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('timer')}
+                  onClick={() => setActiveTab('practice-timer')}
                   className={clsx(
-                    "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    activeTab === 'timer'
-                      ? "bg-white dark:bg-white/15 text-primary dark:text-white shadow-sm"
-                      : "text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white"
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                    activeTab === 'practice-timer'
+                      ? "bg-white dark:bg-primary text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
-                  <Timer className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Practice Timer</span>
+                  <TimerIcon className="w-3.5 h-3.5" /> Practice Timer
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200/80 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('3d-walkthrough')}
+                  className={clsx(
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                    activeTab === '3d-walkthrough'
+                      ? "bg-white dark:bg-primary text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                  )}
+                >
+                  <PlayCircle className="w-3.5 h-3.5" /> 3D Solver
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('conceptual-guide')}
+                  className={clsx(
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                    activeTab === 'conceptual-guide'
+                      ? "bg-white dark:bg-primary text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                  )}
+                >
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> Beginner Guide
                 </button>
               </div>
             )}
@@ -274,175 +305,325 @@ export function LessonPlayer({ lesson, courseId, isCompleted = false, onClose, o
           </div>
         </div>
 
-        {/* Layout Split */}
+        {/* Layout Split: Desktop 2-Column / Mobile Stacked */}
         <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-y-auto lg:overflow-hidden">
           
-          {/* Main Area: 3D Viewport OR Practice Timer */}
-          <div className="flex-1 min-h-[280px] sm:min-h-[350px] lg:min-h-0 relative bg-gradient-to-b from-transparent to-primary/5 touch-none flex flex-col justify-center items-center overflow-hidden">
-            {activeTab === 'visualizer' ? (
-              <>
-                <CubeViewer 
-                  className="absolute inset-0"
-                  action={action}
-                  speed={speed}
-                  currentTimelineIndex={currentTimelineIndex}
-                  initialScramble={initialScramble}
-                  cameraPosition={isDesktop ? [5.65, 4.45, 7.3] : [4.8, 3.8, 6.2]}
-                  cameraFov={32}
-                />
-                
-                {/* Algorithm Step-by-Step Overlay */}
-                <div className="absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#111315]/90 backdrop-blur-md border border-slate-200/80 dark:border-white/10 px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl shadow-lg max-w-[90%] overflow-x-auto hide-scrollbar z-10">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    {activePhase.moves.split(' ').map((move, idx) => (
-                      <span 
-                        key={idx} 
-                        className={clsx(
-                          "font-mono text-sm sm:text-base md:text-lg font-bold transition-all duration-200 px-1.5 py-0.5 rounded-md",
-                          idx === currentTimelineIndex 
-                            ? 'text-primary bg-primary/10 border border-primary/30 scale-110 shadow-[0_0_12px_var(--btn-glow-shadow)]' 
-                            : 'text-slate-700 dark:text-slate-400'
-                        )}
-                      >
-                        {move}
-                      </span>
-                    ))}
-                  </div>
+          {/* Left: 3D Interaction Area */}
+          <div className="flex-1 min-h-[260px] sm:min-h-[340px] lg:min-h-0 relative bg-gradient-to-b from-transparent to-primary/5 touch-none flex flex-col justify-center items-center overflow-hidden">
+            <CubeViewer 
+              className="absolute inset-0"
+              action={action}
+              speed={speed}
+              currentTimelineIndex={currentTimelineIndex}
+              initialScramble={initialScramble}
+              cameraPosition={isDesktop ? [5.65, 4.45, 7.3] : [4.8, 3.8, 6.2]}
+              cameraFov={32}
+            />
+            
+            {/* Algorithm Step-by-Step Overlay */}
+            <div className="absolute top-3 sm:top-5 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#111315]/90 backdrop-blur-md border border-slate-200/80 dark:border-white/10 px-4 sm:px-6 py-2 sm:py-2.5 rounded-2xl shadow-lg max-w-[92%] overflow-x-auto hide-scrollbar z-10 flex flex-col items-center gap-1">
+              {isMultiPhase && (
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[10px] font-bold font-mono uppercase tracking-widest text-primary">
+                    {currentPhase.phase}
+                  </span>
                 </div>
+              )}
+              
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {currentPhase.moves ? (
+                  currentPhase.moves.split(' ').filter(Boolean).map((move, idx) => (
+                    <span 
+                      key={idx} 
+                      className={clsx(
+                        "font-mono text-sm sm:text-base md:text-lg font-bold transition-all duration-200 px-1.5 py-0.5 rounded-md select-all",
+                        idx === currentTimelineIndex 
+                          ? 'text-primary bg-primary/10 border border-primary/30 scale-110 shadow-[0_0_12px_var(--btn-glow-shadow)]' 
+                          : 'text-slate-700 dark:text-slate-400'
+                      )}
+                    >
+                      {move}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs font-mono font-bold text-emerald-500">
+                    🎉 Scramble 100% Solved!
+                  </span>
+                )}
+              </div>
+            </div>
 
-                {/* Example Solve Phase Indicator Pill */}
-                {lesson.exampleSolve && (
-                  <div className="absolute bottom-4 left-4 z-10 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-white text-[11px] font-mono font-bold">
-                    Phase {activeStepIndex + 1} / {steps.length}: {activePhase.phase}
+            {/* Solved Celebration Toast */}
+            {isSolveFullyCompleted && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-emerald-500/90 text-white font-bold text-xs px-4 py-2 rounded-full shadow-lg flex items-center gap-2 backdrop-blur-md"
+              >
+                <Trophy className="w-4 h-4 text-yellow-300" />
+                <span>100% Solved! Full execution sequence completed.</span>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Right: Sidebar Instructions, Multi-Phase Stepper, Practice Timer or Beginner Guide */}
+          <div className="w-full lg:w-[400px] xl:w-[420px] border-t lg:border-t-0 lg:border-l border-slate-200/80 dark:border-white/10 flex flex-col bg-white/50 dark:bg-white/[0.01] shrink-0">
+            
+            {activeTab === '3d-walkthrough' && (
+              <div className="p-5 sm:p-6 flex-1 overflow-y-auto space-y-4 text-left">
+                {/* Multi-Phase Stepper Navigation */}
+                {isMultiPhase && (
+                  <div className="bg-slate-100/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl p-3.5 space-y-2.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold font-mono tracking-widest text-primary uppercase">
+                        Phase {activeStepIndex + 1} of {steps.length}
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-slate-700 dark:text-gray-300">
+                        {Math.round(((currentTimelineIndex + 1) / Math.max(1, totalMoves)) * 100)}%
+                      </span>
+                    </div>
+
+                    {/* Stepper Progress Bar */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {steps.map((_, idx) => (
+                        <div
+                          key={idx}
+                          className={clsx(
+                            "h-1.5 rounded-full transition-all duration-300",
+                            idx < activeStepIndex
+                              ? "bg-emerald-500"
+                              : idx === activeStepIndex
+                              ? "bg-primary shadow-[0_0_8px_var(--btn-glow-shadow)]"
+                              : "bg-slate-200 dark:bg-white/10"
+                          )}
+                        />
+                      ))}
+                    </div>
+
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                      {currentPhase.phase}
+                    </h4>
                   </div>
                 )}
-              </>
-            ) : (
-              /* Practice Timer Interactive Panel */
-              <div 
-                className="absolute inset-0 flex flex-col items-center justify-center p-6 select-none cursor-pointer"
-                onPointerDown={handlePointerDown}
-                onPointerUp={handlePointerUp}
-              >
-                <div className="text-center max-w-lg w-full flex flex-col items-center gap-4 sm:gap-6">
-                  {/* Algorithm Preview Badge */}
-                  <div className="px-5 py-3 rounded-2xl bg-white/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 shadow-sm">
-                    <span className="text-[10px] uppercase font-mono tracking-widest text-slate-500 dark:text-gray-400 block mb-1">
+
+                {/* YouTuber-Style Conversational Commentary */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
+                      Pro Breakdown & Piece Tracking
+                    </h3>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-relaxed font-sans bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 shadow-sm">
+                    {currentPhase.explanation}
+                  </p>
+                </div>
+                
+                {/* Finger Placement & Mechanics Tips */}
+                <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-xl p-3.5 flex items-start gap-2.5">
+                  <PlayCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-700 dark:text-gray-300 leading-relaxed font-medium">
+                    Use the speed buttons below (0.5x – 2x) to pace algorithm execution. Drag with your mouse or finger to inspect hidden face layers!
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* PRACTICE TIMER TAB (For CFOP, Simplified CFOP, Roux, ZZ) */}
+            {activeTab === 'practice-timer' && (
+              <div className="p-5 sm:p-6 flex-1 overflow-y-auto flex flex-col justify-between text-left space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <TimerIcon className="w-4 h-4 text-primary" />
+                      <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
+                        Adaptive Practice Timer
+                      </h3>
+                    </div>
+                    {bestTime !== null && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                        <Trophy className="w-3 h-3" /> PB: {(bestTime / 1000).toFixed(2)}s
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Target Algorithm Quick Reference */}
+                  <div className="bg-slate-100 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl p-3 mb-4">
+                    <span className="text-[10px] font-bold font-mono text-slate-500 dark:text-gray-400 block mb-1 uppercase tracking-wider">
                       Target Algorithm
                     </span>
-                    <span className="font-mono text-base sm:text-xl font-extrabold text-primary select-all">
+                    <span className="font-mono font-bold text-sm text-primary select-all">
                       {lesson.algorithm}
                     </span>
                   </div>
 
-                  {/* Main Stopwatch Face */}
-                  <motion.div 
-                    animate={{
-                      scale: timerState === 'ready' ? 1.04 : 1,
-                      borderColor: timerState === 'ready' 
-                        ? 'rgba(16, 185, 129, 0.6)' 
-                        : timerState === 'arming' 
-                        ? 'rgba(245, 158, 11, 0.6)' 
-                        : 'rgba(255, 255, 255, 0.1)'
-                    }}
+                  {/* Large Stackmat-style Timer Surface */}
+                  <div
+                    onPointerDown={handlePointerDownTimer}
+                    onPointerUp={handlePointerUpTimer}
                     className={clsx(
-                      "w-64 sm:w-80 h-36 sm:h-44 rounded-3xl border-2 flex flex-col items-center justify-center shadow-xl backdrop-blur-md transition-colors",
-                      timerState === 'ready' 
-                        ? 'bg-emerald-500/10 shadow-[0_0_40px_rgba(16,185,129,0.2)]' 
-                        : timerState === 'arming'
-                        ? 'bg-amber-500/10 shadow-[0_0_30px_rgba(245,158,11,0.2)]'
-                        : timerState === 'running'
-                        ? 'bg-primary/10 shadow-[0_0_40px_var(--btn-glow-shadow)]'
-                        : 'bg-white/60 dark:bg-[#181A1D]/80'
+                      "w-full h-40 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-200 relative overflow-hidden shadow-inner",
+                      timerStatus === 'ready'
+                        ? "bg-emerald-500/20 border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.3)] scale-[1.02]"
+                        : timerStatus === 'running'
+                        ? "bg-primary/20 border-primary shadow-[0_0_30px_rgba(99,102,241,0.3)]"
+                        : "bg-slate-100 dark:bg-white/5 border-dashed border-slate-300 dark:border-white/20 hover:border-primary/50"
                     )}
                   >
                     <span className={clsx(
-                      "font-mono text-4xl sm:text-6xl font-black tracking-tight",
-                      timerState === 'ready' ? 'text-emerald-500' : timerState === 'arming' ? 'text-amber-500' : 'text-slate-900 dark:text-white'
+                      "font-mono font-black tracking-tight transition-all",
+                      timerStatus === 'running'
+                        ? "text-4xl sm:text-5xl text-primary"
+                        : timerStatus === 'ready'
+                        ? "text-4xl sm:text-5xl text-emerald-500"
+                        : "text-3xl sm:text-4xl text-slate-800 dark:text-white"
                     )}>
-                      {elapsedTime.toFixed(2)}s
+                      {(elapsedMs / 1000).toFixed(2)}s
                     </span>
 
-                    <div className="mt-2 text-xs font-bold uppercase tracking-widest">
-                      {timerState === 'idle' && <span className="text-slate-400">Hold Space or Touch to Arm</span>}
-                      {timerState === 'arming' && <span className="text-amber-500 animate-pulse">Arming...</span>}
-                      {timerState === 'ready' && <span className="text-emerald-500 flex items-center gap-1"><Zap className="w-3.5 h-3.5 fill-current" /> READY! RELEASE TO START</span>}
-                      {timerState === 'running' && <span className="text-primary animate-pulse">TIMING EXECUTION</span>}
-                      {timerState === 'stopped' && <span className="text-emerald-400">SOLVE RECORDED! HOLD AGAIN</span>}
-                    </div>
-                  </motion.div>
+                    <span className="text-[11px] font-bold font-mono tracking-wider text-slate-500 dark:text-gray-400 mt-2">
+                      {timerStatus === 'idle' && "Hold Spacebar / Tap to Ready"}
+                      {timerStatus === 'ready' && "READY! Release to Start"}
+                      {timerStatus === 'running' && "RUNNING... Press Spacebar / Tap to Stop"}
+                      {timerStatus === 'stopped' && "COMPLETED! Hold to try again"}
+                    </span>
+                  </div>
 
-                  {/* Session Records Mini Dashboard */}
-                  <div className="flex items-center gap-4 text-xs font-mono">
-                    {bestTime !== null && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 font-bold">
-                        <Trophy className="w-3.5 h-3.5" /> Best: {bestTime.toFixed(2)}s
-                      </div>
-                    )}
-                    <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-600 dark:text-gray-400 font-bold">
-                      Attempts: {sessionTimes.length}
-                    </div>
-                    {sessionTimes.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSessionTimes([]);
-                          setElapsedTime(0);
-                          setTimerState('idle');
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
-                        title="Clear attempts"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </button>
+                  {/* Action row */}
+                  <div className="flex justify-between items-center mt-3">
+                    <button
+                      type="button"
+                      onClick={resetTimer}
+                      className="text-xs text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white flex items-center gap-1 cursor-pointer font-bold"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Reset Time
+                    </button>
+                    {timerStatus === 'stopped' && elapsedMs > 0 && (
+                      <span className="text-xs font-mono font-bold text-emerald-500">
+                        {elapsedMs < 2000 ? "⚡ Sub-2s Master!" : elapsedMs < 3500 ? "🔥 Great Speed!" : "👍 Smooth Execution!"}
+                      </span>
                     )}
                   </div>
                 </div>
+
+                {/* Recent Attempts History */}
+                {attempts.length > 0 && (
+                  <div className="bg-slate-100/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-2xl p-3">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold font-mono text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                      <History className="w-3 h-3" /> Recent Times
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {attempts.map((ms, idx) => (
+                        <span 
+                          key={idx}
+                          className="px-2 py-0.5 rounded-lg bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] font-mono font-bold text-slate-800 dark:text-gray-300"
+                        >
+                          {(ms / 1000).toFixed(2)}s
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
 
-          {/* Right: Sidebar Instructions & Controls */}
-          <div className="w-full lg:w-[380px] xl:w-[400px] border-t lg:border-t-0 lg:border-l border-slate-200/80 dark:border-white/10 flex flex-col bg-white/50 dark:bg-white/[0.01] shrink-0">
-            <div className="p-5 sm:p-6 flex-1 overflow-y-auto space-y-4 text-left">
-              <div>
-                <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 dark:text-white mb-2 tracking-tight">
-                  {lesson.exampleSolve ? activePhase.phase : 'Mechanics & Logic'}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-relaxed">
-                  {lesson.exampleSolve ? activePhase.explanation : lesson.explanation}
-                </p>
+            {/* BEGINNER CONCEPTUAL GUIDE TAB */}
+            {activeTab === 'conceptual-guide' && (
+              <div className="p-5 sm:p-6 flex-1 overflow-y-auto space-y-4 text-left">
+                <div className="flex items-center gap-2 mb-1">
+                  <Lightbulb className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
+                    Beginner Movement & Trigger Guide
+                  </h3>
+                </div>
+
+                {/* Visual Trigger Reference Cards */}
+                <div className="space-y-2.5">
+                  <div className="bg-white dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl p-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-bold text-primary">The "Sexy Move" (Right Trigger)</span>
+                      <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md">R U R' U'</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-gray-400">
+                      Right face UP $\to$ Top layer LEFT $\to$ Right face DOWN $\to$ Top layer RIGHT. Memorize this muscle memory trigger!
+                    </p>
+                  </div>
+
+                  <div className="bg-white dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl p-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-bold text-emerald-500">FUR-U-RUF (Yellow Cross)</span>
+                      <span className="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-md">F R U R' U' F'</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-gray-400">
+                      Front face CLOCKWISE $\to$ Sexy Move (R U R' U') $\to$ Front face COUNTER-CLOCKWISE.
+                    </p>
+                  </div>
+
+                  <div className="bg-white dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl p-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-bold text-indigo-400">Niklas (Corner Cycling)</span>
+                      <span className="text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-md">U R U' L' U R' U' L</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-gray-400">
+                      Up $\to$ Right UP $\to$ Up Back $\to$ Left UP $\to$ Up $\to$ Right DOWN $\to$ Up Back $\to$ Left DOWN.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Layer Anatomy Breakdown */}
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5">
+                  <Layers className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-700 dark:text-gray-300 leading-relaxed font-medium">
+                    Always maintain white center on the bottom (D) and yellow center on top (U) unless instructed to flip during the final corner orientation step!
+                  </p>
+                </div>
               </div>
+            )}
+
+            {/* Bottom Controls & Action Bar */}
+            <div className="p-4 sm:p-5 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/80 dark:bg-[#111315]/80 flex flex-col gap-3 shrink-0">
               
-              <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-xl p-3.5 flex items-start gap-2.5">
-                <PlayCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <p className="text-xs text-slate-700 dark:text-gray-300 leading-relaxed font-medium">
-                  {lesson.exampleSolve 
-                    ? "Step through every phase using the playback bar. The 3D tracking engine solves from scramble to 100% finished state."
-                    : "Step through each turn using the playback bar below. Rotate the 3D cube with your mouse or touch to analyze all face orientations."}
-                </p>
-              </div>
-            </div>
+              {/* Playback Controls with 0.5x, 1x, 1.5x, 2x Speed Multipliers */}
+              <div className="w-full">
+                <PlaybackControls 
+                  isPlaying={isPlaying} 
+                  togglePlay={togglePlay}
+                  nextMove={nextMove} 
+                  prevMove={prevMove}
+                  speed={speed} 
+                  setSpeed={setSpeed}
+                  progress={totalMoves > 0 ? (currentTimelineIndex + 1) / totalMoves : 0}
+                />
 
-            {/* Bottom Controls Bar */}
-            <div className="p-4 sm:p-5 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/80 dark:bg-[#111315]/80 flex flex-col gap-3.5 shrink-0">
-              <PlaybackControls 
-                isPlaying={isPlaying} 
-                togglePlay={togglePlay}
-                nextMove={nextMove} 
-                prevMove={prevMove}
-                speed={speed} 
-                setSpeed={setSpeed}
-                progress={totalMoves > 0 ? (currentTimelineIndex + 1) / totalMoves : 0}
-              />
+                {/* Speed Multiplier Pill Toggles */}
+                <div className="flex items-center justify-center gap-1.5 mt-2.5">
+                  <span className="text-[9px] font-bold font-mono uppercase text-slate-400 dark:text-gray-500 mr-1">
+                    Speed:
+                  </span>
+                  {[0.5, 1.0, 1.5, 2.0].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSpeed(s)}
+                      className={clsx(
+                        "px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer",
+                        speed === s
+                          ? "bg-primary text-white shadow-sm"
+                          : "bg-slate-200/60 dark:bg-white/5 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                      )}
+                    >
+                      {s === 1.0 ? "1x" : `${s}x`}
+                    </button>
+                  ))}
+                </div>
+              </div>
               
               {/* Standardized Primary Action Button with Toggle State */}
               <button 
                 type="button"
                 onClick={handleActionClick}
                 className={clsx(
-                  "h-10 px-5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 select-none w-full cursor-pointer",
+                  "h-10 px-5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 select-none w-full cursor-pointer mt-1",
                   isCompleted
                     ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 hover:bg-rose-500/10 hover:border-rose-500/30 hover:text-rose-400 group/btn"
                     : "bg-gradient-to-r from-primary to-secondary text-white btn-glow border border-white/20 hover:opacity-95 shadow-sm"
