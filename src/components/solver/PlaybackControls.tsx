@@ -68,9 +68,9 @@ export function PlaybackControls({ isPlaying, togglePlay, nextMove, prevMove, sp
                         setShowSpeed(false);
                       }}
                       className={clsx(
-                        "w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs font-bold transition-colors text-left relative z-25 min-h-[32px] sm:min-h-0 cursor-pointer",
+                        "w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs font-bold transition-colors text-left relative z-25 min-h-[32px] sm:min-h-0",
                         isSelected 
-                          ? "bg-primary/10 text-primary font-black" 
+                          ? "bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white" 
                           : "text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.02]"
                       )}
                     >
