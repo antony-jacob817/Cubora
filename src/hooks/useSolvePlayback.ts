@@ -15,6 +15,8 @@ const invertMove = (move: string): string => {
 export type PlaybackAction = { index: number; move: string };
 
 export function useSolvePlayback(steps: SolveStep[]) {
+  // FIX: useMemo calculates the timeline synchronously before the first render!
+  // This stops the UI from falsely assuming totalMoves is 0 on load.
   const moveTimeline = useMemo(() => {
     const timeline: { move: string; stepIndex: number; moveIndex: number }[] = [];
     steps.forEach((step, sIdx) => {
@@ -32,7 +34,7 @@ export function useSolvePlayback(steps: SolveStep[]) {
   const [action, setAction] = useState<PlaybackAction | null>(null);
   
   const activeStepIndex = currentTimelineIndex >= 0 
-    ? (moveTimeline[currentTimelineIndex]?.stepIndex ?? 0)
+    ? moveTimeline[currentTimelineIndex]?.stepIndex 
     : 0;
 
   const nextMove = useCallback(() => {
@@ -57,14 +59,6 @@ export function useSolvePlayback(steps: SolveStep[]) {
     });
   }, [moveTimeline]);
 
-  const jumpToStep = useCallback((targetStepIndex: number) => {
-    const firstMoveIdx = moveTimeline.findIndex(item => item.stepIndex === targetStepIndex);
-    if (firstMoveIdx !== -1) {
-      setCurrentTimelineIndex(firstMoveIdx);
-      setAction({ index: firstMoveIdx, move: moveTimeline[firstMoveIdx].move });
-    }
-  }, [moveTimeline]);
-
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isPlaying && currentTimelineIndex < moveTimeline.length - 1) {
@@ -84,7 +78,7 @@ export function useSolvePlayback(steps: SolveStep[]) {
   }, []);
 
   return {
-    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, reset, jumpToStep,
+    isPlaying, togglePlay, speed, setSpeed, nextMove, prevMove, reset,
     currentTimelineIndex, activeStepIndex, action,
     totalMoves: moveTimeline.length,
     currentMove: action ? action.move : null
