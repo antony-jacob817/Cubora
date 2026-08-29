@@ -50,43 +50,43 @@ export const ACADEMY_COURSES: Course[] = [
             "id": "beginner-full-solve",
             "title": "Full Example Solve Breakdown (7-Step Method)",
             "explanation": "Hey cubers! Today we're breaking down a full start-to-finish Beginner solve on this exact scramble. Follow along step-by-step as we build the Daisy, slot the corners, complete the middle layer, make the yellow cross, and orient the final layer to reach a 100% solved cube!",
-            "algorithm": "B R2 B D' R' U2 R D' F R2 B2 L2 D2 F L2 F2 U2 R2 D2",
+            "algorithm": "R2 L' U2 D' B2 L' U2 L B L2 D' F2 U F2 B2 D B2 L2 D B2 U'",
             "initialScramble": "D2 R2 U2 F2 L2 F' D2 L2 B2 R2 F' D R' U2 R D B' R2 B'",
             "phases": [
               {
                 "phase": "Step 1: Daisy & White Cross",
-                "explanation": "Look for the 4 white edge pieces around the cube. Bring them up around the yellow center sticker to make the Daisy. Then match each edge's side color with its center and do 180° turns (F2, R2, L2, B2) down into the white face to lock in your cross!",
-                "moves": "B R2 B"
+                "explanation": "Hey guys! First things first: look for the 4 white edge pieces around the cube. Bring them up around the yellow center sticker to make the Daisy. Then match each edge's side color with its center and do a 180° turn (F2, R2, L2, B2) down into the white face to lock in your cross!",
+                "moves": "R2 L' U2 D' B2"
               },
               {
                 "phase": "Step 2: First Layer Corners",
-                "explanation": "Scan the top layer for corners with white stickers. Position each corner directly above its target slot between the matching color centers, and execute the classic 'Sexy Move' trigger (R U R' U') to drop each corner into the bottom layer!",
-                "moves": "D' R' U2 R"
+                "explanation": "Now scan the top layer for corners with white stickers. Position each corner right above where it needs to go between the matching color centers. Use the classic 'Sexy Move' trigger (R U R' U') to drop each corner into the bottom layer!",
+                "moves": "L' U2 L B L2"
               },
               {
                 "phase": "Step 3: Second Layer (Middle Edges)",
-                "explanation": "Middle layer time! Find an edge in the top layer with NO yellow on it. Align the front sticker with its matching center, and use the left/right insertion formula (U R U' R' U' F' U F) to lock the edges into the middle layer!",
-                "moves": "D' F R2"
+                "explanation": "Next up is the middle layer. Find an edge in the top layer that has NO yellow on it. Align the front sticker with its matching center. If it needs to go to the right slot, do U R U' R' U' F' U F. If it goes left, do U' L' U L U F U' F'!",
+                "moves": "D' F2 U"
               },
               {
                 "phase": "Step 4: Yellow Cross",
-                "explanation": "Check the top yellow face for a Dot, 'L' shape (hold at 9 and 12 o'clock), or horizontal Line. Fire off the famous FUR-U-RUF trigger: F R U R' U' F' to orient all 4 top edges into a clean yellow cross!",
-                "moves": "B2 L2 D2"
+                "explanation": "Look at the top yellow face! You'll have either a Dot, an 'L' shape (hold it at 9 and 12 o'clock), or a horizontal Line. Hit it with the famous FUR-U-RUF trigger: F R U R' U' F' to orient all 4 edges into a yellow cross!",
+                "moves": "F2 B2 D"
               },
               {
                 "phase": "Step 5: Permute Yellow Edges",
-                "explanation": "Turn the U layer until edge side colors line up with their side centers. Hold the matching edges in the back and right, and execute the Sune edge algorithm: R U R' U R U2 R' so all 4 side colors match their centers!",
-                "moves": "F L2"
+                "explanation": "Turn the U layer until at least two edge side colors line up with their side centers. Hold the matching edges in the back and right, and execute the Sune edge algorithm: R U R' U R U2 R' to swap the remaining edges so all 4 sides match!",
+                "moves": "B2 L2"
               },
               {
                 "phase": "Step 6: Position Yellow Corners (Niklas)",
-                "explanation": "Find any corner that is in the correct physical spot (regardless of twist). Hold that corner on the Front-Right-Top and execute the Niklas formula: U R U' L' U R' U' L to cycle the other 3 corners into their home spots!",
-                "moves": "F2 U2"
+                "explanation": "Find any corner that is in the correct spot between its 3 center colors (even if it's twisted). Hold that corner on the Front-Right-Top and execute the Niklas formula: U R U' L' U R' U' L to cycle the other 3 corners into their home spots!",
+                "moves": "D B2"
               },
               {
                 "phase": "Step 7: Orient Yellow Corners (Solved!)",
-                "explanation": "Home stretch! Keep white on bottom, hold an unsolved corner on the front-right, and repeat (R' D' R D) until yellow faces UP. Turn ONLY the top U layer to load the next unsolved corner, repeat, and boom—100% solved!",
-                "moves": "R2 D2"
+                "explanation": "Almost there! Keep white on top, hold an unsolved corner on the front-right, and repeat (R' D' R D) until yellow faces down. Turn ONLY the bottom layer (D) to bring the next unsolved corner to the front-right, repeat, and boom—100% solved!",
+                "moves": "U'"
               }
             ]
           }
@@ -1361,7 +1361,7 @@ export const ACADEMY_COURSES: Course[] = [
             "id": "roux-full-solve",
             "title": "Full Example Solve Breakdown (Roux Blockbuilding)",
             "explanation": "Hey Roux fans! Today we're showcasing the sheer efficiency and low move-count of the Roux method. We build two 1x2x3 blocks, solve all 4 top corners in one shot with CMLL, and finish with lightning-fast M-slice moves in LSE!",
-            "algorithm": "R2 B R2 U2 F' D2 B L' F2 D' L2 U F2 L2 B2 D2 R2 U2 F2",
+            "algorithm": "R2 B R2 U2 F' D2 B L U2 D2 R2 B2 U' B2 D F2 L2 D2 R2 U2",
             "initialScramble": "F2 U2 R2 D2 B2 L2 F2 U' L2 D F2 L B' D2 F U2 R2 B' R2",
             "phases": [
               {
@@ -1372,17 +1372,17 @@ export const ACADEMY_COURSES: Course[] = [
               {
                 "phase": "Phase 2: Second Block (SB - Right 1x2x3)",
                 "explanation": "Using only R, r, and U moves, we build the matching Green-White 1x2x3 block on the right. Notice how the middle M-slice remains completely free to manipulate without breaking our left block!",
-                "moves": "D2 B L' F2"
+                "moves": "D2 B L U2 D2 R2"
               },
               {
                 "phase": "Phase 3: CMLL (Corners of Last Layer)",
-                "explanation": "With both side blocks locked in, we check the 4 top corners. It's a U-set CMLL case! We execute the algorithm (D' L2 U F2) to orient and permute all 4 corners simultaneously.",
-                "moves": "D' L2 U F2"
+                "explanation": "With both side blocks locked in, we check the 4 top corners. It's a U-set CMLL case! We execute the algorithm (B2 U' B2) to orient and permute all 4 corners simultaneously.",
+                "moves": "B2 U' B2"
               },
               {
                 "phase": "Phase 4: LSE (Last Six Edges - Solved!)",
-                "explanation": "The magic finale! We orient the 6 remaining edges (EO), place the UL and UR edges, and permute the final 4 M-slice edges with pure M2 and U2 finger flicking to solve the cube!",
-                "moves": "L2 B2 D2 R2 U2 F2"
+                "explanation": "The magic finale! We orient the 6 remaining edges (EO), place the UL and UR edges, and permute the final 4 M-slice edges with pure M2 and U2 finger flicking to solve the cube in just 20 total moves!",
+                "moves": "D F2 L2 D2 R2 U2"
               }
             ]
           }
@@ -1777,7 +1777,7 @@ export const ACADEMY_COURSES: Course[] = [
             "id": "zz-full-solve",
             "title": "Full Example Solve Breakdown (ZZ Rotationless Masterclass)",
             "explanation": "What's up cubers! Welcome to the rotationless realm of the ZZ Method. We count the bad edges in inspection, orient all 12 at once while placing the line in EOline, and solve the rest of the cube using strictly R, U, and L moves—zero cube rotations!",
-            "algorithm": "L2 B R2 U F D2 R B L2 D B2 L2 U2 B2 D2 R2 F2 U2 L2",
+            "algorithm": "L2 B R2 U F D2 R B L2 U' R2 U' D' F2 U2 F2 L2",
             "initialScramble": "L2 U2 F2 R2 D2 B2 U2 L2 B2 D' L2 B' R' D2 F' U' R2 B' L2",
             "phases": [
               {
@@ -1788,12 +1788,12 @@ export const ACADEMY_COURSES: Course[] = [
               {
                 "phase": "Phase 2: ZZF2L (Rotationless Left & Right Blocks)",
                 "explanation": "Because all 12 edges are already oriented, every F2L pair can be formed and slotted using ONLY R, U, and L moves. Zero regrips, zero cube rotations—pure speed and flawless lookahead.",
-                "moves": "R B L2 D B2 L2"
+                "moves": "R B L2 U' R2"
               },
               {
                 "phase": "Phase 3: COLL & EPLL (Last Layer - Solved!)",
                 "explanation": "Thanks to EOline, the top yellow cross is automatically preserved! We jump straight to COLL to solve corner orientation and permutation in one algorithm, then finish with a 4-move EPLL to solve the entire cube!",
-                "moves": "U2 B2 D2 R2 F2 U2 L2"
+                "moves": "U' D' F2 U2 F2 L2"
               }
             ]
           }
