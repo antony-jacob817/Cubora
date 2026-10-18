@@ -27,16 +27,21 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // If your auth.js middleware throws a 401 (Unauthorized)
-    if (error.response && error.response.status === 401) {
+    const requestUrl = error.config?.url || '';
+    const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/signup');
+
+    // If your auth.js middleware throws a 401 (Unauthorized) on protected routes
+    if (error.response && error.response.status === 401 && !isAuthEndpoint) {
       console.warn('Session expired or invalid token. Redirecting to login...');
-      // Force clear the token and kick the user back to the login screen safely
+      // Force clear the token and kick the user back to the login screen safely if not already there
       localStorage.removeItem('cubora_token');
-      window.location.href = '/login'; 
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+        window.location.href = '/login'; 
+      }
     }
     
     // Extract the exact error message sent from Express
-    const message = error.response?.data?.error || 'An unexpected server error occurred.';
+    const message = error.response?.data?.error || error.response?.data?.message || error.message || 'An unexpected server error occurred.';
     return Promise.reject(new Error(message));
   }
 );

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { 
   Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, CartesianGrid, ReferenceDot, ComposedChart, Line,
+  BarChart, Bar, Cell, CartesianGrid, ComposedChart,
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 import { PageTransition } from '@/components/animations/PageTransition';
@@ -813,14 +813,63 @@ export default function AnalyticsDashboard() {
                           <YAxis stroke="transparent" tick={false} axisLine={false} tickLine={false} width={0} domain={[0, 'auto']} />
                           <Tooltip cursor={false} content={<CustomTooltip activeColor={'currentColor'} />} />
                           
-                          <Area type="monotone" dataKey="time" name="Solve Time" stroke="currentColor" strokeWidth={2} fillOpacity={1} fill="url(#colorTimeAnalytics)" dot={{ r: 4, fill: 'currentColor', strokeWidth: 0 }} activeDot={{ r: 6, fill: 'currentColor', stroke: '#fff', strokeWidth: 2 }} />
-                          <Line type="monotone" dataKey="mo3" name="MO3" stroke="#00E5FF" strokeWidth={2.5} dot={{ r: 3, fill: '#00E5FF', strokeWidth: 0 }} activeDot={{ r: 5, fill: '#00E5FF', stroke: '#fff', strokeWidth: 2 }} connectNulls={false} />
-                          <Line type="monotone" dataKey="ao5" name="AO5" stroke="#FF6B6B" strokeWidth={2.5} dot={{ r: 3, fill: '#FF6B6B', strokeWidth: 0 }} activeDot={{ r: 5, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2 }} connectNulls={false} />
-                          <Line type="monotone" dataKey="ao12" name="AO12" stroke="#DA70D6" strokeWidth={2.5} dot={{ r: 3, fill: '#DA70D6', strokeWidth: 0 }} activeDot={{ r: 5, fill: '#DA70D6', stroke: '#fff', strokeWidth: 2 }} connectNulls={false} />
-                          <Line type="monotone" dataKey="ao50" name="AO50" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3, fill: '#10B981', strokeWidth: 0 }} activeDot={{ r: 5, fill: '#10B981', stroke: '#fff', strokeWidth: 2 }} connectNulls={false} />
-                          <Line type="monotone" dataKey="ao100" name="AO100" stroke="#E2E8F0" strokeWidth={2.5} dot={{ r: 3, fill: '#E2E8F0', strokeWidth: 0 }} activeDot={{ r: 5, fill: '#E2E8F0', stroke: '#fff', strokeWidth: 2 }} connectNulls={false} />
-
-                          {pbPoint && <ReferenceDot x={pbPoint.date} y={pbPoint.time} r={6} fill="#F97316" stroke="#fff" strokeWidth={2} style={{ filter: 'drop-shadow(0px 0px 4px #F97316)', outline: 'none' }} />}
+                          <Area 
+                            type="monotone" 
+                            dataKey="time" 
+                            name="Solve Time" 
+                            stroke="currentColor" 
+                            strokeWidth={2} 
+                            fillOpacity={1} 
+                            fill="url(#colorTimeAnalytics)" 
+                            dot={(dotProps: any) => {
+                              if (dotProps.cx == null || dotProps.cy == null || isNaN(dotProps.cx) || isNaN(dotProps.cy)) return null;
+                              const isPB = pbPoint && dotProps.payload && dotProps.payload.date === pbPoint.date && dotProps.payload.time === pbPoint.time;
+                              if (isPB) {
+                                return (
+                                  <circle
+                                    key={`pb-dot-${dotProps.index}`}
+                                    cx={dotProps.cx}
+                                    cy={dotProps.cy}
+                                    r={6}
+                                    fill="#F97316"
+                                    stroke="#fff"
+                                    strokeWidth={2}
+                                    style={{ filter: 'drop-shadow(0px 0px 4px #F97316)', outline: 'none' }}
+                                  />
+                                );
+                              }
+                              return (
+                                <circle
+                                  key={`dot-${dotProps.index}`}
+                                  cx={dotProps.cx}
+                                  cy={dotProps.cy}
+                                  r={4}
+                                  fill="currentColor"
+                                  strokeWidth={0}
+                                />
+                              );
+                            }}
+                            activeDot={(activeProps: any) => {
+                              if (activeProps.cx == null || activeProps.cy == null || isNaN(activeProps.cx) || isNaN(activeProps.cy)) return null;
+                              const isPB = pbPoint && activeProps.payload && activeProps.payload.date === pbPoint.date && activeProps.payload.time === pbPoint.time;
+                              return (
+                                <circle
+                                  cx={activeProps.cx}
+                                  cy={activeProps.cy}
+                                  r={isPB ? 8 : 6}
+                                  fill={isPB ? "#F97316" : "currentColor"}
+                                  stroke="#fff"
+                                  strokeWidth={2}
+                                  style={isPB ? { filter: 'drop-shadow(0px 0px 6px #F97316)', outline: 'none' } : undefined}
+                                />
+                              );
+                            }}
+                          />
+                          <Area type="monotone" dataKey="mo3" name="MO3" stroke="#00E5FF" strokeWidth={2.5} fill="none" dot={{ r: 3, fill: '#00E5FF', strokeWidth: 0, fillOpacity: 1 }} activeDot={{ r: 5, fill: '#00E5FF', stroke: '#fff', strokeWidth: 2, fillOpacity: 1 }} connectNulls={false} />
+                          <Area type="monotone" dataKey="ao5" name="AO5" stroke="#FF6B6B" strokeWidth={2.5} fill="none" dot={{ r: 3, fill: '#FF6B6B', strokeWidth: 0, fillOpacity: 1 }} activeDot={{ r: 5, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2, fillOpacity: 1 }} connectNulls={false} />
+                          <Area type="monotone" dataKey="ao12" name="AO12" stroke="#DA70D6" strokeWidth={2.5} fill="none" dot={{ r: 3, fill: '#DA70D6', strokeWidth: 0, fillOpacity: 1 }} activeDot={{ r: 5, fill: '#DA70D6', stroke: '#fff', strokeWidth: 2, fillOpacity: 1 }} connectNulls={false} />
+                          <Area type="monotone" dataKey="ao50" name="AO50" stroke="#10B981" strokeWidth={2.5} fill="none" dot={{ r: 3, fill: '#10B981', strokeWidth: 0, fillOpacity: 1 }} activeDot={{ r: 5, fill: '#10B981', stroke: '#fff', strokeWidth: 2, fillOpacity: 1 }} connectNulls={false} />
+                          <Area type="monotone" dataKey="ao100" name="AO100" stroke="#E2E8F0" strokeWidth={2.5} fill="none" dot={{ r: 3, fill: '#E2E8F0', strokeWidth: 0, fillOpacity: 1 }} activeDot={{ r: 5, fill: '#E2E8F0', stroke: '#fff', strokeWidth: 2, fillOpacity: 1 }} connectNulls={false} />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </div>

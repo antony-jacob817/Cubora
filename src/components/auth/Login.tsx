@@ -37,6 +37,8 @@ export default function Login() {
         }
     } catch (err: any) {
         setError(err.message || 'Invalid email or password credentials.');
+        setEmail('');
+        setPassword('');
     } finally {
         setIsLoading(false);
     }
@@ -64,7 +66,10 @@ export default function Login() {
               type="email" 
               placeholder="Email address"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+              }}
               disabled={isLoading}
               required
             />
@@ -75,7 +80,10 @@ export default function Login() {
                 type="password" 
                 placeholder="Password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
                 disabled={isLoading}
                 required
               />

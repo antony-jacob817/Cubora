@@ -54,7 +54,7 @@ export default function Signup() {
             setError(response.data.error || 'Registration failed.');
         }
     } catch (err: any) {
-        setError('Unable to reach the server. Make sure your backend is running on port 3000.');
+        setError(err.message || 'Unable to complete registration. Please try again.');
     }
   };
 
